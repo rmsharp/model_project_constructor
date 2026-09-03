@@ -57,7 +57,7 @@ rows below it are the smaller residue that closing it exposed.
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
 | The docs toolchain has no version ceiling | `pyproject.toml` bounds the tutorial site's theme from below only (`>=9.0`), so a major Material release could be resolved into the public site. Deliberately deferred when the renderer landed. Session 243 made such a bump fail as a red job instead of a silent unstyled publish; the ceiling would stop it being resolved at all. | Small — 2 lines + `uv lock`. Non-binding today: Material 10.x does not exist. |
 
-| `README.md`'s per-directory test counts have drifted | The repo map in `README.md` gives a test count per directory. Three of them are stale by a combined **131 tests**, measured against `pytest --collect-only` at Session 247: `data_agent_package/` says 207 and collects **257**; `eval/` says 94 and collects **157**; `test_llm_json_parity.py` says 16 and collects **34**. Every other row is exact, and the headline total was corrected to 1,338 in the same session. Filed, not fixed — the Session 247 deliverable was a live census guard over the ledger archives, and these are a different class (test counts, which that guard does not cover). | **Small**: three numerals. The measurement is done and is in the item below, so this is a paste. Worth asking whether it earns a derived check of its own rather than a fourth hand-typed number. |
+| `README.md`'s test counts are hand-typed and will drift again | Session 247 found three per-directory rows in `README.md`'s repo map stale by a combined 131 tests. **Session 250 fixed the numerals** — each re-measured against `pytest --collect-only`, not pasted from the filing — and every count in that block now agrees with the collection: the rows sum to the 1,347 collected, and the headline's 1,338 passing plus 9 live-skipped is the same figure. What remains is the design question the filing raised: nothing derives any of those counts, so the next test added re-opens the drift. | **Operator call.** Either accept periodic hand re-measurement (the verification command is in the item below), or build a sibling of the census guard that composes the rows from a collection pass — a design change, not a typo fix. |
 
 | Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249** — the premise is corrected at every live site and the frozen copies are marked unrepairable; B–H remain unruled. |
 
@@ -786,37 +786,25 @@ larger blast radius); reopen only if such a case arises. See `CHANGELOG.md` and
 
 ---
 
-### `README.md`'s per-directory test counts have drifted from the collected suite
+### `README.md`'s test counts are hand-typed and will drift again
 
-**Filed Session 247, while updating the same block for the census guard.** Not a regression and not
-caused by that guard: the drift predates it. Session 247 added one row and corrected the headline
-total from 1,313 to **1,338**, which is exact — `pytest --collect-only` reports **1,347** collected,
-of which 9 skip without live LLM credentials.
+**Filed Session 247; the drift it reported was fixed in Session 250.** The three stale rows —
+`data_agent_package/` (207 → **257**), `eval/` (94 → **157**) and `test_llm_json_parity.py`
+(16 → **34**) — were corrected against a fresh collection pass, not pasted from the filing. At that
+pass `pytest --collect-only` reported **1,347** collected, of which 9 skip without live LLM
+credentials, and every per-directory row in the block agreed with it, including the three that sum
+into `agents/` (155 intake + 199 website + 19 data). The rows sum to the collected total.
 
-The per-directory rows are a second, independent census in the same block, and three have drifted:
-
-| `README.md` row | claims | collects | delta |
-| --- | ---: | ---: | ---: |
-| `data_agent_package/` | 207 | **257** | +50 |
-| `eval/` | 94 | **157** | +63 |
-| `test_llm_json_parity.py` | 16 | **34** | +18 |
-
-Every other row is exact, including the three that sum into `agents/` (155 intake + 199 website +
-19 data = 373). The arithmetic closes: the claimed rows total 1,216 against 1,347 collected, and
-50 + 63 + 18 = 131 accounts for the whole difference. **The class was swept, not sampled** — every
-count in the block was re-measured, so this is the complete list rather than the first three found.
-
-**Verification:**
+**What is still open is the class, not the instance.** Every count in that block is typed by hand
+and nothing derives it — this is the fourth surface in this repository to state a count nobody
+derives, after the shard census, the size figures and the span sentences.
+`tests/test_session_notes_census.py` covers the shard census only; a sibling check that composes
+these rows from a collection pass would close the class instead of the instance. That is a design
+call, which is why the item stays rather than closes. The alternative is to accept that the block
+is re-measured by hand whenever someone notices, with this command:
 
 ```bash
 uv run pytest --collect-only -q --no-cov 2>/dev/null | command grep '::' \
   | sed 's|^tests/||' | awk -F'/' '{print ($2==""? "ROOT:"$1 : $1"/")}' \
   | sed 's/::.*//' | sort | uniq -c | sort -rn
 ```
-
-**The open question is whether to fix the numerals or derive them.** Three numerals is a two-minute
-paste that will drift again — this is the fourth surface in this repository to state a count nobody
-derives, after the shard census, the size figures and the span sentences. `tests/test_session_notes_census.py`
-now covers the shard census only; a sibling check that composes these rows from a collection pass
-would close the class instead of the instance. That is a design call, not a typo fix, which is why
-this is filed rather than done.

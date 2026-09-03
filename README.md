@@ -97,8 +97,8 @@ tests/
   agents/website/                       # 199 website agent tests (templates, fake client, nodes, agent, CLI, governance, retry, gitlab + github adapters)
   orchestrator/                         # 250 orchestrator tests (pipeline halt paths, adapters, checkpoints, config, logging, metrics)
   ui/intake/                            # 32 web UI tests (FastAPI, runner, SQLite resume, SSE)
-  data_agent_package/                   # 207 CLI + Anthropic/Bedrock/OpenCode client tests
-  eval/                                 # 94 eval/parity harness tests (corpus, scoring, cutover gate, interview sweep, stakeholder sim, live)
+  data_agent_package/                   # 257 CLI + Anthropic/Bedrock/OpenCode client tests
+  eval/                                 # 157 eval/parity harness tests (corpus, scoring, cutover gate, interview sweep, stakeholder sim, live)
   scripts/                              # 109 run_pipeline.py adapter/resume, site-asset + published-site guards, wiki publisher + hook
   fixtures/sample_request.json          # canonical DataRequest fixture
   fixtures/subrogation.yaml             # canonical intake fixture (§4.1 worked example)
@@ -111,7 +111,7 @@ tests/
   fixtures/tier2_intake.json            # tier 2 high + strategic cycle (Phase 4B)
   fixtures/sample_datareport.json       # serialized DataReport for website agent input
   test_data_agent_decoupling.py         # structural decoupling guarantee (2 tests)
-  test_llm_json_parity.py               # intake/data-agent JSON-parser behavioral parity (16 tests)
+  test_llm_json_parity.py               # intake/data-agent JSON-parser behavioral parity (34 tests)
   test_vocab_guard.py                   # Literal-derived vocabulary/enum guard (6 tests)
   test_wiki_no_line_citations.py        # wiki fragile-citation guard (3 tests)
   test_session_notes_census.py          # shard-census guard: the four prose files vs the shards on disk (25 tests)
