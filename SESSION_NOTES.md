@@ -282,6 +282,12 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 
 ## ACTIVE TASK
 
+### What Session 250 Did
+**Deliverable:** Fix the three stale per-directory test counts in `README.md`, re-measured against
+`pytest --collect-only` rather than pasted from Session 247 (IN PROGRESS)
+**Started:** 2026-09-03 03:37 UTC
+**Status:** Session claimed. Work beginning.
+
 ### What Session 249 Did
 **Deliverable:** **Option A of [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — COMPLETE.**
 The false read-cap premise is corrected at every live site; every frozen copy is left alone and
