@@ -282,6 +282,14 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 
 ## ACTIVE TASK
 
+### What Session 251 Did
+**Deliverable:** Present the outstanding ruling on
+[`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — options D, E and F,
+and the still-unruled B, C, G and H — to the operator with every figure re-derived at HEAD; record the
+ruling; execute nothing (IN PROGRESS)
+**Started:** 2026-09-03 18:07 UTC
+**Status:** Session claimed. Work beginning.
+
 ### What Session 250 Did
 **Deliverable:** **Fix the three stale per-directory test counts in `README.md` — COMPLETE.**
 Operator's words: *"fix the three stale test counts in README.md"*. Each numeral was re-measured
