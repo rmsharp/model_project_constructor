@@ -58,6 +58,7 @@ rows below it are the smaller residue that closing it exposed.
 | The docs toolchain has no version ceiling | `pyproject.toml` bounds the tutorial site's theme from below only (`>=9.0`), so a major Material release could be resolved into the public site. Deliberately deferred when the renderer landed. Session 243 made such a bump fail as a red job instead of a silent unstyled publish; the ceiling would stop it being resolved at all. | Small — 2 lines + `uv lock`. Non-binding today: Material 10.x does not exist. |
 
 | `README.md`'s test counts are hand-typed and will drift again | Session 247 found three per-directory rows in `README.md`'s repo map stale by a combined 131 tests. **Session 250 fixed the numerals** — each re-measured against `pytest --collect-only`, not pasted from the filing — and every count in that block now agrees with the collection: the rows sum to the 1,347 collected, and the headline's 1,338 passing plus 9 live-skipped is the same figure. What remains is the design question the filing raised: nothing derives any of those counts, so the next test added re-opens the drift. | **Operator call.** Either accept periodic hand re-measurement (the verification command is in the item below), or build a sibling of the census guard that composes the rows from a collection pass — a design change, not a typo fix. |
+| The wiki's `Contributing.md` carries a second, older test census | The contributors' wiki page states how many test **functions** each `tests/` directory holds — a different measure from `README.md`'s collected-test counts, since one parametrized function collects as many tests, and the page says so. Measured in Session 250 with the page's own command: `data_agent_package/`, `eval/`, `scripts/` and the top-level files are stale, its total is (997, now 1,167), and its "1110 passed plus 12 skip" sentence is (now 1,338 and 9); it also names four top-level test files where five exist. Filed, not fixed: the wiki publishes to GitHub on commit, so this is an outward-facing edit the operator did not ask for. | **Small**: one paragraph and a table, plus the same derive-or-accept decision as the `README.md` row above. Anything under `docs/wiki/` publishes via the post-commit hook. |
 
 | Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249** — the premise is corrected at every live site and the frozen copies are marked unrepairable; B–H remain unruled. |
 
@@ -808,3 +809,39 @@ uv run pytest --collect-only -q --no-cov 2>/dev/null | command grep '::' \
   | sed 's|^tests/||' | awk -F'/' '{print ($2==""? "ROOT:"$1 : $1"/")}' \
   | sed 's/::.*//' | sort | uniq -c | sort -rn
 ```
+
+### The wiki's `Contributing.md` carries a second, older test census
+
+**Filed Session 250, found while sweeping for other copies of the counts `README.md` states.**
+`docs/wiki/model_project_constructor/Contributing.md` — the "Current snapshot" paragraph and the
+`grep` command beneath it annotated *"997 at time of writing"* — counts test **functions** per
+directory (`def test_` occurrences), a different measure from `README.md`'s collected tests, and the
+page says so itself. Measured with the page's own method at Session 250:
+
+| directory | page says | `def test_` now |
+| --- | ---: | ---: |
+| `orchestrator/` | 211 | 211 |
+| `data_agent_package/` | 199 | **225** |
+| `agents/website/` | 191 | 191 |
+| `agents/intake/` | 150 | 150 |
+| `schemas/` | 81 | 81 |
+| `eval/` | 75 | **137** |
+| `ui/intake/` | 32 | 32 |
+| `scripts/` | 22 | **95** |
+| `agents/data/` | 16 | 16 |
+| top-level `test_*.py` | 20, across four named files | **29**, across five |
+| total | 997 | **1,167** |
+
+The page's *"`pytest -q` currently reports 1110 passed plus 12 credential-gated `live` cases"* is
+1,338 and 9 today. **Not fixed here**: a different file in a different denominator, and anything
+under `docs/wiki/` publishes to the live GitHub wiki on commit — an outward-facing edit outside what
+Session 250 was asked to do. It is the same class as the `README.md` item above and closes under the
+same decision: derive it, or accept re-measuring by hand.
+
+```bash
+for d in orchestrator data_agent_package agents/website agents/intake agents/data eval schemas scripts ui; do
+  printf '%-22s %s\n' "$d" "$(command grep -rhoE '^\s*(async )?def test_' tests/$d --include='*.py' | wc -l | tr -d ' ')"
+done
+command grep -rhoE '^\s*(async )?def test_' tests --include='*.py' | wc -l   # total
+```
+

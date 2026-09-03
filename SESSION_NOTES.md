@@ -283,10 +283,161 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 ## ACTIVE TASK
 
 ### What Session 250 Did
-**Deliverable:** Fix the three stale per-directory test counts in `README.md`, re-measured against
-`pytest --collect-only` rather than pasted from Session 247 (IN PROGRESS)
-**Started:** 2026-09-03 03:37 UTC
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **Fix the three stale per-directory test counts in `README.md` — COMPLETE.**
+Operator's words: *"fix the three stale test counts in README.md"*. Each numeral was re-measured
+against a fresh `pytest --collect-only`, not pasted from the Session 247 filing. No other work started.
+
+**Started / completed:** 2026-09-03 (UTC). **Commits: three** — `fd1d855` (Phase 1B claim, alone),
+`47fcd90` (the fix, with the `BACKLOG.md` row maintenance the file's own "Maintain it" rule requires
+in the same commit), and this close-out.
+
+**No `CHANGELOG.md` entry.** `README.md` and `BACKLOG.md` only; `PROJECT_CONVENTIONS.md` §2's gate
+(`src/`, `packages/`, `scripts/`, `.github/workflows/`, `tests/` logic) is not met. Checked against
+precedent as well as the written rule: four earlier commits removed a `BACKLOG.md` item heading
+without touching `CHANGELOG.md` (`7075f7b`, `efc24a6`, `99e9abf`, `bfeb2a7`).
+
+#### What was measured
+
+| `README.md` row | said | collects now | Session 247 filed |
+| --- | ---: | ---: | ---: |
+| `data_agent_package/` | 207 | **257** | 257 |
+| `eval/` | 94 | **157** | 157 |
+| `test_llm_json_parity.py` | 16 | **34** | 34 |
+
+Collection reports **1,347** tests; `test_eval_live.py` collects 9, all `live`-marked, so 1,338 run
+without credentials — which is the headline sentence at `README.md:151`. **Every row in the block was
+re-measured, not just the three**: schemas 99, agents/data 19, agents/intake 155, agents/website 199,
+orchestrator 250, ui/intake 32, scripts 109, decoupling 2, vocab guard 6, wiki-citation guard 3,
+census guard 25. The block's numerals sum to 1,347. The three filed figures held because no test file
+changed between Sessions 247 and 250 — the re-measurement is what established that, at a cost of
+under a minute.
+
+**Independent confirmation, partial.** One workflow agent re-ran collection from scratch and
+reproduced every row, the sub-split and the total (its per-file breakdown is in the workflow journal,
+key file below). **Four sibling arms failed** — a second measurement method, the repository sweep, and
+two adversarial critics — on a subagent session limit (*"You've hit your session limit · resets
+12:50am America/Detroit"*). The aggregate came back `sweep: null, critics: []`. The sweep and the
+critique were then done inline by me; the measurement is independently confirmed, the critique is not.
+
+#### Sweep — every live site stating a test count
+
+`git grep` for count-shaped phrases across the tree, ledgers excluded (`SESSION_NOTES.md`,
+`CHANGELOG.md`, `PROJECT_LEARNINGS.md`, `docs/architecture-history/`), then a second sweep by the
+NAMES of what is counted (`data_agent_package/`, `test_llm_json_parity`, "repo map"):
+
+- `README.md:151` — the headline; consistent with collection.
+- **`docs/wiki/model_project_constructor/Contributing.md:104`** — a **second per-directory census**,
+  found only by the name sweep: it counts test *functions* (`def test_`), not collected tests, and
+  says so. Measured with the page's own command: `data_agent_package/`, `eval/`, `scripts/` and the
+  top-level files are stale, as are its total and its pass/skip sentence. **Filed in `BACKLOG.md` with
+  the like-for-like table, not fixed** — a different file, a different denominator, and anything under
+  `docs/wiki/` auto-publishes to the live GitHub wiki on commit, which the operator did not ask for.
+- `audits/2026-06-10-wiki-vs-code-accuracy-audit.md:417` and
+  `executive-summaries/stakeholder-readiness-dossier.qmd:44,75` — dated snapshots stating their own
+  session; historical, not live claims.
+
+#### Verification
+
+| check | result |
+| --- | --- |
+| census guard `tests/test_session_notes_census.py` | **25/25** after each edit (`README.md` and `BACKLOG.md` are two of its four files) |
+| nine `docs/architecture-history/*.verify.sh` | **GREEN** before and after |
+| full suite | **not re-run** — collection only (1,347); no test file changed; last run S249: 1,338 passed, 9 skipped |
+| `README.md` block arithmetic | rows sum to 1,347 = collected; 1,338 + 9 = 1,347 |
+
+### Session 249 Handoff Evaluation (by Session 250)
+
+**Score: 9/10.** Its what's-next #4 named this task in one line, and its gotchas were load-bearing
+for a session that touched none of its own subject matter.
+
+- **"Numerals already measured"** — true, and I re-measured anyway, which its own gotcha family
+  demands. All three matched. That is the right outcome of a handoff figure: confirmed, not copied.
+- **Gotcha 6 (`command grep`)** — used in every count, fifth session running.
+- **Gotcha 4 (run the guard AND the proofs)** — followed after each edit.
+- **Gotcha 5 (`PROJECT_LEARNINGS.md` is refused by a default `Read`)** — saved a failed read; I used
+  `tail` and `head`.
+- **Gotcha 7 (`gh issue list` is empty by design)** — saved a question.
+- **−1: gotcha 8 was stale on arrival.** *"`master` is 17 commits ahead of `origin/master`"* — measured
+  0 ahead, 0 behind at Phase 0; the operator pushed between sessions. Not wrong when written, but a
+  push-state fact has a shelf life of one operator action and should be phrased as "re-measure",
+  the way its own #2 phrases the ledger size.
+- **Missing, not scored:** that `BACKLOG.md`'s header (*"Completed items move to `CHANGELOG.md`"*)
+  reads against §2 for a documentation-only close. Cost one precedent check. Also that the wiki
+  carries a second census — but that belongs to Session 247's filing, which swept `README.md`'s
+  block, not the repository.
+- **ROI: high.** About three minutes to read; it removed every decision except the measurement.
+
+### Session 250 Self-Assessment
+
+**Score: 8/10.** The deliverable is complete, verified two ways, and exactly the size it was asked
+to be. What holds it at 8 is that the adversarial half of the verification was mine, not
+independent, and that a second stale census sits one file over, filed rather than fixed.
+
+**+** **Re-measured, every row, two methods.** Mine and one independent collection pass agree on
+all fifteen figures and the total.
+**+** **Scope held.** Three numerals plus the same-commit row maintenance `BACKLOG.md` requires of
+any session that changes an item; the wiki census was filed with evidence, not edited, because a
+wiki edit publishes.
+**+** **Swept by name, not by number.** A numeral sweep found nothing; the directory-name sweep found
+the wiki's second census immediately.
+**+** **Guard and proofs after each edit, not once at the end.**
+**+** **Checked the `CHANGELOG.md` question against the written rule and against precedent**, and
+recorded both, so the next documentation-only close does not repeat the check.
+
+**−** **Four of five verification agents died on a rate limit.** The critique of my own edit was
+done by me. The one surviving agent makes the *measurement* independent; nothing makes the
+*review* independent. Recorded as such rather than rounded up.
+**−** **I typed "fourteen rows" in a draft** of the `BACKLOG.md` row — a hand count of rows, in a
+session about hand-typed counts — and deleted it before commit. Caught, but it was written.
+**−** **The plain-language index in `BACKLOG.md` renders as three tables, not one.** Sessions 247
+and 248 each appended their row after a blank line, so the `README.md` row and the ledger-budgets
+row each render as a header-less one-row table; my new row sits in the same shape. Deliberately not
+fixed — outside the ask — and named in what's-next.
+**−** **~97k subagent tokens bought one confirmed measurement** and four failures.
+
+**Against the bar:** S249 corrected a false premise at every live site and found the machinery that
+would have re-minted it. S250 is a three-numeral fix and belongs at that scale; its one carry-forward
+is that the class S247 named — counts nobody derives — has a second instance, in a second
+denominator, one file away.
+
+**What's next.**
+
+1. **The operator still owes a ruling on D, E and F** of `docs/planning/ledger-budgets-review.md`
+   §8 — unchanged from Session 249's #1. Present it and stop.
+2. **The ninth trim is due and still cannot be run compliantly** before that ruling. The ledger is
+   over the >1,500-line trigger; re-measure at Phase 0.
+3. **The census guard's `SPELLED`/`ORDINAL` maps stop at sixteen** — S249 #3, still unfiled.
+4. **NEW: the wiki's `Contributing.md` test-function census** — filed in `BACKLOG.md` with the
+   measurement and the command. One paragraph; publishes to the live wiki on commit.
+5. **`BACKLOG.md` plain-language index** — delete the blank line before the `README.md` row and the
+   one before the *"Are the ledger budgets"* row so the three fragments render as one table. Two
+   deletions, next time that file is touched.
+6. **The `post-merge` hook**, then the two delivered plans, then the docs toolchain ceiling — S249 #5.
+
+**Key files:**
+- `README.md:100`, `:101`, `:114` — the three corrected rows; `:151` — the headline sentence they
+  must agree with.
+- `BACKLOG.md` — the rewritten item *"`README.md`'s test counts are hand-typed and will drift again"*
+  (verification command inside) and the new item for the wiki census (like-for-like table and
+  command inside). Both have plain-language rows.
+- `docs/wiki/model_project_constructor/Contributing.md:104-108` — the second census and its own
+  `grep` command, annotated *"997 at time of writing"*.
+- Workflow journal with the independent measurement's per-file breakdown:
+  `~/.claude/projects/-Users-rmsharp-Development-model-project-constructor/f527cbf0-9aef-4136-b1be-ba98dd6419d4/subagents/workflows/wf_6e3922f5-499/journal.jsonl`.
+
+**Gotchas:**
+1. **A workflow's failed arms return `null` and `[]` in the aggregate** — indistinguishable from
+   "searched, found nothing". Read the notification's `<failures>` block before treating a result as
+   coverage. Subagent limits reset on a clock; the arms can be re-run after it.
+2. **`BACKLOG.md`'s header says completed items move to `CHANGELOG.md`; §2 says documentation-only
+   work earns no entry.** §2 is the written gate and four earlier doc-only closes followed it. Do not
+   re-litigate; do not edit the header without an operator ruling.
+3. **Two censuses, two denominators.** `README.md` counts collected tests; the wiki counts `def test_`
+   functions. A parametrized function is one of the latter and many of the former. Never reconcile
+   one to the other's figures.
+4. **Anything under `docs/wiki/` publishes on commit** via `.githooks/post-commit`. A one-paragraph
+   wiki count fix is an outward-facing change.
+5. **`command grep` for every count** — bare `grep` is a `ugrep --ignore-files` wrapper (S249 #6).
 
 ### What Session 249 Did
 **Deliverable:** **Option A of [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — COMPLETE.**
