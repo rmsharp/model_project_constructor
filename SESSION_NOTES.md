@@ -282,6 +282,15 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 
 ## ACTIVE TASK
 
+### What Session 252 Did
+**Deliverable:** Present the outstanding ruling on
+[`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — options D, E and F,
+and the still-unruled B, C, G and H — to the operator with every figure re-derived at HEAD; record the
+ruling; execute nothing (IN PROGRESS)
+**Started:** 2026-09-07 (UTC)
+**Status:** Session claimed. Work beginning. Operator's words: *"finish what Session 251 claimed"* —
+same deliverable, new session number, because Session 251 produced no work product to inherit.
+
 ### What Session 251 Did
 **Deliverable:** Present the outstanding ruling on
 [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — options D, E and F,
@@ -289,6 +298,13 @@ and the still-unruled B, C, G and H — to the operator with every figure re-der
 ruling; execute nothing (IN PROGRESS)
 **Started:** 2026-09-03 18:07 UTC
 **Status:** Session claimed. Work beginning.
+
+**ABANDONED — annotation added by Session 252, 2026-09-07.** This session claimed the task and
+produced nothing further. Evidence: its claim commit `63bf3d6` was `HEAD` when Session 252 oriented,
+four days later, with a clean working tree — no work commit, no close-out, no self-assessment, no
+handoff evaluation of Session 250. Nothing above this line was written by Session 252; the stub is
+left standing verbatim because that is exactly what Phase 1B exists to leave behind (failure mode
+#14). The deliverable it names was carried forward unchanged.
 
 ### What Session 250 Did
 **Deliverable:** **Fix the three stale per-directory test counts in `README.md` — COMPLETE.**
