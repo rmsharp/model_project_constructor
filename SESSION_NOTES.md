@@ -283,13 +283,206 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 ## ACTIVE TASK
 
 ### What Session 252 Did
-**Deliverable:** Present the outstanding ruling on
-[`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §8 — options D, E and F,
-and the still-unruled B, C, G and H — to the operator with every figure re-derived at HEAD; record the
-ruling; execute nothing (IN PROGRESS)
-**Started:** 2026-09-07 (UTC)
-**Status:** Session claimed. Work beginning. Operator's words: *"finish what Session 251 claimed"* —
-same deliverable, new session number, because Session 251 produced no work product to inherit.
+**Deliverable:** **The operator's ruling on [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md)
+§8 — COMPLETE.** Every figure re-derived at HEAD, the options presented, the ruling recorded in
+[`§13`](docs/planning/ledger-budgets-review.md) and `BACKLOG.md`. **Nothing was executed** — no trim, no
+re-tune, no `CLAUDE.md` edit, no option implemented. Operator's words: *"finish what Session 251
+claimed"*, then six rulings. No other work started.
+
+**Started / completed:** 2026-09-07 → 2026-09-08 (UTC). **Commits: two** — `effc3f5` (Phase 1B claim,
+alone) and this one. **No `CHANGELOG.md` entry:** `PROJECT_CONVENTIONS.md` §2 gates on `src/`,
+`packages/`, `scripts/`, `.github/workflows/` or `tests/` logic; this session touched
+`docs/planning/`, `BACKLOG.md` and this file only. Checked against the rule, and against the four
+doc-only precedents Session 250 recorded (`7075f7b`, `efc24a6`, `99e9abf`, `bfeb2a7`).
+
+#### The ruling
+
+| option | ruling |
+| --- | --- |
+| **E — collapse-on-write, RETROACTIVE** | **RULE FOR — first** |
+| **D — front-matter budget** | **RULE FOR — second, WIDENED** to the four mandated-read files; K in bytes |
+| **F — end assertion-per-trim** | **RULE FOR, narrowed** — with a CI step running `--self-test` |
+| **B, C, G, H** | **DECLINED** |
+| the `--self-test` break (new, below) | **its own session, ahead of all three** |
+
+**§9 recommended D before E; the ruling inverts that**, on §13.3's arithmetic. **G's decline is
+recorded on corrected grounds** — §9's stated reason is falsified (below).
+
+#### What moved under the document, and why it mattered
+
+- **§3.2's "empty constraint set" and §3.4's "a ruling is on the critical path" are STALE.** The
+  retention rule is *satisfiable* at HEAD: floor-4 retains Sessions 252, 251, 250, 249 and lands at
+  **664 lines** against the 1,050 target. **The cause is that Session 251 abandoned its claim**,
+  leaving a permanent 15-line record, next to Session 250's unusually short 157. **An abandoned
+  session bought, for free, exactly the one-trim reprieve Options B and C were priced at a session
+  each to buy** — which is the whole case for declining both. Under a *four substantive records*
+  reading it is still unsatisfiable (1,216); both readings are in §13.2.
+- **§12.1's `K = 1` is now `K = 4`.** A default `Read` returns `lines 1-753 of 2346 (66193 tokens, cap
+  25000)` — front matter plus four complete records, cutting inside Session 248's. **The file grew 21%
+  in tokens and what one `Read` delivers went from one record to four.** That is §1.3's thesis
+  demonstrated rather than argued, and it is the strongest single argument for D.
+- **Option E is ~52× at the margin, not §8's ~2× or §12.2's ~6.9×.** Both earlier prices amortise the
+  collapse's one-time frame across five trims. Measured: a prose pointer block costs **6,110 B/trim =
+  11.0% of the one-`Read` budget, permanently**; a table row costs **117 B = 0.21%**.
+- **D and E are not independent.** Front matter is 41% of the 55,783 B delivered prefix (the three
+  standing prose blocks alone are 33%), so **1.8** median records fit; after E, 9% and **2.8**. **D at
+  K=3 is arithmetically unreachable until E lands.** And E-retroactive is the only option on the table
+  that produces a post-trim ledger which **reads whole** (18,977 tokens against a 25,000 cap) — §2
+  records that the system's success state has always been a file that still truncates.
+- **Every cost figure moved against the apparatus:** ledger sessions 7 of the last 10 (was 5), 10 of 20
+  (was 8), longest run 5 (was 3); `src/`/`packages/` untouched since Session 223 — **29 sessions, 95
+  commits**; 9 open code/harness defects, unchanged. Lines added since the first trim: apparatus
+  **+43,225 across 19 files** against **+40 in one file** for product code, ~**1,080 : 1**.
+
+#### The finding that outlives the ruling
+
+**`SESSION_NOTES-pointer-collapse.verify.sh` has failed its own `--self-test` since Session 249 while
+its ordinary run stays green.** `M16` and `M17` survive. They mutate by `live_wt.replace(NEW_TABLE,…)`;
+`NEW_TABLE` is no longer a substring of this file, so both are no-ops and `C6` sees clean input. `C6`'s
+plain run survives because it checks each table row and the opening line individually.
+
+**Dated by bisecting `NEW_TABLE in git show <sha>:SESSION_NOTES.md`:** last matched at `b1d761f`, broke
+at **`5243242` — Session 249's Option A**, which rewrote the *"`grep` the shards; `Read` none"* sentence
+inside the pinned region. A correct repair that silently disarmed two mutants. The proof file itself has
+been touched exactly once, at its own commit. **`C6` is the only assertion in this lineage that reads
+the working tree** — what `CLAUDE.md` calls the closure of *"the largest hole this apparatus has."*
+`CLAUDE.md` already mandates *"Run `--self-test` before trusting a green run."* Four sessions ran the
+plain loop and saw green. **This is why F's CI substitute is ruled as `--self-test`, not `bash "$f"`.**
+
+#### G: the reason §9 gave is false, the decline still stands
+
+Pairing every record with the score its successor awarded it, n = **173** across this file and all eight
+archives: **r(lines) = −0.087** — records scoring ≥9 have a median of **95** lines against 134 for ≤8, so
+*"the 9s and 10s are the long ones"* is contradicted. But **r(bytes) = +0.070** — the sign flips, because
+the older records are short in lines and long in bytes. In the modern regime (S217+, n=28) r = +0.106 and
+**0 of 28 records fit either cap**, so the data cannot test the claim at all. The decline rests instead
+on: §8's 120–150 line form is exceeded by **100%** of the last 33 records; **the operator already
+ratified 12,288 B upstream** (`~/Development/methodology/…/record-budget-reduction-plan.md:3`, enforced
+at `bin/check-handoff:665`) with its §7 saying *"No adopter receives any file this plan changes"*; and
+the controlled measurement that settled it upstream does not exist here.
+
+#### Verification
+
+| check | result |
+| --- | --- |
+| census guard | **25/25** — and it went **RED on me once**, correctly, on `95/95` sitting within 30 characters of the word it watches. Fixed by naming the file instead of the category, not by exempting it |
+| nine `*.verify.sh`, plain run | **GREEN** before and after — which is precisely the problem this session found |
+| `--self-test`, all nine | **eight pass; the collapse proof exits 2.** `SESSION_NOTES-S241-through-S239.md.verify.sh` catches 95 of 95 |
+| full suite | **not re-run** — no `src/`, `packages/` or test-logic change |
+| independent re-derivation | 8 measurement arms + 8 adversarial refuters + 1 completeness critic, **17/17 completed, 0 errors**, ~1.66M subagent tokens |
+
+### Session 251 Handoff Evaluation (by Session 252)
+
+**Score: 1/10 — a ghost session that left exactly one thing, and that one thing worked.**
+
+Session 251 claimed this deliverable on 2026-09-03 and produced nothing: no work commit, no close-out,
+no self-assessment, and **no evaluation of Session 250's handoff, which is now permanently unwritten.**
+Its claim commit `63bf3d6` was `HEAD` four days later with a clean tree.
+
+- **+1, and it is not nothing.** The Phase 1B stub did its whole job. I lost no time discovering what
+  had happened, and I inherited a correctly-scoped deliverable in the session's own words. **Failure
+  mode #14's countermeasure worked exactly as designed on the exact failure it was built for.**
+- **−.** Everything else. The stub is left standing verbatim and annotated rather than overwritten,
+  because erasing it would erase the evidence.
+- **Unscoreable and worth recording:** its abandonment is what made the ninth trim legal again (§13.2).
+  A session that did nothing improved the ledger's arithmetic more than the two options proposed to.
+
+### Session 250 Handoff Evaluation (by Session 252)
+
+**Score: 9/10.** The handoff I actually inherited, one session further back.
+
+- **What's-next #1 was this session's entire scope**, in one line, with "present it and stop".
+- **Gotcha 5 (`command grep`)** — load-bearing in every count published here, sixth session running.
+- **Gotcha 1 (a workflow's failed arms return `null` and `[]`)** — I checked the `<failures>` block
+  before trusting the aggregate. 17/17 this time, but I would not have known to look.
+- **Gotcha 2 (the `CHANGELOG.md` question is settled — do not re-litigate)** — saved a precedent hunt.
+- **−1: what's-next #2 was wrong on arrival.** *"The ninth trim is due and still cannot be run
+  compliantly."* Measured at Phase 0, it can. Not wrong when written — Session 251's abandonment
+  changed it — but it is the third consecutive handoff to carry that sentence unmeasured, and its own
+  #2 says *"re-measure at Phase 0"*, which is the instruction that caught it.
+- **ROI: very high.** It defined the session and cost three minutes.
+
+### Session 252 Self-Assessment
+
+**Score: 8/10.** The ruling is recorded on re-derived figures, two of the document's load-bearing
+premises were falsified before the operator ruled on them, and the session found a live defect in the
+apparatus the ruling is about. What holds it at 8 is that I presented a recommendation on G before the
+critic had returned, and the critic's evidence went against my reasoning.
+
+**+** **I re-derived instead of quoting, and the two biggest figures had both moved** — the retention
+rule is satisfiable, and `K` went 1 → 4. Both would have been inherited as true.
+**+** **I found the `--self-test` break and dated it to the commit**, in a session whose subject is
+whether the apparatus is worth its cost. It is the strongest evidence on both sides at once.
+**+** **I went back to the operator after the ruling** when the critic produced evidence that G's
+stated ground was false and that the operator had ratified the mechanism upstream. Re-opening a
+decided question is expensive; presenting it once, with the measurement, was right.
+**+** **The guard adjudicated me and I let it.** It went red on `95/95`; I made the sentence more
+precise rather than adding a `FROZEN` exemption.
+**+** **17/17 subagents, zero failures**, after Session 250 lost four of five to a rate limit.
+
+**−** **I recommended declining G on §9's reason without testing it first.** The correlation took one
+script. I presented it, the operator ruled, and then the critic falsified the premise — so the operator
+ruled twice on one option because I did not measure before recommending. **That is this project's
+signature defect committed inside the session that catalogues it.**
+**−** **My §13.3 pricing is in bytes, not tokens.** No arm could run a tokenizer. It agrees with
+§12.2's token figure by an independent route (6.71× vs 6.92×), and I labelled it — but it is a proxy.
+**−** **One of my own measurement arms asserted what §3.2 says without opening it.** A refuter caught
+it. I wrote the prompt that let it.
+**−** **~1.66M subagent tokens.** Justified — the critic alone changed a ruling — but it is the second
+most expensive session in this lineage.
+
+**Against the bar:** S248 falsified the premise the apparatus rests on; S249 showed the premise was
+executable. S252's equivalent is showing that **the document's own conclusions had expired in four
+sessions** — the rule it called unsatisfiable is satisfiable, the K it measured at 1 is 4, and the
+proof it counted as green cannot be trusted.
+
+**What's next.**
+
+1. **The `--self-test` repair — ruled as the next session's deliverable**, ahead of E, D and the CI
+   step. Filed in `BACKLOG.md` with the mechanism, the dating, the DONE gate and the VERIFY command.
+2. **Then Option E, retroactive** — collapse the three standing prose blocks and make collapse-on-write
+   the rule. §11's E criterion applies; §13.3 has the target arithmetic.
+3. **Then Option D, widened** to `SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md` and
+   `PROJECT_LEARNINGS.md`, with K expressed in **bytes** against the delivered prefix and stubs
+   excluded from K. §13.8 and §13.11 have the ruling and the refinement.
+4. **Then the CI step**, running `--self-test` on all nine. It is one line and F depends on it.
+5. **Sync the local dashboard.** `~/Development/methodology_dashboard.py` is v2.15.2 against canonical
+   v2.17.0; the sync command is in the dashboard's own startup warning. Outside this repo.
+6. **`BACKLOG.md`'s plain-language index still renders as four tables**, not one — S250's #5, now one
+   fragment worse because I appended a row the same way. Two blank-line deletions.
+
+**Key files.**
+- `docs/planning/ledger-budgets-review.md` **§13** — the ruling, the re-derived figures, and **§13.11**,
+  the eleven figures in §8/§12/Appendix A that are stale at HEAD.
+- `BACKLOG.md` — the new item *"A shard proof has been silently unfalsifiable since Session 249"*, and
+  the ledger-budgets row now marked RULED.
+- `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` — `NEW_TABLE` (the literal that
+  no longer matches), `C6` (~`def C6`), and `M16`/`M17` at the mutant table.
+- `~/Development/methodology/docs/planning/record-budget-reduction-plan.md` and
+  `~/Development/methodology/bin/check-handoff:665` — the upstream G ratification and its enforcement.
+- `/private/tmp/claude-501/…/scratchpad/measurements-s252.md` — every figure with its command.
+
+**Gotchas.**
+1. **The nine-proof loop is not a check on the apparatus.** `bash "$f"` and `bash "$f" --self-test`
+   disagree today. Run **both**, and treat the plain loop as necessary, never sufficient.
+2. **Editing this file can disarm a proof without failing it.** `5243242` is the worked example: a
+   correct prose repair inside a pinned literal turned two mutants into no-ops. **After any front-matter
+   edit, run `--self-test`, not the plain loop.**
+3. **The ninth trim is legal and the margin is measured, not projected.** With this record written, a
+   floor-4 cut (Sessions 252, 251, 250, 249) lands at **854 lines** before the new pointer block —
+   **196 lines of headroom** under the 1,050 target, so it stays compliant even at the eighth trim's
+   96-line block. This record was sized to that budget deliberately (199 lines against a 320 ceiling).
+   **Re-measure before trimming**: the number moves with every close-out, and Session 251's abandoned
+   15-line record is what is paying for most of the headroom.
+4. **The census guard fires on any numeral within 30 characters of the word "shard"** (`VOCABULARY`,
+   `WINDOW = 30`). It caught `95/95` here. Name the file rather than the category; `FROZEN` is a last
+   resort and the companion staleness test makes entries permanent work.
+5. **`command grep` for every count** — bare `grep` is a `ugrep --ignore-files` wrapper.
+6. **`PROJECT_LEARNINGS.md` and `CHANGELOG.md` are REFUSED by a default `Read`** — zero content. The
+   exact boundary is 262,144 B, measured.
+7. **The Phase 0 dashboard under-reports read-cap risk on this machine.** The local copy is v2.15.2 and
+   still measures lines against 2,000; canonical v2.17.0 measures bytes against a token-derived budget.
+8. **`gh issue list` is empty by design** until UAT.
 
 ### What Session 251 Did
 **Deliverable:** Present the outstanding ruling on

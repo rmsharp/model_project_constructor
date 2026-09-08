@@ -1,6 +1,9 @@
 # Are the ledger budgets worth what they cost?
 
-**Status:** ANALYSIS — options presented, nothing ruled, nothing re-tuned, no prose corrected.
+**Status:** **RULED — see §13 (Session 252, 2026-09-07).** A is executed (Session 249); **E then D**
+are ruled for execution, **F** is ruled with a CI substitute, **B, C, G and H are declined.** The
+analysis below stands as written except where §13 records a figure that has since moved; §13 corrects
+rather than rewrites, for the reason §12 gives.
 **Session:** 248, 2026-08-26, at `b95c39e`. Per the operator assignment recorded at `c6aa37b` and filed
 as `BACKLOG.md:62`. **Deliverable:** this document (`SESSION_RUNNER.md` FM #18 — the plan is the
 deliverable; every repair named below is a *proposal*).
@@ -773,3 +776,271 @@ document asserted the reframing without following it there. It is followed here.
 rises sharply** on §12.2's re-pricing, **D must be widened** to cover `PROJECT_LEARNINGS.md`,
 `BACKLOG.md` and `CHANGELOG.md` (§12.3), and **one CI line adding the proof loop** should be bundled
 into whichever option is ruled first (§12.6).
+
+---
+
+## 13. The ruling — Session 252, 2026-09-07, at `effc3f5`
+
+**Nothing in this section was executed.** Session 252's deliverable was to present §8 with every
+figure re-derived at HEAD and to record the operator's ruling. Each option ruled for is a **separate
+session** with the §11 completion criterion already written for it.
+
+### 13.1 The ruling
+
+| option | ruling | note |
+|---|---|---|
+| **A — correct the premise** | **executed**, Session 249 | not re-opened |
+| **E — collapse-on-write, applied RETROACTIVELY** | **RULE FOR — do this FIRST** | §9 sequenced D before E; the ruling inverts that, on §13.3 |
+| **D — front-matter budget** | **RULE FOR — second, WIDENED** | scope is the four mandated-read files, not just this ledger (§13.8); express K in BYTES against the delivered prefix, stubs excluded (§13.11); unreachable at K=3 until E lands |
+| **F — end the assertion-per-trim convention** | **RULE FOR, narrowed** | with a CI step running `--self-test` on all nine proofs — **not** the plain loop |
+| **B — raise the target** | **DECLINED** | moot: the reprieve arrived without it (§13.2) |
+| **C — lower the floor** | **DECLINED** | same |
+| **G — cap record length** | **DECLINED — on corrected grounds** | §9's stated reason is falsified; the decline stands on three others (§13.5) |
+| **H — stop trimming** | **DECLINED** | gives up `L9`/`L10`'s unconditional guarantee for a 2.57 s cost |
+
+**Order of execution: E → D → the CI step.** The `--self-test` repair of §13.6 is ruled a **separate
+session of its own, ahead of all three** — it is a live executable defect in the only assertion that
+reads the working tree, and folding it into E would repair it inside the very change that rewrites the
+front matter it reads.
+
+### 13.2 §3.2 and §3.4 are STALE: the retention rule is satisfiable at HEAD
+
+Measured, not projected [M — `effc3f5`]: `SESSION_NOTES.md` is **2,345 lines / 175,688 B /
+66,193 tokens**; front matter **284 lines**; eleven record headings. A floor-4 cut retains Sessions
+252, 251, 250 and 249 and leaves **664 lines** — under the 1,050 target with ~380 lines of headroom
+under any pointer-block size this lineage has produced.
+
+**The cause is an accident, and it is the finding.** Session 251 claimed the ruling task and abandoned
+it, leaving a permanent **15-line** record; Session 250's record is **157** lines against a 231 median.
+**An abandoned session bought, for free, exactly the one-trim reprieve Options B and C were proposed to
+buy at a session each** — which is the whole of the case for declining both.
+
+Two limits stated rather than smoothed:
+
+- **Under a "four SUBSTANTIVE records" reading the rule is still unsatisfiable** — Sessions 250, 249,
+  248, 247 total 932 lines, and `932 + 284 = 1,216`. `CLAUDE.md`'s declared grammar counts *heading-
+  delimited byte spans*, and §3.3 records that every historical trim counted its own Phase-1B stub, so
+  the literal rule is satisfied and its spirit is not. Both readings are on the record here.
+- **It is one trim's reprieve, and it tightens immediately.** After Session 252's own close-out the
+  landing is `655 + R + G`, compliant iff `R + G ≤ 395`: **R ≤ 394** under E's one-line row, **R ≤ 320**
+  at the last three trims' prose mean, **R ≤ 299** at the eighth trim's 96-line block — below the
+  304-line maximum already on record.
+
+### 13.3 Why E moves ahead of D — measured at the margin, and it is ~52×, not ~2× or ~6.9×
+
+§8 priced E in lines (96/72/56 vs 51, ~2×) and §12.2 re-priced it in tokens (~6.9×). **Both amortise
+the collapse's one-time 44-line frame across five trims.** The quantity that decides every *future*
+trim is the marginal one [M]:
+
+| | per trim | share of the one-`Read` budget |
+|---|---:|---:|
+| prose pointer block — 96 / 72 / 56 lines, **accelerating** | **6,110 B** | **11.0%, permanently** |
+| one collapsed table row | **117 B** | **0.21%** |
+
+**D at K=3 is arithmetically unreachable until E runs** [M, against the 55,783 B one-`Read` budget
+measured in §13.4]:
+
+| | front matter | records that fit |
+|---|---:|---:|
+| today | 23,029 B (**41%**), of which the three standing prose blocks are 18,329 B (**33%**) | **1.8** median records |
+| after E collapses those three | 5,051 B (**9%**) | **2.8** median records |
+
+And the ninth trim's own landing, at a 250-line record:
+
+| | bytes | tokens | |
+|---|---:|---:|---|
+| status quo — one more prose block | 74,268 | 27,983 | 1.12× cap, still truncates |
+| E prospective — one row | 68,342 | 25,751 | 1.03× cap, still truncates |
+| **E retroactive — collapse the three standing blocks too** | **50,364** | **18,977** | **reads whole** |
+
+§2 records that *"the system's success state has been a file that still truncates."* **E-retroactive is
+the only option on this table that ends that**, after eight trims of trying. That is why it goes first.
+
+### 13.4 §12.1's K = 1 is stale, and the direction of the error is the argument
+
+[M] A default `Read` of `SESSION_NOTES.md` at `effc3f5` returns:
+
+> `PARTIAL view — showing lines 1-753 of 2346 total (66193 tokens, cap 25000)`
+
+Line 753 sits inside Session 248's record. One `Read` delivers the front matter **plus four complete
+records** (252, 251, 250, 249). §12.1 measured **K = 1** at 1,924 lines / 54,688 tokens. **The file grew
+21% in tokens and what one `Read` delivers went from one record to four.** The delivered prefix is
+**55,783 B**, giving **2.231 B/token** on this file's real content — against the canonical fleet tool's
+`MIN_BYTES_PER_TOKEN = 2.27` floor, which is therefore accurate here.
+
+That is §1.3's thesis demonstrated rather than argued: **total length does not govern; the front matter
+and record density do.** It is also the strongest single argument for D.
+
+### 13.5 G is declined — and §9's stated reason for it is FALSIFIED
+
+**The reason §9 gave does not survive measurement, and the ruling records that rather than inheriting
+it.** §9 declined G on *"the handoffs that score 9 and 10 are the long ones"* [W]. Pairing every record
+with the score its successor awarded it in Phase 3A — live file plus all eight shards, **n = 173**
+scored non-stub records [M]:
+
+| denominator | Pearson r | scored ≥9 (n=135) | scored ≤8 (n=38) |
+|---|---:|---|---|
+| **lines** | **−0.087** | mean 128, **median 95** | mean 148, median 134 |
+| **bytes** | **+0.070** | mean 18,836 B, median 16,978 B | mean 16,667 B, median 16,485 B |
+
+**In lines the claim is mildly contradicted; in bytes the sign flips.** The whole correlation is a
+format change, not a quality effect — the pre-S216 records are short in lines (median 107) and long in
+bytes (median 17,194 B). **In the modern regime the data cannot test the claim at all**: Sessions 217+,
+n = 28, r(lines) = +0.106, r(bytes) = +0.023, and **0 of 28 records fit either a 150-line cap or a
+12,288 B budget**. There is no short, high-scoring modern record to learn from.
+
+**G is nonetheless declined, on three grounds that do survive:**
+
+1. **The form proposed here is far harsher than the form already ratified.** §8's *"~120–150 lines"* is
+   exceeded by **100% of the last 33 records** (live non-stub median 231, six S221–S241 shards median
+   225, min 157, max 304) [M]. It is a rewrite of the record format, not a bound on it.
+2. **The operator has already ratified this mechanism upstream, deliberately scoped NOT to reach here**
+   [M]. `~/Development/methodology/docs/planning/record-budget-reduction-plan.md:3` — *"**Status:
+   RATIFIED 2026-08-25** — the operator chose **12,288 (12 KiB)** … **Phase 1 IMPLEMENTED** the same
+   day … **PHASE 2 IMPLEMENTED 2026-08-25**"* — enforced at
+   `~/Development/methodology/bin/check-handoff:665`, `RECORD_BUDGET_BYTES = 12288`, failing at `:731`.
+   Its §7 is explicit: *"`bin/check-handoff` is **canonical-only** … **No adopter receives any file this
+   plan changes.**"* Nothing in this repository references `check-handoff`. **So declining G here
+   contradicts no standing ruling** — but the divergence is now on the record rather than accidental.
+3. **The measurement that would settle it does not exist here.** Upstream ran the controlled version
+   and found no step in `predecessor_score` at either budget event (8.25 → 7.75, smooth drift,
+   S103→S125) [W]. This project has no equivalent, and §13.5's own regime split shows why it cannot be
+   manufactured from the existing ledger.
+
+**For the record, against the ratified 12,288 B budget:** 8 of this project's 9 live non-stub records
+are over it (median 18,328 B; only Session 250's 10,672 B fits), and so were **89%** of the 200 S216-era
+records. **A byte budget would bind on this project immediately and in every era it has had.**
+
+### 13.6 A live proof has been silently unfalsifiable since Session 249
+
+**Not in §6's table, not in §12.5, and the reason the CI step is ruled with `--self-test` rather than
+the plain loop** [M]:
+
+```
+$ bash docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh --self-test
+  SURVIVED  M16 the table absent from the WORKING TREE
+  SURVIVED  M17 the collapse declared but NOT applied to the working tree
+  SELF-TEST FAILED: 2 mutant(s) survived. This proof cannot be trusted.        exit 2
+
+$ bash docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh
+  exit 0                                                                       ← GREEN
+```
+
+**Mechanism.** `M16` and `M17` mutate by `live_wt.replace(NEW_TABLE, …)`. `NEW_TABLE` is a 51-line
+pinned literal that is **no longer a substring of the live ledger**, so both replacements are no-ops and
+`C6` is handed unmutated input. `C6`'s plain run survives because it checks each table **row** and the
+table's opening line individually, and none of those changed.
+
+**Dated exactly** [M — `NEW_TABLE in git show <sha>:SESSION_NOTES.md`]: it last matched at `b1d761f`
+and broke at **`5243242`, Session 249's Option A**, which rewrote the *"`grep` the shards; `Read` none"*
+sentence inside the pinned region. A correct prose repair that silently disarmed two mutants. The proof
+file itself has been touched exactly once, at its own commit `2b8c9c9`.
+
+**Why it is load-bearing.** `C6` is the only assertion in this lineage that reads the **working tree** —
+what `CLAUDE.md:87` calls the closure of *"the largest hole this apparatus has."* `CLAUDE.md:85` already
+mandates *"Run `--self-test` before trusting a green run"*; four sessions ran the plain loop and saw
+green. For contrast, the newest shard proof passes **95/95**. This is simultaneously the strongest
+evidence **for** F (the per-trim convention polices trim-generated prose while the one live-state
+assertion rotted unnoticed) and the reason F must not ship without the CI step.
+
+### 13.7 Figures that moved since §4 and §12, all against the apparatus
+
+| | §4 / §12 | **at `effc3f5`** |
+|---|---|---|
+| ledger-apparatus sessions, last 10 | 5 (50%) | **7 (70%)** — 245, 246, 247, 248, 249, 251, 252 |
+| last 20 | 8 (40%) | **10 (50%)** |
+| since S216 | 10 of 32 (31%) | **14 of 37 (38%)** |
+| longest consecutive run | 3 | **5** (S245–S249) |
+| last commit to `src/` or `packages/` | S223 `2733df0` | **unchanged — 29 sessions** |
+| open code/harness defects filed S217–S225 | 9 | **9, untouched** |
+| `CLAUDE.md` against its own ~25 KB budget | 25,997 B | **27,600 B** |
+| machinery : live ledger | 6.97 : 1 | **5.06 : 1** — and it fell only because the ledger grew |
+| machinery : all guarded data | 0.37 : 1 | **0.36 : 1** |
+
+Lines added since the first trim [W, refuter-derived and spot-checked]: ledger apparatus **+43,225
+across 19 files**; `src/` + `packages/` **+40 in one file** — roughly **1,080 : 1**.
+
+Unchanged and confirmed [M]: the eight pre-trim ledger states are all byte-recoverable
+(25,578 / 1,462 / 1,681 / 1,530 / 1,761 / 1,786 / 1,561 / 1,648 lines); assertion and mutant growth is
+4/9 → 5/15 → 8/28 → 10/50 → 12/59 → 13/68 → 14/84 → 15/95 plus the collapse's 8/46; the nine-proof loop
+runs in **2.57 s**; CI runs `ruff`, `mypy`, `pytest -q` and the decoupling test and **no `*.verify.sh`**.
+
+### 13.8 Two things already fixed upstream, and the file D must be widened to cover
+
+- **The fleet dashboard is already remediated** [M]. Canonical
+  `~/Development/methodology/tools/methodology_dashboard.py` **v2.17.0** now sets
+  `READ_CAP_TOKENS = 25_000`, `MIN_BYTES_PER_TOKEN = 2.27`, `READ_CAP_BYTES = 56,750` (*computed, not
+  written*), `READ_REFUSE_BYTES = 256 KB` and `CLASS_A_FIRE_BYTES = 192 KB`, with a Class A / Class B
+  split whose own comments argue ordered truncation and newest-on-top explicitly. §12.3's *"the
+  instrument is measuring the wrong quantity"* is **fixed at canonical.** The copy on this machine is
+  **v2.15.2** with `READ_CAP_LINES = 2000`, which is why Session 252's Phase 0 dashboard run reported no
+  read-cap risk at all. **Syncing it is one command and is outside this repository.**
+- **`PROJECT_LEARNINGS.md` is the file D must reach, and the operator has RULED that it does** [M]:
+  **285,501 B**, past the **262,144 B** hard refuse ceiling — a default `Read` returns *zero content*,
+  not a partial view. It crossed between Sessions 245 and 248 (144,225 → 240,018 → 255,027 → 272,677 →
+  285,501 B) and grows ~3.5 KB/session. `CLAUDE.md:101` directs every session to consult it, and it is
+  **not in `READ_CAP_WATCHED` even in the fixed canonical dashboard.** `BACKLOG.md` and `CLAUDE.md:101`
+  both still state 272.5 KB. **Ruling: D is widened rather than given its own session.** Its scope is
+  the four mandated-read files — `SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md` and
+  `PROJECT_LEARNINGS.md` — because D already governs *"what one `Read` delivers"* and none of B, C, E,
+  F, G or H does anything for any of them. **§12.3 asserted this widening and gave it no mechanism, no
+  cost and no option row, which is why it was never rulable until now.**
+- **Two smaller files nobody has tabulated** [M]: `docs/methodology/ITERATIVE_METHODOLOGY.md` is
+  **58,815 B**, over the 56,750 B one-`Read` budget; `HOW_TO_USE.md` is **53,459 B**, just under.
+  Neither is a Phase 0 mandated read, so neither is in D's ruled scope — recorded so the next sweep
+  does not rediscover them.
+
+### 13.9 Defect count at HEAD
+
+**Nine of the ten filed in §6 and §12.5 are still live** — #9 was correctly refuted by Session 249 and
+is not one of them. **Four are new:**
+
+| # | site | says | measured |
+|---|---|---|---|
+| 11 | `…S231-through-S228.md.verify.sh:1398` | — | the `startswith("L1")` prefix bug is in **two** frozen proofs, not one; §6 row 8 named only the S235 shard's. The S238 proof's own comment credits *"the fifth and sixth trims"* and is right |
+| 12 | `CLAUDE.md:81` | the budgets are *"jointly unsatisfiable at this record density"* | **false at HEAD** — §13.2 |
+| 13 | `BACKLOG.md`, `CLAUDE.md:101` | `PROJECT_LEARNINGS.md` is **272.5 KB** | **278.8 KB**; invalidated by the close-out of the session that measured it |
+| 14 | the collapse proof | — | **`--self-test` fails, 2 mutants survive** — §13.6 |
+
+All nine `*.verify.sh` exit 0 and the census guard passes 25/25 throughout.
+
+### 13.10 Method
+
+Every figure above was derived by a command at `effc3f5`, and independently re-derived by eight
+measurement arms and eight adversarial refuters that never saw the first set. The refuters reproduced
+**156 of ~170** figures exactly and corrected several narrative glosses — including one of this
+session's own arms, which asserted what §3.2 says without opening it. Where an arm and a refuter
+disagreed, the refuter's method is the one recorded here.
+
+### 13.11 Figures in §8, §12 and Appendix A that a completeness critic found stale
+
+Recorded, not repaired — §12's own rule, and the reason this document appends rather than rewrites.
+All [M/W] at `effc3f5`, front matter 284, non-stub density 226.33.
+
+| site | says | measured |
+|---|---|---|
+| §8 row B | lower bound `283 + 4(234.8) = 1,222` | **`284 + 4(226.33) = 1,189`** |
+| §8 row C | floor-3 lands at `283 + 3(234.8) = 987` | **963** at +0 growth; **1,036** at +73; **1,050.0** at the last *observed* +87. The verdict is window-dependent, which §8 never surfaces — and an unlucky draw of the three largest live records (304+272+253) lands at **1,113** |
+| §8 row G | density *"doubled unlegislated (119 → 235)"* | **119.24 → 226.33**; the 119 endpoint reproduces exactly |
+| §8 rejected | floor 6 needs ≥1,692; floor 8 needs 2,162; dynamic range 7.3 | **1,642 / 2,095 / 7.58** — the Session 249 annotation said *"recompute before citing the 7.3"* and nobody had |
+| §12.1 | 1,924 lines / 145,307 B / 54,688 tok / **K = 1** | **2,345 / 175,688 B / 66,193 tok / K = 4** (§13.4) |
+| §12.2 | blocks 96 / 72 / 56 lines | **95 / 71 / 55** as *content* spans; 96/72/56 are heading-to-heading gaps. A convention difference, **not** drift — both are correct under their own rule, and §13.3 uses the gap form |
+| §12.3 | `BACKLOG.md` 768 lines, 25,212 tok, *"1.01× — already truncating"* | **847 lines**, measured banner **28,576 tok = 1.14×** |
+| §12.3 | the fleet watch cited at `methodology_dashboard.py:287-289` | **the citation resolves to the wrong file now** — at the canonical path `DASHBOARD_VERSION = "2.17.0"` and `READ_CAP_LINES` has **zero** hits (§13.8) |
+| §12.4 | `CLAUDE.md` 25,997 B; section at lines 77–89 = 17,060 B = 65.6%; growth **+165%** | **27,600 B**; the section runs 77–**90** = **18,500 B = 67.0%**; growth from 9,822 B is **+181%** |
+| §12.5 defect #9 | *"the count is ten, not eight"* | **nine** — #9 was correctly refuted by Session 249, whose adjudication this re-derivation confirms |
+| Appendix A | annotated expectation `# 7` record headings | **11**. The other two annotations (`# 8` for `^def C[0-9]`, `# 46` for M-labels) still reproduce exactly |
+
+**Three figure families in this document remain un-re-derived, and are flagged rather than repeated:**
+§12.2's per-region **token** table (no arm could run a tokenizer; §13.3 substitutes a byte proxy
+cross-checked against the measured 2.231 B/token delivered prefix, and reaches **6.71×** where §12.2
+reached 6.92× — independent agreement by a different route); §12.3's token column for
+`PROJECT_LEARNINGS.md` and `CHANGELOG.md`, which is **unmeasurable by the only method available** —
+both are refused outright with zero content, so no banner ever emits a token figure for them; and
+§12.6's four counter-instances to *"the apparatus only finds defects it created"*, of which only the
+fourth is corroborated here, arithmetically, by Session 250's `47fcd90`.
+
+**And §11's own completion criteria already fail at HEAD**, for a reason unrelated to any option:
+Option A's DONE and Option D's VERIFY both require a green/self-testing apparatus, and §13.6 shows one
+proof cannot currently be trusted. **Any option whose gate is "all nine green" would certify it.** That
+is why the `--self-test` repair is ruled ahead of E, D and the CI step rather than inside them.
