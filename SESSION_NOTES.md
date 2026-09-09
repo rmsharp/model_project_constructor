@@ -282,6 +282,13 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 
 ## ACTIVE TASK
 
+### What Session 253 Did
+**Deliverable:** Repair `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` so its
+`--self-test` exits 0 with `M16`/`M17` catching again, and add the CI step running `--self-test` on
+all nine proofs. (IN PROGRESS)
+**Started:** 2026-09-09 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 252 Did
 **Deliverable:** **The operator's ruling on [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md)
 §8 — COMPLETE.** Every figure re-derived at HEAD, the options presented, the ruling recorded in
