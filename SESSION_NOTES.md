@@ -283,11 +283,187 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 ## ACTIVE TASK
 
 ### What Session 253 Did
-**Deliverable:** Repair `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` so its
-`--self-test` exits 0 with `M16`/`M17` catching again, and add the CI step running `--self-test` on
-all nine proofs. (IN PROGRESS)
-**Started:** 2026-09-09 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **The unfalsifiable proof is repaired — COMPLETE.**
+`docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` passes `--self-test` with
+`M16`/`M17` catching again; a `proofs` job in `.github/workflows/ci.yml` runs **both** modes over
+every `*.verify.sh` in `docs/architecture-history/` on push and PR. No pinned literal, no assertion,
+no archived file and no ancestor proof was touched. Operator's words: the backlog item's own title.
+
+**Started / completed:** 2026-09-09 (UTC). **Commits: two** — `5def6b9` (Phase 1B claim, alone) and
+this one. **`CHANGELOG.md` entry: YES** — `PROJECT_CONVENTIONS.md` §2's directory test puts
+`.github/workflows/` inside the gate (operator ruling, Session 244, "not a judgement test"), and this
+session adds a job to `ci.yml`.
+
+#### What was wrong, and what the repair actually is
+
+`M16`/`M17` corrupted the working tree with `live_wt.replace(NEW_TABLE, …)`. `NEW_TABLE` is a
+51-line pinned literal of **table plus prose**; `C6` reads only the composed rows and the table's
+opening line. Session 249 correctly repaired the read-cap sentence inside that prose at `5243242`,
+`NEW_TABLE` stopped matching (4,273 of 4,369 characters still agree — the divergence is the
+literal's last sentence), both replacements became no-ops, and `C6` was handed pristine input. **The
+assertion was never wrong; the fixture was.** Re-derived here, not inherited: last matched at
+`b1d761f`, broke at `5243242`, and the proof was plain-GREEN / self-test-RED at **8 consecutive
+commits** across Sessions 249–252 (measured per commit in an isolated clone).
+
+**The filing's proposed remedy was tested and rejected on evidence.** `BACKLOG.md` said *"Re-pin one
+literal"*. `C1` resolves its `after` operand at this file's own add-commit `2b8c9c9` **forever**, and
+that commit carries the old sentence: a re-pinned `NEW_TABLE` fails `C1 TABLE MISSING` and
+`C1 CONFINEMENT` at once, permanently. There is no green state containing one. The repair went where
+the same item's last paragraph already pointed — the mutants.
+
+`live_table_replaced(lw, put="")` strips **the same expressions `C6` counts** — `rows_of(NEW_TABLE)`
+and `new_table.split("\n")[0]`, neither carrying a trailing newline. Measured over three drift
+classes: a row-content edit and an opening-line edit turn **both** modes red together; a prose edit
+inside the block — the exact class that caused this bug — leaves both green.
+
+**And the class, not the instance.** The `--self-test` driver now compares each mutant's 10-tuple of
+arguments against the pristine tuple and reports **`NO-OP`** — a distinct hard failure — for any
+mutant that changed nothing. `SURVIVED` names the wrong culprit: it says the assertion missed a
+corruption when the corruption never happened. Session 252 needed a bisect to learn that difference;
+the self-test now prints it.
+
+#### The finding that outlives the repair
+
+**Neither mode subsumes the other, and every published recipe was one-mode.** Measured with controls:
+
+| mode | proves | is blind to |
+| --- | --- | --- |
+| `bash "$f"` | the world is intact | a proof that can no longer fail (8 commits, 2 inert mutants, green throughout) |
+| `bash "$f" --self-test` | the proof can fail | **real corruption** — append a line to any archived file and its `--self-test` still PASSES, because every mutant then fails for the corruption's sake and scores as *caught* |
+
+The plain run's coverage is **lineage-wide, not per-file**: for the two oldest proofs (which define
+only `L0`–`L4`, none of which reads disk) their own file's corruption leaves them green, and `L9` in
+every proof from the S227 one forward is what catches it. `CLAUDE.md`'s trimmed-file bullet now
+carries the two-mode loop and why each half is necessary; it previously mandated `--self-test` alone.
+
+#### Verification
+
+| check | result |
+| --- | --- |
+| nine proofs, **both** modes | **GREEN/PASS 9/9** — the corrected gate prints nothing |
+| `M16` reverted / `M17` reverted / both | exit 2, `NO-OP`, correctly diagnosed each time |
+| `C6` neutered (type-preserving `return []`) | `M16, M17, M34, M35, M43` survive — matches the header's own table exactly |
+| CI step run verbatim | exit 0, 9 groups, 0 errors; exit 1 on a corrupted archive **and** on a re-broken mutant |
+| shallow-clone control | all nine RED at depth 1 → `fetch-depth: 0` is load-bearing |
+| census guard | **25/25** — went RED on me once, correctly, on a census claim I wrote into `CLAUDE.md`; reworded to state no census rather than exempted |
+| full gate | **1338 passed + 9 live-skipped @ 97.98%**, `ruff` and `mypy` clean |
+| adversarial review | 7 lenses + per-finding refuters + completeness critic; **42 agents, 0 errors**, ~4.4M subagent tokens; 10 confirmed, 24 rejected |
+
+**Three review findings changed the code.** (1) I had written *"it is filed in `BACKLOG.md`"* about
+the residual gap — **and nothing was filed**; 7 of 7 lenses reported it, the most-reported finding of
+the session. The filing now exists. (2) My first helper searched for `row + "\n"` while `C6` counts a
+bare `row` — **the same failure shape as the bug being repaired**, one field over; a trailing space on
+a row would have left the plain run green and killed the self-test on an assert. (3) The CI step
+exited 0 for a proof that ignores `--self-test` entirely, because every proof here ignores an
+unrecognised flag; it now requires the `SELF-TEST OK` line. The **critic** found a fourth: the DONE
+gate's own `VERIFY` command is `--self-test`-only and therefore passes on an already-corrupt world.
+
+**One rejected finding was re-measured by hand and the rejection confirmed:** the header's *"35
+failure-emitting statements"* is correct (33 `out.append` + 2 early `return ["C…`), so no item was
+filed against it. A reviewer had counted one form and called it stale.
+
+### Session 252 Handoff Evaluation (by Session 253)
+
+**Score: 8/10.** It defined this session completely and its gotchas were load-bearing throughout.
+
+- **+ What's-next #1 was the entire deliverable**, and the `BACKLOG.md` item behind it carried the
+  mechanism, the dating, the DONE gate and a VERIFY command. I never had to discover the problem.
+- **+ Gotcha 1 — "run both, treat the plain loop as necessary, never sufficient"** — is the single
+  most valuable line in the handoff, and this session measured *why* it is true in both directions.
+- **+ Gotcha 4 (census guard, 30-character window)** paid immediately: the guard went red on my
+  `CLAUDE.md` sentence and I knew from the gotcha to reword rather than exempt.
+- **+ Gotchas 5 and 6** (`command grep`; the two files a default `Read` refuses) — both load-bearing,
+  seventh session running for #5.
+- **+ Key files were exact** — `NEW_TABLE`, `C6`, `M16`/`M17` at the mutant table.
+- **− The item's own remedy is impossible.** *"Re-pin one literal"* cannot be done: `C1` pins the
+  post-collapse front matter at the add-commit forever. Ten minutes to test and discard. Mitigated
+  only because the same item's last paragraph says the opposite and is right.
+- **− The DONE gate contradicts gotcha 1.** The gate is `--self-test`-only, so it certifies a tree
+  whose archived history is already damaged — the same one-mode error the gotcha warns about, written
+  by the same session, in the criteria this session is closed against. Corrected here.
+- **ROI: very high.** It cost five minutes and defined the session.
+
+### Session 253 Self-Assessment
+
+**Score: 8/10.** The deliverable is complete, verified in both modes, and the fix is at the class
+level rather than the instance. What holds it at 8 is that I wrote an unverified claim into the very
+header block arguing that claims must be measured, and that a review — not I — caught me
+reintroducing the repaired bug's own shape.
+
+**+ I tested the filed remedy instead of following it**, and the experiment redirected the repair.
+**+ I fixed the class.** A `str.replace` whose needle has drifted is silent; it is now loud, with a
+message naming the right culprit.
+**+ I found that neither verification mode subsumes the other** — with controls over every archived
+file — which falsified a recipe in `CLAUDE.md`, in the DONE gate, and in my own first CI draft.
+**+ I re-derived every inherited figure** — the break commit, the outage span, `95/95`, the header's
+arm counts — and one of them (the arm counts) turned a reviewer's finding into a non-finding.
+**+ The guard adjudicated me and I let it**, for the second session running.
+
+**− I wrote *"it is filed in `BACKLOG.md`"* when nothing was filed.** In the block arguing for
+measured claims. Seven of seven lenses found it. **This project's signature defect, committed inside
+the repair that catalogues it** — the same sentence Session 252 wrote about itself.
+**− My first repair reintroduced the bug's own shape.** `row + "\n"` against `C6`'s bare `row`.
+I had just spent an hour characterising *needle ≠ haystack* and then wrote one.
+**− I measured that `--self-test` is blind to corruption and did not connect it to the gate I was
+being judged by.** The critic did. That is a synthesis failure, not a measurement failure.
+**− ~4.4M subagent tokens**, the most expensive verification in this lineage. It changed three things
+in the code and found a fourth, so it paid — but it is a large bill for a two-file repair.
+
+**Against the bar:** S249 showed a premise was executable; S252 showed a document's conclusions had
+expired. S253's equivalent is showing that **the apparatus's own verification recipe was wrong in
+every place it was written down** — and that the proof it was meant to certify had been unable to
+fail for four sessions while every published check reported success.
+
+**What's next.**
+
+1. **Option E, retroactive** — collapse the standing prose blocks in this file's front matter and
+   make collapse-on-write the rule. `§11`'s E criterion, `§13.3`'s target arithmetic. **Re-read
+   `C0`/`C1` first:** `OLD_BLOCKS` and `NEW_TABLE` are pinned at `2b8c9c9` and an E-collapse rewrites
+   the region around them. `C6` reads the working tree and will need its own declared substitution.
+2. **Then Option D, widened**, K in bytes. §13.8 and §13.11.
+3. **The ninth trim is over its trigger.** This file measures **2,721 lines** at close-out (re-measure
+   — it moves with every edit) against the 1,500-line trigger. Session 252's gotcha 3 has the
+   floor-4 arithmetic; **re-measure before trimming**, and note that E lands in the same front matter.
+4. **Two new `BACKLOG.md` items** filed this session: the partially-inert-mutant gap (7 of 46 mutants
+   change more than one argument slot and the guard sees whole tuples only — all seven read frozen
+   operands, so nothing is broken today), and CI's detection latency versus this repo's push cadence
+   (**operator call**).
+5. **Push.** This clone was 7 commits ahead of `origin/master` at Phase 0 — `origin/master` last saw
+   Session 249. The new CI job cannot run until someone pushes, which is finding #4's whole point.
+6. **Carried, unchanged:** sync the local dashboard (v2.15.2 vs canonical v2.17.0, outside this repo);
+   `BACKLOG.md`'s plain-language index still renders as several tables rather than one; the census
+   guard's `SPELLED`/`ORDINAL` maps stop at sixteen (S249 #3, still unfiled); `tests/eval/README.md`'s
+   three stale statements, now an eighth session.
+
+**Key files.**
+- `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` — `live_table_replaced` (in
+  `self_test()`, just above `FAKE_ROW`), the `pristine`/`inert` guard in the driver loop, and the
+  `SESSION 253 REPAIR` header block. **Locate by content, never by line number.**
+- `.github/workflows/ci.yml` — the `proofs` job: `fetch-depth: 0`, both modes, the `SELF-TEST OK` grep.
+- `CLAUDE.md` — the trimmed-file bullet's two-mode loop (replaced a `--self-test`-only mandate).
+- `BACKLOG.md` — the two new items at the former location of the closed one, and its two index rows.
+- `/private/tmp/claude-501/…/scratchpad/measurements-s253.md` — every figure with its command.
+
+**Gotchas.**
+1. **Run BOTH modes; neither is sufficient.** The loop is in `CLAUDE.md` now. A plain run cannot see
+   an inert mutant; `--self-test` cannot see a corrupted archive. Session 252's gotcha 1 was right and
+   its own DONE gate contradicted it.
+2. **`--self-test` never calls `check()` on pristine input** — `self_test(...)` then `sys.exit(0)`
+   precedes the plain `check(...)`. That is *why* it is blind to corruption. Do not "simplify" the CI
+   job to one mode.
+3. **Editing this file can still disarm a mutant** — that has not changed, only this one proof's
+   exposure to it. After any front-matter edit run **both** modes, and read the first line of the
+   self-test output: `NO-OP` means your edit broke a fixture, `SURVIVED` means it broke an assertion.
+4. **A proof that ignores `--self-test` exits 0.** All nine parse their own argv and ignore unknown
+   flags. The CI job greps for `SELF-TEST OK`; a hand-run loop that only checks exit codes does not.
+5. **The census guard fires on any numeral within 30 characters of the word it watches** — it caught
+   me in `CLAUDE.md`. Reword so the sentence states no census; an exemption is permanent work.
+6. **`command grep` for every count** — bare `grep` is a `ugrep --ignore-files` wrapper.
+7. **`PROJECT_LEARNINGS.md` and `CHANGELOG.md` are REFUSED by a default `Read`** (262,144 B boundary).
+   `PROJECT_LEARNINGS.md` is 287.0 KB at close-out — re-measure with `wc -c`, never quote it.
+8. **`PROJECT_LEARNINGS.md` rows 224–230 are two-column**, missing `Source` and `When to Apply`.
+   Pre-existing, not fixed here. Rows 231–236 are well-formed.
+9. **`gh issue list` is empty by design** until UAT.
 
 ### What Session 252 Did
 **Deliverable:** **The operator's ruling on [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md)

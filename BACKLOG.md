@@ -60,10 +60,10 @@ rows below it are the smaller residue that closing it exposed.
 | `README.md`'s test counts are hand-typed and will drift again | Session 247 found three per-directory rows in `README.md`'s repo map stale by a combined 131 tests. **Session 250 fixed the numerals** — each re-measured against `pytest --collect-only`, not pasted from the filing — and every count in that block now agrees with the collection: the rows sum to the 1,347 collected, and the headline's 1,338 passing plus 9 live-skipped is the same figure. What remains is the design question the filing raised: nothing derives any of those counts, so the next test added re-opens the drift. | **Operator call.** Either accept periodic hand re-measurement (the verification command is in the item below), or build a sibling of the census guard that composes the rows from a collection pass — a design change, not a typo fix. |
 | The wiki's `Contributing.md` carries a second, older test census | The contributors' wiki page states how many test **functions** each `tests/` directory holds — a different measure from `README.md`'s collected-test counts, since one parametrized function collects as many tests, and the page says so. Measured in Session 250 with the page's own command: `data_agent_package/`, `eval/`, `scripts/` and the top-level files are stale, its total is (997, now 1,167), and its "1110 passed plus 12 skip" sentence is (now 1,338 and 9); it also names four top-level test files where five exist. Filed, not fixed: the wiki publishes to GitHub on commit, so this is an outward-facing edit the operator did not ask for. | **Small**: one paragraph and a table, plus the same derive-or-accept decision as the `README.md` row above. Anything under `docs/wiki/` publishes via the post-commit hook. |
 
-| Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249.** **RULED by the operator, Session 252 (2026-09-07)** — see [`§13`](docs/planning/ledger-budgets-review.md): **E retroactive first, then D (widened to the four mandated-read files, K expressed in bytes), then a CI step running `--self-test`; F ruled with that CI step as its substitute; B, C, G and H declined.** Three sessions, in that order, and the `--self-test` repair below comes ahead of all three. Two of the ruling's premises were re-measured and had **moved**: the retention rule is *satisfiable* at HEAD (an abandoned Session 251 left a 15-line record that bought exactly the one-trim reprieve B and C were priced to buy), and §12.1's `K = 1` is now `K = 4`. |
+| Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249.** **RULED by the operator, Session 252 (2026-09-07)** — see [`§13`](docs/planning/ledger-budgets-review.md): **E retroactive first, then D (widened to the four mandated-read files, K expressed in bytes), then a CI step running `--self-test`; F ruled with that CI step as its substitute; B, C, G and H declined.** Three sessions, in that order. **The `--self-test` repair that came ahead of all three LANDED in Session 253**, so Option E (collapse-on-write, retroactive) is next. Two of the ruling's premises were re-measured and had **moved**: the retention rule is *satisfiable* at HEAD (an abandoned Session 251 left a 15-line record that bought exactly the one-trim reprieve B and C were priced to buy), and §12.1's `K = 1` is now `K = 4`. |
 
-| A proof has been unfalsifiable since Session 249 | Nine scripts in `docs/architecture-history/` prove the ledger's archived history is intact. Each ships "mutants" — deliberate corruptions it must detect — and a `--self-test` mode that checks it still catches all of them. One of the nine, the newest, **fails its own self-test**: two mutants slip past. Its ordinary run still reports success, so the loop every session runs says all nine are green. Nobody noticed for four sessions because nothing automates the self-test. | **Small, and it goes first.** Re-pin one literal, prove the two mutants catch again, add the CI step the operator ruled for. The broken assertion is the only one in the whole set that inspects the files as they are on disk right now. |
-
+| The NO-OP guard cannot see a partially inert mutant | Session 253 repaired the broken proof and added a guard: a mutant that corrupts nothing is now reported as a broken *fixture* rather than a missed *assertion*. The guard compares the whole argument list, so it catches a mutant that has gone completely inert — and misses one that mutates three things and loses one of them. Measured: 7 of 46 are exposed, all of them reading frozen inputs that cannot drift, so nothing is broken today. | **Small.** Compare slot-by-slot, or accept the seven and say so. |
+| CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk.
 
 ---
@@ -459,56 +459,61 @@ under a second — but see the circuit-breaker item above, which this scenario i
 with a named error when the selected model's provider prefix has neither a stored credential nor the
 corresponding key in the environment.
 
-### A shard proof has been silently unfalsifiable since Session 249 — `--self-test` fails, the plain run is green
+### The NO-OP guard cannot see a PARTIALLY inert mutant — 7 of 46 are exposed
 
-**Filed Session 252, 2026-09-07.** **Ruled by the operator the same session: this is the NEXT
-session's deliverable, ahead of Options E, D and the CI step.** It is a live executable defect in the
-only assertion in the lineage that reads the working tree, and repairing it inside the E session would
-mean fixing it inside the very change that rewrites the front matter it reads.
+**Filed Session 253**, by the session that built the guard, because the header of
+`docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` states this limitation and a
+statement of a limitation should resolve to a filing.
 
-```
-$ bash docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh --self-test
-  SURVIVED  M16 the table absent from the WORKING TREE (committed, then reverted on disk)
-  SURVIVED  M17 the collapse declared but NOT applied to the working tree
-  SELF-TEST FAILED: 2 mutant(s) survived. This proof cannot be trusted.          exit 2
+Session 253's `--self-test` driver compares each mutant's whole 10-tuple of arguments against the
+pristine tuple and reports `NO-OP` when they are equal. That catches a mutant whose *only* mutation
+has become a no-op — the Session 249 failure exactly. It is structurally blind to a mutant that
+mutates **two or more** slots and loses only one of them: the tuple still differs, so the guard
+stays silent, and whether the survivor is caught then depends on the mutation that still lands.
 
-$ bash docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh
-  exit 0                                                                         <- GREEN
-```
+**Measured, not estimated** (instrumented copy printing which slots differ, repo untouched):
 
-**Mechanism.** `M16` and `M17` mutate by `live_wt.replace(NEW_TABLE, ...)`. `NEW_TABLE` is a 51-line
-pinned literal that is **no longer a substring of the live `SESSION_NOTES.md`**, so both replacements
-are no-ops and `C6` is handed unmutated input. `C6`'s ordinary run survives because it checks each
-table **row** and the table's opening line individually — none of which changed.
+| slots changed | mutants | which |
+|---|---|---|
+| 1 | 39 | (unexposed — inertness is total, and the guard sees it) |
+| 2 | 3 | `M27`, `M28`, `M44` (`before`, `after`) |
+| 3 | 4 | `M38`, `M39`, `M40`, `M41` (`after`, `live_wt`, `new_table`) |
 
-**Dated exactly**, by testing `NEW_TABLE in git show <sha>:SESSION_NOTES.md` across the lineage: it
-last matched at `b1d761f` and broke at **`5243242`** — Session 249's Option A, which rewrote the
-*"`grep` the shards; `Read` none"* sentence inside the pinned region. A correct prose repair that
-silently disarmed two mutants. **The proof file itself has been touched exactly once, at its own
-commit `2b8c9c9`** — nothing was done to the proof; the file it reads moved out from under it.
+**Lower risk than the bug it follows, and the reason is structural.** All seven derive their
+operands from frozen sources — `M27`/`M28`/`M44` from `before` (read at `ddd5660`) plus the pinned
+`OLD_BLOCKS`/`FRONT_SUBST`; `M38`–`M41` from `NEW_TABLE.replace(...)` fed through `with_table()`,
+which rebuilds `after` and `live_wt` from `before`. None reads the working tree, so none can drift
+out from under its needle the way `live_wt` did at `5243242`. This is a gap to close on purpose,
+not a fire.
 
-**Why nobody saw it.** `CLAUDE.md`'s trimmed-file section already mandates *"Run `--self-test` before
-trusting a green run. A proof that has never been falsified proves less than it appears to."* Four
-sessions ran the plain nine-proof loop, which takes 2.57 s and stays green. Nothing automates the
-self-test, and CI runs none of it (`.github/workflows/ci.yml` runs `ruff`, `mypy`, `pytest -q` and one
-decoupling test; `git grep -n 'verify\.sh' -- .github/ .githooks/` returns nothing).
+**Not audited in the other eight proofs.** A generic detector exists — instrument each mutant's
+argument tuple, or scan for `.replace()`/`re.sub()` call sites whose every execution returns its
+input unchanged. Session 253's review ran the latter across all nine and found **zero** totally
+dead replace sites today, so nothing is currently broken; the item is that nothing *watches*.
 
-**Two consequences beyond the repair.** (1) `docs/planning/ledger-budgets-review.md` §11's completion
-criteria for Options A and D both gate on a green/self-testing apparatus, so **any option whose DONE is
-"all nine green" would certify a proof that cannot be trusted.** (2) The CI step the operator ruled for
-must run **`--self-test`**, not `bash "$f"` — the plain loop is exactly what failed to notice.
+**DONE** = either the guard compares slot-by-slot and reports which slot went inert, or a documented
+decision that whole-tuple comparison is sufficient with the seven named above accepted as residual.
+**VERIFY:** re-run the slot census; every mutant is either 1-slot or explicitly accepted.
 
-**DONE** = `--self-test` exits 0 on all nine proofs with `M16`/`M17` demonstrably catching again (revert
-each and watch it fail); a CI step runs `--self-test` for all nine on every push; and the repair does
-**not** edit any frozen shard or ancestor proof. **VERIFY:**
-`for f in docs/architecture-history/*.verify.sh; do bash "$f" --self-test >/dev/null || echo "RED $f"; done`
-prints nothing. For contrast, `SESSION_NOTES-S241-through-S239.md.verify.sh` — the newest of the
-eight, and the one this proof is not a sibling of — catches **95/95** today.
+### CI runs the proofs on push, and this repository pushes in bursts
 
-**Do not repair it by editing the proof.** `SESSION_NOTES-pointer-collapse.verify.sh` is not a shard
-proof and is not enumerated by `L9`/`L10`, but it is still write-once by the same convention. The
-mutants are the thing to fix, and the fix must survive the ninth trim, which will move that front
-matter again.
+**Filed Session 253. Operator call — it is about cadence, not code.**
+
+Session 253 added a `proofs` job to `.github/workflows/ci.yml` running both modes over every
+`docs/architecture-history/*.verify.sh` on push to `master` and on PRs. That is the automation the
+operator ruled for, and it works. What it does not fix: measured at the time of filing,
+`origin/master` was at `037895b` (Session 249's close-out) while local `master` was **7 commits and
+4 sessions ahead**. On that cadence the new job would first have observed the Session 249 breakage
+about four sessions after it landed — **the same latency as the outage it repairs.**
+
+The per-session countermeasure landed instead, in `CLAUDE.md`'s trimmed-file bullet: the both-modes
+loop, with the reason neither mode alone is sufficient. That is prose, and prose was already
+mandating `--self-test` when four sessions did not run it.
+
+**Options:** (a) accept — CI is a backstop, the per-session run is the fast path; (b) a `pre-push`
+hook under `.githooks/` (the directory exists and `core.hooksPath` is already the convention here)
+running the two-mode loop; (c) push every session. **DONE** = an operator ruling recorded here.
+
 
 ### The `SESSION_NOTES.md` shard is past the agent read cap and nothing watches it
 

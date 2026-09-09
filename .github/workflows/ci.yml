@@ -51,6 +51,56 @@ jobs:
           path: htmlcov/
           retention-days: 7
 
+  proofs:
+    name: Ledger proofs (plain + --self-test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # LOAD-BEARING, not hygiene. The proofs resolve blobs by sha and locate add-commits with
+          # `git log --diff-filter=A` across the whole history. Measured Session 253: under
+          # checkout@v4's default depth-1 clone ALL NINE go red.
+          fetch-depth: 0
+      - name: Prove the archived history is intact, and that the proofs can still fail
+        # BOTH modes, and neither subsumes the other -- measured Session 253 with controls.
+        # The plain run proves the world is intact. `--self-test` proves the proof can FAIL, which
+        # a green plain run does not: SESSION_NOTES-pointer-collapse.verify.sh was green on every
+        # plain run for 8 consecutive commits across Sessions 249-252 while two of its mutants were
+        # silent no-ops. And --self-test alone is blind in the other direction -- append a line to
+        # any of the eight shards and --self-test PASSES for every one of them, because every
+        # mutant then fails for the corruption's sake and scores as "caught".
+        #
+        # The `SELF-TEST OK` grep is not belt-and-braces. Every proof here parses its own argv and
+        # IGNORES a flag it does not implement, so `bash "$f" --self-test` on a proof lacking the
+        # mode silently performs a second PLAIN run and exits 0 -- the step would stay green while
+        # proving half of what it claims. Requiring the success line closes that; a proof whose
+        # self-test did not run cannot print it.
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          proofs=(docs/architecture-history/*.verify.sh)
+          if [ ${#proofs[@]} -eq 0 ]; then
+            echo "::error::no *.verify.sh proofs found -- the loop would have passed silently"
+            exit 1
+          fi
+          echo "proofs found: ${#proofs[@]}"
+          rc=0
+          for f in "${proofs[@]}"; do
+            echo "::group::$f"
+            bash "$f" || { echo "::error file=$f::PLAIN RUN FAILED"; rc=1; }
+            if out=$(bash "$f" --self-test 2>&1); then
+              printf '%s\n' "$out"
+              printf '%s\n' "$out" | grep -q 'SELF-TEST OK' \
+                || { echo "::error file=$f::--self-test exited 0 but printed no 'SELF-TEST OK' -- the mode did not run"; rc=1; }
+            else
+              printf '%s\n' "$out"
+              echo "::error file=$f::SELF-TEST FAILED"
+              rc=1
+            fi
+            echo "::endgroup::"
+          done
+          exit $rc
+
   decoupling:
     name: Data Agent decoupling test
     runs-on: ubuntu-latest

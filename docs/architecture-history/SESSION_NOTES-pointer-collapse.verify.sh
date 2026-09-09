@@ -3,7 +3,8 @@
 # oldest pointer blocks in SESSION_NOTES.md's front matter.
 #
 #   bash <this>              prove the collapse changed exactly what it declared, and nothing else
-#   bash <this> --self-test  prove this proof can FAIL (46 mutants; exit 2 if any survives)
+#   bash <this> --self-test  prove this proof can FAIL (46 mutants; exit 2 if any survives OR
+#                            if any mutation turns out to have changed nothing -- Session 253)
 #
 # THIS IS NOT A TRIM AND NOT A SHARD PROOF. No record moved, no shard was written, no session was
 # archived. Read `SESSION_NOTES-S241-through-S239.md.verify.sh` for the L-series; this file is a
@@ -160,6 +161,51 @@
 # rather than `return []` makes the run die instead of surviving -- which scores as "caught" and
 # hides the arm. C6's `is MISSING` guard did exactly that here until the neuter was made
 # type-preserving. That is the same defect Session 245 lost sixty arm results to.
+
+# ------------------------------------------------------------------------------------------------
+# SESSION 253 REPAIR -- M16 AND M17 MUTATED NOTHING FOR FOUR SESSIONS, AND THE PLAIN RUN NEVER SAW IT.
+#
+# Both mutated the working tree with `live_wt.replace(NEW_TABLE, ...)`. NEW_TABLE is 51 lines of
+# TABLE plus PROSE, and prose in this file gets repaired: at `5243242` Session 249 corrected the
+# read-cap sentence in the table's closing paragraph -- an entirely correct repair of a claim this
+# lineage had itself measured false. From that commit `NEW_TABLE in live_wt` was False, both
+# replacements returned their input unchanged, and C6 was handed PRISTINE bytes. C6 objected to
+# nothing because nothing was wrong; both mutants "SURVIVED"; --self-test exited 2 from Session 249
+# to Session 252 while `bash <this>` stayed GREEN, and nothing ran --self-test. Dated by bisecting
+# `NEW_TABLE in git show <sha>:SESSION_NOTES.md`: last matched at b1d761f, broke at 5243242.
+#
+# THE LITERAL COULD NOT BE RE-PINNED, and that is measured, not assumed. C1 resolves `after` at
+# THIS FILE'S OWN ADD-COMMIT (2b8c9c9) forever, and at that commit the file carries the OLD
+# sentence. Re-pinning NEW_TABLE to today's text fails C1 TABLE MISSING and C1 CONFINEMENT at once
+# -- there is no green state containing a re-pinned table. That is the same trap the C6 note above
+# records for its own first draft, one field over. The BACKLOG's "re-pin one literal" is therefore
+# not the repair; the mutants are, exactly as that item's last paragraph says.
+#
+# SO THE MUTATION MOVED TO WHAT C6 ACTUALLY READS: the COMPOSED ROWS and the table's OPENING LINE.
+# Those cannot rot the same way, and the reason is structural rather than lucky -- C6's ORDINARY run
+# asserts that each row and the opening line occur in the working tree exactly once, so any drift in
+# what M16/M17 remove turns the PLAIN run red before it can disarm the self-test. The prose between
+# them stays free to be repaired, which it will be: the ninth trim moves this front matter again.
+#
+# AND THE CLASS, NOT ONLY THE INSTANCE: a `str.replace` whose needle has drifted out of its haystack
+# is SILENT. The driver now compares every mutant's argument tuple against the pristine one and
+# reports NO-OP -- a distinct, hard failure -- for any mutant that changed nothing. What Session 252
+# had to bisect for, the self-test now prints. The corollary for the other eight proofs is worth
+# stating because it is cheap: a FULLY inert mutant always survives, since check() then receives
+# pristine input and pristine input is green by definition -- so their passing --self-test already
+# proves none of theirs is fully inert. A PARTIALLY inert mutant (one of two mutations landing) is
+# invisible to that argument AND to this guard; it is filed in BACKLOG.md, not fixed here.
+#
+# NEITHER MODE SUBSUMES THE OTHER, measured this session with a control over all eight shards:
+# append a line to a shard on disk and --self-test PASSES for every one of them -- because every
+# mutant then fails for the corruption's sake and scores as "caught". The plain run catches all
+# eight, but NOT always via the corrupted shard's own proof: that holds for six, while the S216 and
+# S220 shards' own proofs stay green (they define only L0-L4, none of which reads disk) and the
+# corruption is caught instead by L9 in every proof from the S227 one forward. So: --self-test
+# proves the proof can fail; the plain run proves the world is intact; and the plain run is a
+# LINEAGE-wide check, not a per-file one. Run BOTH, over every proof in the directory, in that
+# order. The first draft of this paragraph said "that shard's proof" and a review measured 6 of 8.
+# ------------------------------------------------------------------------------------------------
 
 set -euo pipefail
 exec python3 - "$@" <<'PYEOF'
@@ -880,6 +926,34 @@ def self_test(before, after, live_wt, pre_live, world):
         a = declared_front(f, OLD_BLOCKS, nt, FRONT_SUBST) + "".join(r)
         return a, a
 
+    def live_table_replaced(lw, put=""):
+        """M16/M17's mutation, expressed in what C6 READS -- the composed ROWS and the table's
+        OPENING LINE -- and never in the 51-line NEW_TABLE literal. NEW_TABLE carries prose, prose
+        gets repaired, and when Session 249 correctly repaired the read-cap sentence inside it at
+        `5243242` both mutants silently became no-ops for four sessions. Rows and opening line
+        cannot rot the same way, and the guarantee is EXACT rather than approximate: the needles
+        below are the SAME OBJECTS C6 counts -- `rows_of(new_table)` and `new_table.split("\n")[0]`,
+        neither carrying a trailing newline -- so no drift in SESSION_NOTES.md can break one without
+        breaking the other in the same run. A first draft searched for `r + "\n"` while C6 counts a
+        bare `r`; a review measured the gap (append one trailing space to a row: C6's substring
+        count still finds it and the plain run stays GREEN, while the `+ "\n"` needle misses and the
+        self-test dies on the assert). Same failure SHAPE as the bug being repaired -- a needle that
+        is not the haystack's -- caught this time before it shipped. The asserts are the
+        fixture-integrity idiom already used for `first_row` below; they can now only fire in a run
+        where C6 is failing anyway, which is what makes them a backstop and not a second predicate."""
+        if lw is MISSING:
+            return lw
+        for r in rows_of(NEW_TABLE):
+            assert lw.count(r) == 1, (
+                "self-test fixture: table row not present exactly once in the working tree: %s"
+                % r[:70])
+            lw = lw.replace(r, "", 1)
+        head = NEW_TABLE.split("\n")[0]
+        assert lw.count(head) == 1, (
+            "self-test fixture: the table's opening line is not present exactly once in the "
+            "working tree")
+        return lw.replace(head, put, 1)
+
     FAKE_ROW = ("| 6 | S999 `deadbee` | 999 → 998 | 7 | 1,234 | "
                 "`SESSION_NOTES-S999-through-S998.md` | 1,300 | 999 → 997 | L99 |\n")
     t_extra = NEW_TABLE.replace("| 5 | S235", FAKE_ROW + "| 5 | S235", 1)
@@ -951,11 +1025,11 @@ def self_test(before, after, live_wt, pre_live, world):
         ("M15 a row credits the wrong assertions to its trim",
          before, after, live_wt, rows_m15, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world),
         ("M16 the table absent from the WORKING TREE (committed, then reverted on disk)",
-         before, after, (live_wt.replace(NEW_TABLE, "", 1) if live_wt is not MISSING else live_wt),
+         before, after, live_table_replaced(live_wt),
          ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world),
         ("M17 the collapse declared but NOT applied to the working tree",
          before, after,
-         (live_wt.replace(NEW_TABLE, OLD_BLOCKS, 1) if live_wt is not MISSING else live_wt),
+         live_table_replaced(live_wt, OLD_BLOCKS),
          ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world),
         ("M18 an ancestor shard EDITED after its own add-commit (C3/C4 read the commit, not disk)",
          before, after, live_wt, ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live,
@@ -1062,8 +1136,20 @@ def self_test(before, after, live_wt, pre_live, world):
          ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world, {}),
     ]
     mutants = [m if len(m) == 11 else m + ({},) for m in mutants]
-    bad = []
+    # The NO-OP guard, and the reason it exists is in the header: M16 and M17 mutated by a literal
+    # that had drifted out of the file they mutate, so for four sessions `check()` was handed
+    # PRISTINE arguments and reported, accurately and uselessly, that nothing was wrong with them.
+    # "SURVIVED" names the wrong culprit for that -- it says the assertion missed a corruption,
+    # when the corruption never happened. A mutant whose arguments equal the pristine ones is a
+    # broken FIXTURE, not a weak assertion, and it is reported as one.
+    pristine = (before, after, live_wt, ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live,
+                world, {})
+    bad, inert = [], []
     for name, b, a, lw, rows, sub, ob, nt, pl, wd, opt in mutants:
+        if (b, a, lw, rows, sub, ob, nt, pl, wd, opt) == pristine:
+            inert.append(name)
+            print("  NO-OP     %s" % name)
+            continue
         fails = check(b, a, lw, rows, sub, ob, nt, pl, wd, **opt)
         if not fails:
             bad.append(name)
@@ -1071,10 +1157,17 @@ def self_test(before, after, live_wt, pre_live, world):
         else:
             codes = sorted({f.split(":")[0].split(" (")[0] for f in fails})
             print("  caught    %-72s -> %s" % (name, ", ".join(codes)))
+    if inert:
+        print("\nSELF-TEST FAILED: %d mutant(s) MUTATED NOTHING. Their arguments are byte-identical\n"
+              "to the pristine ones, so what they report is not `the assertion missed it` but `the\n"
+              "corruption never happened`. Repair the MUTATION, never the assertion:" % len(inert))
+        for n in inert:
+            print("    %s" % n)
     if bad:
         print("\nSELF-TEST FAILED: %d mutant(s) survived. This proof cannot be trusted." % len(bad))
+    if inert or bad:
         sys.exit(2)
-    print("\nSELF-TEST OK: all %d mutants caught." % len(mutants))
+    print("\nSELF-TEST OK: all %d mutants caught, and every one of them changed its input." % len(mutants))
 
 
 before, after, live_wt, pre_live, source, note = artifacts()
