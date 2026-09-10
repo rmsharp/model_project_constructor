@@ -282,6 +282,13 @@ sentence claimed a silent stop at 2,000 lines until Session 249; measured, that 
 
 ## ACTIVE TASK
 
+### What Session 254 Did
+**Deliverable:** Option E, retroactive — collapse the three standing prose pointer blocks in this
+file's front matter into rows of the collapsed table, declare collapse-on-write as the rule, and
+extend the `C`-series proof with a mutant (IN PROGRESS)
+**Started:** 2026-09-09 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 253 Did
 **Deliverable:** **The unfalsifiable proof is repaired — COMPLETE.**
 `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` passes `--self-test` with
