@@ -92,6 +92,15 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 255 Did
+**Deliverable:** Option D, widened — replace the file-length retention rule with a byte-denominated
+front-matter budget (*front matter + the K newest non-stub records return in one `Read`*) over the
+four mandated-read files (`SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md`, `PROJECT_LEARNINGS.md`),
+demonstrated by a probe and enforced with its own mutants — `docs/planning/ledger-budgets-review.md`
+§8 row D, §11, §13.1, §13.8 (IN PROGRESS)
+**Started:** 2026-09-10 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 254 Did
 **Deliverable:** **Option E, applied RETROACTIVELY — COMPLETE.** The three prose pointer blocks
 still standing in this file's front matter are rows 6, 7 and 8 of the table above; collapse-on-write
