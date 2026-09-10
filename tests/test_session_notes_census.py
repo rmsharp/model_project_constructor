@@ -380,10 +380,12 @@ FROZEN: tuple[tuple[str, str, str], ...] = (
      "frozen: which session added which assertion"),
     (CLAUDE, "a misnamed shard satisfies L5/3, L5/4 and L8/set together",
      "'L5/3' and 'L5/4' are assertion names, not counts"),
-    (CLAUDE, "corrects the gotcha Session 245 left: every shard proof resolves",
-     "frozen: a session number, not a count"),
-    (CLAUDE, "`CLAUDE.md` (this one) included. Only the shards and the proof scripts",
-     "'one' is a pronoun for this file"),
+    # Both entries that stood here exempted numerals in CLAUDE.md's Session-246 collapse bullet.
+    # Session 254 rewrote that bullet for the retroactive collapse and neither sentence exists any
+    # more, so ``test_frozen_entries_are_still_present`` correctly went red. They are DROPPED rather
+    # than re-pointed: the replacement prose carries no numeral the fail-closed scan objects to, and
+    # a per-occurrence exemption that is no longer needed is exactly what this list must not
+    # accumulate. Verified by running the scan with the entries gone, not by inspection.
     (README, "L9 (write-once for all four shards)",
      "frozen: describes what the FOURTH trim's proof does, and that proof guards "
      "four shards. Not stale -- a count word is stale only if it claims the present"),

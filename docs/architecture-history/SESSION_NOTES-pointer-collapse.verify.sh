@@ -3,12 +3,12 @@
 # oldest pointer blocks in SESSION_NOTES.md's front matter.
 #
 #   bash <this>              prove the collapse changed exactly what it declared, and nothing else
-#   bash <this> --self-test  prove this proof can FAIL (46 mutants; exit 2 if any survives OR
+#   bash <this> --self-test  prove this proof can FAIL (47 mutants; exit 2 if any survives OR
 #                            if any mutation turns out to have changed nothing -- Session 253)
 #
 # THIS IS NOT A TRIM AND NOT A SHARD PROOF. No record moved, no shard was written, no session was
 # archived. Read `SESSION_NOTES-S241-through-S239.md.verify.sh` for the L-series; this file is a
-# sibling of that lineage, not a member of it, and its assertions are lettered C0-C6 on purpose.
+# sibling of that lineage, not a member of it, and its assertions are lettered C0-C7 on purpose.
 # Session 245 had to write a paragraph recording that its L14 was NOT the L14 a previous trim had
 # drafted and rejected, so that a later trim would not resurrect the dead one believing it live. A
 # second numbering costs nothing and removes that whole failure mode.
@@ -117,10 +117,11 @@
 #     C0 -> M20, M26, M36, M39, M40                C1 -> M3, M4, M5
 #     C2 -> M7, M8                                 C3 -> M9-M11, M18, M25, M29, M37, M38, M41
 #     C4 -> M21, M22, M24, M30, M45                C5 -> M19, M32, M33
-#     C6 -> M16, M17, M34, M35, M43                C7 -> M44
+#     C6 -> M16, M17, M34, M35, M43, M47           C7 -> M44
 #
-#   PER ARM -- 35 failure-emitting `out.append` statements inside C0-C7; 17 uniquely catch a
-#   mutant. TWENTY-SIX of the 46 mutants exist only because a sweep or a review found the arm they
+#   PER ARM -- 36 failure-emitting statements inside C0-C7 (34 `out.append` + 2 early returns);
+#   18 uniquely catch a
+#   mutant. TWENTY-SIX of the 47 mutants exist only because a sweep or a review found the arm they
 #   cover unreachable, which is the whole argument for running both: M21-M25 gave C4 and C3/ROW
 #   their first unique coverage; M26-M36 reached one guard each; M37-M44 came from an adversarial
 #   review of a GREEN, twice-swept proof; M45-M46 restored coverage that the review's own new arms
@@ -206,6 +207,41 @@
 # LINEAGE-wide check, not a per-file one. Run BOTH, over every proof in the directory, in that
 # order. The first draft of this paragraph said "that shard's proof" and a review measured 6 of 8.
 # ------------------------------------------------------------------------------------------------
+# SESSION 254 -- C6'S LIVE ANCHOR WAS RE-DECLARED, AND WHY THAT IS NOT A WEAKENING.
+#
+# Session 254 executed Option E RETROACTIVELY: the three pointer blocks still standing above this
+# table were collapsed into it, so it holds eight trims and its opening sentence -- "The first five
+# trims are one table now" -- had to be rewritten. C6 derived its opening-line needle from
+# NEW_TABLE's first line, so the plain run went RED, exactly as Session 254's own control
+# experiment predicted before it touched anything.
+#
+# THE NEEDLE COULD NOT BE RE-POINTED AT NEW_TABLE, for the reason this header already gives one
+# field over: C1 resolves `after` at THIS FILE'S add-commit (2b8c9c9) forever, and that commit
+# carries the five-trim sentence. Editing NEW_TABLE fails C1 TABLE MISSING and C1 CONFINEMENT at
+# once, permanently. So the live anchor became its own DECLARED literal, LIVE_HEAD, and the frozen
+# literal was left untouched -- the same shape as a trim's declared substitution.
+#
+# AND THE ARM THAT STOPS IT BEING A WEAKENING: C6/SUPERSEDED requires the ORIGINAL opening line to
+# be ABSENT from the working tree. Dropping a requirement leaves both texts legal, and the one that
+# would then be legal is the false one. M47 is its mutant and uniquely catches it (measured, by
+# neutering the arm). C6/opening-line still has no uniquely-catching mutant of its own for the
+# reason already stated above -- M16 removes the whole table and the per-row arm fires first.
+#
+# THE SWEEP WAS RE-RUN AT BOTH LEVELS, AND IT CAUGHT A WEAKENING THIS EDIT INTRODUCED. Swapping
+# C6's anchor made a working tree rebuilt from `after` contain no LIVE_HEAD, so C6 began firing
+# for every table mutant and C0/FIGURE and C3/FIGURE stopped being the sole objector to M39, M40
+# and M41. Measured: 17 unique of 35 before, 16 of 36 after -- one arm gained, two lost silently,
+# with BOTH modes green throughout. `with_table` now swaps only the ROWS into the real working
+# tree and the count is 18 of 36, which is the 17 + 1 the arithmetic predicts. The inherited
+# "17 of 35" was re-derived against the pre-collapse tree and reproduced exactly, so Session
+# 253's published figure was right; the regression was mine and the arm sweep is the only thing
+# that could have found it.
+#
+# What this file proves is UNCHANGED: the five rows are still C3-derived and still required in the
+# working tree, and Session 254's own proof
+# (SESSION_NOTES-pointer-collapse-S254.verify.sh, the R-series) re-derives all EIGHT rows, so the
+# table now has one owner rather than a split one.
+# ------------------------------------------------------------------------------------------------
 
 set -euo pipefail
 exec python3 - "$@" <<'PYEOF'
@@ -232,6 +268,20 @@ WORD = {v: k for k, v in SPELLED.items()}
 WORD["The"] = 1
 
 DECLARED_OLD_LINES = 176        # C0: how many lines the collapse removed
+
+# ---- C6's LIVE-side anchor, re-declared at Session 254. ----
+# C6 originally derived this needle from NEW_TABLE's own first line. That was correct for as long as
+# the table's opening prose was the live opening prose -- and Session 254's RETROACTIVE collapse
+# (Option E; `docs/planning/ledger-budgets-review.md` section 13.1) replaced it, because a sentence
+# reading "The first five trims are one table now" is false of a table that now holds eight. The
+# needle could not simply be re-pointed at NEW_TABLE: C1 pins that literal against `after` at THIS
+# FILE'S OWN add-commit forever, so editing it fails C1 TABLE MISSING and C1 CONFINEMENT at once --
+# the trap this file's own header records, one field over. So the live anchor is DECLARED here, the
+# frozen literal is untouched, and C6 gained an arm requiring the OLD line to be GONE: a proof that
+# merely stopped requiring the old text would leave both versions legal, and the stale one is the
+# one that says "five". The rows are still derived by C3 and still the load-bearing half.
+LIVE_HEAD = ("**One trim, one row \u2014 and that is the rule now (Session 254, on the operator's "
+             "ruling of")
 
 OLD_BLOCKS = """**Fifth trim (Session 235). Archived Sessions 231 → 228 — 4 record headings, 918 lines** into
 [`docs/architecture-history/SESSION_NOTES-S231-through-S228.md`](docs/architecture-history/SESSION_NOTES-S231-through-S228.md)
@@ -816,11 +866,16 @@ def C6(live_wt, old_blocks, new_table):
         if n != 1:
             out.append("C6 LIVE: a table row occurs %d times in the working tree's %s (want "
                        "exactly 1): %s" % (n, LIVE, r[:110]))
-    head = new_table.split("\n")[0]
-    if live_wt.count(head) != 1:
-        out.append("C6 LIVE: the table's opening line occurs %d times in the working tree's %s "
+    if live_wt.count(LIVE_HEAD) != 1:
+        out.append("C6 LIVE: the live block's opening line occurs %d times in the working tree's %s "
                    "(want exactly 1) -- the block was removed or duplicated"
-                   % (live_wt.count(head), LIVE))
+                   % (live_wt.count(LIVE_HEAD), LIVE))
+    # Session 254: the substitution must have HAPPENED, not merely be permitted.
+    stale = new_table.split("\n")[0]
+    if stale in live_wt:
+        out.append("C6 SUPERSEDED: the table's ORIGINAL opening line is still in the working tree's "
+                   "%s. It says the table holds five trims; Session 254's collapse made it eight. "
+                   "LIVE_HEAD is the anchor now and the old sentence must be gone." % LIVE)
     if old_blocks in live_wt:
         out.append("C6 LIVE: the 176 collapsed lines are STILL in the working tree's %s -- the "
                    "collapse is declared but not applied" % LIVE)
@@ -919,12 +974,26 @@ def self_test(before, after, live_wt, pre_live, world):
     dup_subst = before.replace(FRONT_SUBST[0][0], FRONT_SUBST[0][0] * 2, 1)
 
     def with_table(nt):
-        """A consistent world in which the table really is `nt`: `after` rebuilt from `before`
-        and the working tree rebuilt from `after`. Without this, every table mutant trips C1 and
-        proves nothing about C0/FIGURE, C3/SET or C3/FIGURE."""
+        """A consistent world in which the table really is `nt`: `after` rebuilt from `before`, and
+        the working tree taken to be the REAL one with the mutated table's ROWS swapped in.
+
+        SESSION 254, AND THE NEUTER SWEEP IS WHY. This returned `(a, a)` -- the working tree
+        rebuilt from `after`. That was right while the table's opening prose WAS the live opening
+        prose. Once C6's anchor became the declared LIVE_HEAD, a working tree rebuilt from `after`
+        no longer contained LIVE_HEAD at all, so C6 fired for every table mutant and C0/FIGURE and
+        C3/FIGURE silently stopped being the sole objector to M39, M40 and M41. Measured, not
+        suspected: the arm sweep put unique coverage at 17 of 35 before the re-anchoring and 16 of
+        36 after it -- one arm gained, two lost. Swapping only the ROWS into the real tree restores
+        both, because rows are all C6 reads besides LIVE_HEAD and the two absences."""
         f, r = zones(before)
         a = declared_front(f, OLD_BLOCKS, nt, FRONT_SUBST) + "".join(r)
-        return a, a
+        if live_wt is MISSING:
+            return a, live_wt
+        old_rows = "\n".join(rows_of(NEW_TABLE))
+        assert live_wt.count(old_rows) == 1, (
+            "self-test fixture: this proof's five rows are not contiguous exactly once in the "
+            "working tree -- a later collapse reordered the table")
+        return a, live_wt.replace(old_rows, "\n".join(rows_of(nt)), 1)
 
     def live_table_replaced(lw, put=""):
         """M16/M17's mutation, expressed in what C6 READS -- the composed ROWS and the table's
@@ -948,11 +1017,10 @@ def self_test(before, after, live_wt, pre_live, world):
                 "self-test fixture: table row not present exactly once in the working tree: %s"
                 % r[:70])
             lw = lw.replace(r, "", 1)
-        head = NEW_TABLE.split("\n")[0]
-        assert lw.count(head) == 1, (
-            "self-test fixture: the table's opening line is not present exactly once in the "
+        assert lw.count(LIVE_HEAD) == 1, (
+            "self-test fixture: the live block's opening line is not present exactly once in the "
             "working tree")
-        return lw.replace(head, put, 1)
+        return lw.replace(LIVE_HEAD, put, 1)
 
     FAKE_ROW = ("| 6 | S999 `deadbee` | 999 → 998 | 7 | 1,234 | "
                 "`SESSION_NOTES-S999-through-S998.md` | 1,300 | 999 → 997 | L99 |\n")
@@ -1130,6 +1198,12 @@ def self_test(before, after, live_wt, pre_live, world):
          after.replace("**The block below is frozen at the SIXTH trim",
                        "**The umpteen blocks below are frozen at the SIXTH trim", 1),
          live_wt, ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world, {}),
+        ("M47 the table's ORIGINAL opening line resurrected on disk (C6/SUPERSEDED -- the arm "
+         "Session 254 added when it replaced the live anchor)",
+         before, after,
+         (live_wt.replace(LIVE_HEAD, NEW_TABLE.split("\n")[0] + "\n" + LIVE_HEAD, 1)
+          if live_wt is not MISSING else live_wt),
+         ROWS, FRONT_SUBST, OLD_BLOCKS, NEW_TABLE, pre_live, world, {}),
         ("M43 one table ROW reverted on disk while the commit keeps it (C6 per-row)",
          before, after,
          (live_wt.replace("| 3 | S228", "| 3 | S288", 1) if live_wt is not MISSING else live_wt),

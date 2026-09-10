@@ -72,6 +72,26 @@ Replace `YYYY-MM-DD` with the date the document is moved (not the date it was wr
 
 **Ledger shards are the one exception (Session 222).** The *live* append-only log never moves — but a **frozen shard of its retired records** does, as `<STEM>-through-<CUTKEY>.md` beside a `<same>.verify.sh` proving the move was byte-for-byte lossless. This is a size remedy, not an archaeology judgement: a ledger past the agent read cap comes back as an **announced partial view** on every `Read` — the cap is denominated in tokens rather than lines, the notice names the overage and the next page, and past a separate byte ceiling the read is refused outright rather than trimmed. Nothing is dropped in silence (measured Sessions 248–249; reproduction in `docs/planning/ledger-budgets-review.md` Appendix A). A shard therefore does **NOT** carry the concept-era banner above — that banner says "describes the system as designed on YYYY-MM-DD", which is false of a session log — it carries its own banner naming its record count, its session span, and the fact that nothing below it was altered. **Eight instances so far**, and the naming rule above bent at the second: `SESSION_NOTES-through-S216.md` (Session 222, Sessions 216→1), `SESSION_NOTES-S220-through-S217.md` (Session 224, Sessions 220→217), `SESSION_NOTES-S224-through-S221.md` (Session 228, Sessions 224→221), `SESSION_NOTES-S227-through-S225.md` (Session 231, Sessions 227→225) `SESSION_NOTES-S231-through-S228.md` (Session 235, Sessions 231→228), `SESSION_NOTES-S235-through-S232.md` (Session 239, Sessions 235→232) `SESSION_NOTES-S238-through-S236.md` (Session 242, Sessions 238→236) and `SESSION_NOTES-S241-through-S239.md` (Session 245, Sessions 241→239). The `<STEM>-through-<CUTKEY>.md` form is only unambiguous for the FIRST shard, whose span is open at the bottom — a second shard named `-through-S220` would read as "everything through Session 220", which is false, since 216→1 sit in the earlier file. **A non-first shard therefore takes the range form `<STEM>-<NEWEST>-through-<OLDEST>.md`.** This is a deliberate departure, recorded here so a later trim copies the rule rather than the first filename — **the third, fourth, fifth, sixth, seventh and eighth trims all did**, which is the evidence the note works rather than merely reads well. A corollary of write-once: shard names are load-bearing routing information, and the set of them is only correct when read together — no single shard is authoritative about where Session N lives. The canonical `methodology_trim.py` deliberately refuses `SESSION_NOTES.md` (no generic grammar fallback), so the shard is hand-built and its proof ships a `--self-test` that proves the proof itself can fail.
 
+**A trim's pointer block is a TABLE ROW, never prose — collapse-on-write (operator ruling,
+2026-09-07; executed retroactively in Session 254).** Every trim leaves a pointer record in the live
+ledger's front matter saying what moved, where it went, and what proves it. For eight trims that
+record was a prose block, and the front matter became the half of the file that grows: measured at
+`docs/planning/ledger-budgets-review.md` §13.3, a prose block cost ~6,110 B per trim against ~117 B
+for a table row, and by the eighth trim those blocks were 33% of everything a session reads before
+it opens a single record. **The rule now: a trim adds one row to the table in the front matter, and
+the trim's rationale — what it argued, measured, swept or rejected — goes in that session's own
+record instead.** Session 254 applied it backwards as well as forwards, replacing the three blocks
+still standing; the ruling is `docs/planning/ledger-budgets-review.md` §13.1 (Option E, ahead of
+Option D, on §13.3's arithmetic) and the mechanism is §8 row E. Two consequences worth stating
+because they are easy to get wrong. First, **the table IS the routing table**: its `archived` column
+tiles the whole session history with no gap and no overlap, so a session is placed by reading the
+row whose span contains it, and the prose routing clauses that used to state the same thing were
+deleted rather than kept in parallel. Second, **the rule is asserted, not announced** — `R8` in
+`docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh` reads the WORKING TREE and
+goes red if a prose pointer block, or a member of the positional "the N blocks below are frozen"
+family, ever reappears in the front matter. That is deliberate: this convention had no enforcement
+for eight trims, and every block written under it went stale without a single proof noticing.
+
 **SESSION_RUNNER.md references to `docs/planning/` are unchanged by this convention.** The runner points to `docs/planning/` as the canonical location for *active* plans; the archive move is a retrospective action for plans whose work is done.
 
 ---
