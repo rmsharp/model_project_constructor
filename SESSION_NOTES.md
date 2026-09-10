@@ -93,11 +93,248 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 254 Did
-**Deliverable:** Option E, retroactive — collapse the three standing prose pointer blocks in this
-file's front matter into rows of the collapsed table, declare collapse-on-write as the rule, and
-extend the `C`-series proof with a mutant (IN PROGRESS)
-**Started:** 2026-09-09 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **Option E, applied RETROACTIVELY — COMPLETE.** The three prose pointer blocks
+still standing in this file's front matter are rows 6, 7 and 8 of the table above; collapse-on-write
+is declared in `docs/methodology/PROJECT_CONVENTIONS.md` §3.1 and **asserted** by `R8` against the
+working tree. Front matter **284 lines / 23,029 B → 94 / 7,184**. Operator's words: *"Option E,
+retroactive"*. No trim, no shard, no record moved, nothing else started.
+
+**Started / completed:** 2026-09-09 (UTC). **Commits: three** — `8c9bb35` (Phase 1B claim, alone),
+`a7d3b29` (the collapse, carrying **no** record edit, which is what `R2` asserts), and this close-out.
+**`CHANGELOG.md` entry: YES** — this session changed `tests/test_session_notes_census.py`, and
+`PROJECT_CONVENTIONS.md` §2 gates on `tests/` logic. Session 249 set the precedent for a change to
+this same guard. The rest of the session (`docs/`, `CLAUDE.md`, `README.md`, this file) would have
+earned none.
+
+#### What the collapse actually removed, and the control that justified it
+
+Three perturbations of the working tree, each restored from a copy and confirmed with
+`git diff --exit-code` — **never `git checkout`**:
+
+| perturbation | result |
+| --- | --- |
+| corrupt the live "authority" block's routing clause **and** one of its size figures | **all 9 proofs GREEN** |
+| **DELETE all three prose blocks (lines 5–227) outright** | **all 9 proofs GREEN** |
+| rewrite **only** the C-series table's opening line | **exactly 1 RED** — `C6 LIVE` |
+
+**The 276 lines this commit replaced were guarded by nothing**, and the single proof obstacle to a
+one-table design was one pinned line. That is the whole argument, and it was measured before
+anything was edited rather than asserted afterwards.
+
+**Four figures inside that region had rotted, and the dated one is the argument.** The block called
+itself *"the authority"* and said its filename sweep returns **23** files. Measured **26** at HEAD
+and **23 at its own cut `4ab6306`** — true when written, silently false since, with three nameable
+files added (`SESSION_NOTES-pointer-collapse.verify.sh` S246, `tests/test_session_notes_census.py`
+S247, `docs/planning/ledger-budgets-review.md` S248). Also: `CLAUDE.md` **and** the table's own prose
+said `C0–C6` and *36 mutants* where the file has **eight** assertions and **46**; and the sentence at
+the old line 227 ended mid-clause (*"…so this trim"*). None of the four was read by any assertion.
+
+#### The new proof — the `R`-series, and the two assertions that are new to this lineage
+
+`docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh`, **R0–R8, 48 mutants**.
+Lettered `R` for the collision reason Session 245 recorded — it is not an `L`, and it is not an §8
+option letter either, so `R3` can never be misread as a ruling. A **new file** was required, not an
+extension of the `C`-series: `artifacts()` resolves `before`/`after` at `addcommit(SELF)`, so the
+C-series' operands are frozen at `2b8c9c9` and it can never see a second collapse.
+
+- **`R7 ROUTING`** — the assertion that licensed *deleting* the nine prose routing clauses rather
+  than keeping them in parallel. The declared `archived` spans, sorted, must tile the history with
+  no gap and no overlap; **and** the newest archived session plus one must equal the oldest record
+  id **in the working tree**. The second arm is the load-bearing one: tiling proves the table agrees
+  with itself, not with the file a session opens.
+- **`R8 THE RULE`** — collapse-on-write, enforced against the working tree so it binds FUTURE trims:
+  no prose pointer-block head, and no member of the `**The N blocks below are frozen**` family, may
+  stand in the front matter. `C7` had to *derive* the count in that family because the family
+  survived its collapse; asserting the family is **empty** is stronger and cheaper, and it is §11's
+  Option E completion criterion mechanised.
+- `R3` re-derives **all eight** rows (not just its own three) from each shard at its own add-commit,
+  so the table has exactly one owner; its `FIGURE` arm composes the four arithmetic phrases the new
+  prose states about itself. `R1` needs **zero** declared substitutions — no prose block survives, so
+  none could be falsified, which is the point of the rule rather than an omission.
+
+#### The C-series repair, and the weakening the arm sweep caught
+
+`C6`'s opening-line needle was `NEW_TABLE.split("\n")[0]`, and this collapse replaced that line.
+**It could not be re-pointed at `NEW_TABLE`** — `C1` pins that literal at the proof's own add-commit
+forever, the trap that file's own header records one field over. So the live anchor became a declared
+`LIVE_HEAD`, and `C6` gained **`C6/SUPERSEDED`**, requiring the OLD line to be **absent**: dropping a
+requirement would have left both texts legal, and the legal one would be the false one. `M47` is its
+mutant.
+
+**Then the per-arm sweep caught a weakening I had introduced and both modes had missed.** A working
+tree rebuilt from `after` no longer contained `LIVE_HEAD`, so `C6` began firing for every table
+mutant and **`C0/FIGURE` and `C3/FIGURE` silently stopped being the sole objector** to `M39`, `M40`
+and `M41`. Measured: **17 unique of 35 before, 16 of 36 after** — one arm gained, two lost, with the
+plain run and `--self-test` green throughout. `with_table` now swaps only the ROWS into the real
+working tree; coverage is **18 of 36**, the 17 + 1 the arithmetic predicts. **The inherited "17 of 35"
+was re-derived against the pre-collapse tree and reproduced exactly** — Session 253's figure was
+right, and the regression was mine.
+
+#### Verification
+
+| check | result |
+| --- | --- |
+| ten proofs, **both** modes | **GREEN/PASS 10/10** — the gate prints nothing, before and after the collapse commit |
+| `R`-series whole-assertion neuter | every one of **R0–R8** is the sole objector to ≥2 mutants |
+| `R`-series per-arm neuter | **44 statements, 17 uniquely catching**; the 27 grouped by cause in the header |
+| `C`-series per-arm neuter | **36 statements, 18 uniquely catching** (was 35/17; +1 arm, +1 unique) |
+| census guard | **25/25** — went RED on me once, correctly, on two stranded `FROZEN` entries |
+| full gate | **1,338 passed + 9 live-skipped**; `ruff` clean; `uv run mypy` clean (68 files) |
+| read-cap probe, empirical | `lines 1-754 of 2,539 (71,499 tokens, cap 25,000)` — front matter **+ 5 complete records**, where it delivered 4 |
+| front matter share of the delivered prefix | **13.1%**, was **41.3%** |
+
+**Two figures I got wrong and corrected before committing.** I typed *"37 failure-emitting
+statements"* into the C-series header without measuring (it is 36), and I ran `uv run mypy .` and
+reported 185 errors when CI's command is `uv run mypy` with no path argument — 68 files, clean.
+Both were caught by measuring rather than by review.
+
+**Where I exceeded the plan, and by how much.** §13.3 projected the post-E front matter at **5,051 B
+/ 9%** of the delivered prefix; I landed at **7,184 B / 13.1%**, because that projection assumed the
+three blocks simply vanish and budgeted nothing for standing prose. The 2,133 B difference buys the
+routing rule, the write-once rule, the banner-snapshot rule and the three bequests — and it costs
+**nothing** in delivered records: K = 5 either way. The standing block is **fixed-size by
+construction**: it contains no per-trim content, which is the property Option E exists to create.
+If a future session finds it growing, that is the regression to watch.
+
+### Session 253 Handoff Evaluation (by Session 254)
+
+**Score: 9/10.** The best handoff this lineage has produced for a session that had to touch the
+apparatus itself. It named the deliverable, named the trap, and was right about both.
+
+- **+ What's-next #1 was the entire session**, including the two things that actually governed the
+  design: *"`OLD_BLOCKS` and `NEW_TABLE` are pinned at `2b8c9c9`"* and **"`C6` reads the working tree
+  and will need its own declared substitution."** That second clause is the single most valuable
+  sentence in the handoff — it predicted the only proof obstacle, correctly, before I looked.
+- **+ Gotcha 1 (run BOTH modes, neither is sufficient)** — load-bearing twice: once for the routine
+  gate, and once when it was *still* not enough and the per-arm sweep found what both modes missed.
+  That is not a defect in the gotcha; it is the next layer down, and gotcha 3 points at it.
+- **+ Gotcha 5 (the census guard fires within 30 characters; reword, do not exempt)** paid exactly as
+  written. The guard went red, and I dropped two stranded entries rather than adding one.
+- **+ Gotcha 6 (`command grep`)** — eighth session running, used in every count published here.
+- **+ Gotcha 7 (`PROJECT_LEARNINGS.md`/`CHANGELOG.md` are refused by a default `Read`)** — saved two
+  failed reads; I used `wc -c`, `sed -n` and `command grep` throughout.
+- **+ It re-derived its own inherited figures and said so**, which is why I trusted "35 statements"
+  enough to test it — and it reproduced exactly.
+- **− The only miss is one it could not have avoided:** its self-assessment says *"~4.4M subagent
+  tokens … a large bill for a two-file repair"*, and I repeated the pattern at similar scale for a
+  larger change without first checking whether the inventory would finish inside the session. Not
+  its fault; noted because the next session inherits the same temptation.
+- **ROI: very high.** Five minutes to read; it removed every structural decision except the shape of
+  the new prose.
+
+### Session 254 Self-Assessment
+
+**Score: 8/10.** The deliverable is complete, verified in both modes, measured with controls before
+and after, and it ends a condition §2 of the review document says has held since the first trim —
+the front matter is no longer the half of this file that grows, and the rule that keeps it that way
+is asserted rather than announced. What holds it at 8 is that I introduced a silent weakening into a
+proof I was repairing and found it only because I ran a sweep I had already decided to run for a
+different reason, and that I typed two figures without measuring them first.
+
+**+ I measured the premise before acting on it, with a control**, including the perturbation that
+matters most — deleting all three blocks and watching nine proofs stay green. That converted "the
+plan says this is safe" into "this is safe, and here is the experiment".
+**+ I built the new prose with a script**, so rows 1–5 are copied byte-for-byte and rows 6–8 are
+composed from figures derived at each shard's own add-commit. No table figure in this file was typed.
+**+ `R7` and `R8` are the two assertions this deliverable actually needed**, and neither existed in
+the lineage: one licenses a deletion, the other makes a convention enforceable.
+**+ The dated sweep census (23 at its own cut, 26 now)** is the strongest evidence I found, and I
+found it by re-measuring a claim rather than by reading it.
+**+ The guard adjudicated me and I let it** — third session running — and I dropped the stranded
+exemptions rather than re-pointing them, after verifying the scan was clean without them.
+**+ I corrected my own `mypy` claim** rather than reporting a regression that was my invocation.
+
+**− I introduced a real weakening into the `C`-series and neither verification mode saw it.**
+`C0/FIGURE` and `C3/FIGURE` lost their unique mutants the moment I re-anchored `C6`. Both modes were
+green across the regression. Only the per-arm neuter sweep found it — and I ran that because
+`CLAUDE.md` mandates it for a new proof, not because I suspected the old one. **Had I shipped the
+`R`-series without touching `C6`'s fixture, this session would have published a green gate over a
+quietly weaker proof, which is precisely the class Session 253 existed to close.**
+**− I typed "37 failure-emitting statements" into a header block whose subject is unmeasured
+figures.** Wrong by one. I caught it by measuring, but I wrote it first — the same defect Sessions
+252 and 253 each recorded against themselves.
+**− I exceeded §13.3's front-matter projection by 42%** and only justified it after the fact. The
+justification holds (K is unchanged at 5), but I should have computed the budget before writing the
+prose, not after.
+**− The adversarial inventory did not finish inside the session.** I launched a 5-lens, ~78-agent
+review at the start, completed the deliverable from my own measurements while it ran, and it was
+still running at close-out. Its labels show it independently found at least two things I found
+(`c0-c6-already-stale`, the stranded `FROZEN` literals), which is corroboration — but I shipped
+without it, and a review that lands after the commit is a follow-up, not a gate. **Filed as
+what's-next #1.**
+
+**Against the bar:** S252 showed a document's conclusions had expired; S253 showed the apparatus's
+verification recipe was wrong everywhere it was written down. S254's equivalent is showing that
+**the recipe is still not sufficient** — a proof can be weakened while both mandated modes report
+success, and the only instrument that sees it is the per-arm sweep this project treats as a
+new-proof formality rather than a change-detection tool. Learning #237 is that finding.
+
+**What's next.**
+
+1. **Read the adversarial inventory's output and act on anything it found that I did not.** It was
+   still running at close-out; its journal is at the key-file path below. Its five lenses were:
+   what-must-survive, what-the-collapse-falsifies, external citations, proof impact, and the live
+   guards plus budget arithmetic. **Treat any surviving finding as a defect in this commit**, and
+   note that its refuters were instructed to default to *refuted* when they could not confirm.
+2. **Then Option D, widened** — the front-matter budget, K in **bytes**, over the four mandated-read
+   files. §13.8 and §13.11. **E has now made it reachable**: front matter is 13.1% of the delivered
+   prefix, and §13.3's precondition was that D at K=3 is unreachable above ~33%.
+3. **The ninth trim is over its trigger and the arithmetic has changed.** This file measures
+   **2,538 lines** before this record lands — **re-measure**, it moves with every edit — against the
+   1,500-line trigger. The front matter is no longer the binding quantity, which is exactly what E
+   was for. **The ninth trim must write a ROW, not a block**, and `R8` will go red if it does not.
+4. **`R7`'s frontier arm binds the ninth trim in a way no earlier assertion did.** After a trim, the
+   oldest live record id changes, so the new row's `archived` span must extend the tiling *and* the
+   frontier must still equal `newest_archived + 1`. Both are asserted; a trim that writes the row
+   wrongly cannot go green.
+5. **Push.** This clone is now **10 commits ahead of `origin/master`**, which last saw Session 249.
+   The CI `proofs` job added in Session 253 still has never run.
+6. **Carried, unchanged:** sync the local dashboard (v2.15.2 vs canonical v2.17.0, outside this
+   repo); `BACKLOG.md`'s plain-language index still renders as several tables; the census guard's
+   `SPELLED`/`ORDINAL` maps stop at sixteen (S249 #3, still unfiled); `tests/eval/README.md`'s three
+   stale statements, now a ninth session.
+
+**Key files.**
+- `docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh` — the `R`-series. Read
+  its header first: the nine assertions, the control experiments, and the measured neuter table.
+  `R7`/`R8` are the new ones. **Locate by content, never by line number.**
+- `docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh` — `LIVE_HEAD` (declared, just
+  after `DECLARED_OLD_LINES`), `C6/SUPERSEDED`, `with_table` in `self_test()`, and the
+  `SESSION 254` header block recording the weakening and its repair.
+- `docs/methodology/PROJECT_CONVENTIONS.md` §3.1 — collapse-on-write, declared as convention.
+- `CLAUDE.md` — the rewritten collapse bullet. It **states no assertion or mutant count on purpose**.
+- `tests/test_session_notes_census.py` — two `FROZEN` entries dropped, with the reason in a comment
+  at their former location.
+- `/private/tmp/claude-501/…/scratchpad/measurements-s254.md` — every figure with its command;
+  `build_front.py`, `derive_rows.py`, `neuter.py`, `sweep_final.py` are the scripts that produced them.
+- Inventory workflow journal (still running at close-out):
+  `~/.claude/projects/-Users-rmsharp-Development-model-project-constructor/3fdb0739-d8ba-4856-a11c-098817ec32d6/subagents/workflows/wf_383a901d-415/journal.jsonl`.
+
+**Gotchas.**
+1. **A green plain run AND a green `--self-test` still miss a weakened arm.** This session proved it:
+   re-anchoring `C6` cost two arms their unique mutants with both modes green. **After changing any
+   assertion or self-test fixture, re-run the per-arm neuter sweep and compare unique coverage to the
+   published figure.** The loop is in both proofs' headers.
+2. **Three commits, not two, and the order is load-bearing.** `R2` asserts the records zone is
+   byte-identical across the collapse commit, so the claim stub, the collapse, and the close-out are
+   three separate commits. Bundling the record with the collapse holds `R2` red forever.
+3. **`R8` will fire on the ninth trim if it writes prose.** That is deliberate. Add a row to the
+   table; put the rationale in the session's record. The table's `archived` column is the routing
+   table now — there are no prose routing clauses left to update.
+4. **`C1` pins `NEW_TABLE` at `2b8c9c9` forever and `R1` pins `NEW_BLOCK` at `a7d3b29` forever.**
+   Neither literal can be re-pinned; there is no green state containing an edited one. Prose inside
+   the collapsed block may still be repaired — that is what `LIVE_HEAD`-style declared anchors are
+   for — but the frozen literals stay frozen.
+5. **The census guard's `FROZEN` entries are claims about prose.** Reword a guarded sentence and its
+   entry strands, turning the guard red **and taking every mutant test with it** (17 failures, one
+   cause). Drop the entry if the new prose needs no exemption; verify by running the scan, not by
+   reading it.
+6. **CI's type check is `uv run mypy` with no path argument** (68 files, clean). `uv run mypy .`
+   pulls in out-of-scope tests and reports errors that are not regressions.
+7. **`command grep` for every count** — bare `grep` is a `ugrep --ignore-files` wrapper.
+8. **`PROJECT_LEARNINGS.md` and `CHANGELOG.md` are REFUSED by a default `Read`.**
+   `PROJECT_LEARNINGS.md` is 290.5 KB at close-out — re-measure with `wc -c`, never quote it.
+9. **`gh issue list` is empty by design** until UAT.
 
 ### What Session 253 Did
 **Deliverable:** **The unfalsifiable proof is repaired — COMPLETE.**
