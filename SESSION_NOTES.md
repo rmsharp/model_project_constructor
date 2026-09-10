@@ -99,8 +99,9 @@ is declared in `docs/methodology/PROJECT_CONVENTIONS.md` §3.1 and **asserted** 
 working tree. Front matter **284 lines / 23,029 B → 94 / 7,184**. Operator's words: *"Option E,
 retroactive"*. No trim, no shard, no record moved, nothing else started.
 
-**Started / completed:** 2026-09-09 (UTC). **Commits: three** — `8c9bb35` (Phase 1B claim, alone),
-`a7d3b29` (the collapse, carrying **no** record edit, which is what `R2` asserts), and this close-out.
+**Started / completed:** 2026-09-09 (UTC). **Commits: four** — `8c9bb35` (Phase 1B claim, alone),
+`a7d3b29` (the collapse, carrying **no** record edit, which is what `R2` asserts), the close-out, and
+a follow-up carrying the five repairs the adversarial review forced (below).
 **`CHANGELOG.md` entry: YES** — this session changed `tests/test_session_notes_census.py`, and
 `PROJECT_CONVENTIONS.md` §2 gates on `tests/` logic. Session 249 set the precedent for a change to
 this same guard. The rest of the session (`docs/`, `CLAUDE.md`, `README.md`, this file) would have
@@ -192,9 +193,53 @@ Both were caught by measuring rather than by review.
 / 9%** of the delivered prefix; I landed at **7,184 B / 13.1%**, because that projection assumed the
 three blocks simply vanish and budgeted nothing for standing prose. The 2,133 B difference buys the
 routing rule, the write-once rule, the banner-snapshot rule and the three bequests — and it costs
-**nothing** in delivered records: K = 5 either way. The standing block is **fixed-size by
-construction**: it contains no per-trim content, which is the property Option E exists to create.
-If a future session finds it growing, that is the regression to watch.
+**nothing** in delivered records: K = 5 either way.
+
+**I claimed the standing block is "fixed-size by construction" and that is not true — the
+adversarial review measured the exception.** The *"Three things are bequeathed to the ninth trim"*
+list is **12 lines / 1,013 B, 14% of the front matter**, and it IS per-trim by content; so is the
+numeral in *"What these eight trims found"* (which `R3/FIGURE` at least derives). Nothing asserts the
+bequest list's size, and nothing stops a trim appending to it rather than rewriting it. The honest
+statement is narrower: **the block contains no per-trim POINTER content — no block per cut — which
+is the growth driver Option E was ruled against.** The bequest seam is the remaining one, it is
+filed in `BACKLOG.md`, and a session that finds that list longer than it found it should move the
+resolved items into its own record.
+
+#### The adversarial review landed after the commit, and it changed the code
+
+A 5-lens inventory with per-finding refuters and a completeness critic was launched at Phase 2 and
+finished after `a7d3b29` was already committed: **116 agents, 0 errors, ~10.3M subagent tokens,
+~100 minutes. 110 findings verified — 19 survived, 91 refuted** — plus 12 from the critic. A review
+that lands after the commit is a follow-up, not a gate, and it is recorded here as one.
+
+**Eight of the nineteen survivors independently re-derived rows 6, 7 and 8 field-for-field** —
+including the composed markdown lines — and agreed with my derivation exactly. Four more predicted
+the two obstacles I had already hit (the `FROZEN` literals inside `CLAUDE.md:87`; that the C-series'
+`ROWS` must **not** be extended and a separate proof was required). That is corroboration, not
+correction.
+
+**Five findings were real defects in the commit, and all five are fixed in the follow-up:**
+
+| # | what it found | fix |
+| --- | --- | --- |
+| **1** | **`R7/FRONTIER` had NO GREEN STATE after the next trim.** It compared the FROZEN declared `ROWS` (max archived 241) against the LIVE oldest record id, so a ninth trim fails it — while extending `ROWS` fails `R3 SET` and editing `NEW_BLOCK` fails `R1`. **The C3 "rows cannot be extended" trap, reproduced one level up, inside my brand-new arm, in the session whose own record calls that trap out.** | `R7` split into a frozen-declaration half and **live** arms that parse the `archived` column out of the working tree. Verified by simulating a ninth trim three ways: archive-without-row → RED, archive-and-row → **GREEN**, overlapping row → RED. `M49`/`M50` added, each isolating one live arm. |
+| **2** | My what's-next #4 told the ninth trim to satisfy `R7` — **impossible** given #1, and it was the only guidance that session had. | rewritten, with the three simulation outcomes stated. |
+| **3** | `R8`'s family regex was inherited from `C7` and **never matched the singular form.** `**The two blocks below are frozen` matched; `**The block below is frozen` did not — and **both** stood in the front matter I deleted, so `C7` could only ever have caught one of the two members of the family it was written for. | count word made optional. |
+| **4** | The front-matter byte figure is **wrong in two live files**: `CLAUDE.md` and `CHANGELOG.md` said `94 / 7,179` where the measurement, the proof's own output and this record all say **7,184**. A stale figure from an earlier build, in the commit whose subject is stale figures. | corrected in both. |
+| **5** | `docs/planning/ledger-budgets-review.md` pins `SESSION_NOTES.md:185`, `:256` and `:277` — **all three inside the region I deleted.** One of them (`:277`) presented as a backticked quotation a string that **never existed in that file at any commit**, so that inventory row was unverifiable before the collapse too. | six sites annotated: what was deleted, where it survives, and which §13.11 rows Session 254 closed. |
+
+**Two more survivors are residual gaps, filed rather than fixed** (`BACKLOG.md`): the standing block
+is guarded only at its table rows and spans — a six-way control showed deleting the routing sentence,
+the write-once rule, the banner-snapshot rule or the legend leaves every proof green (an improvement
+in **cost**, not in **safety**, and the record should not be read as claiming otherwise); and
+**neither collapse proof is guarded by anything** — not `L10`'s declared list, not the census guard's
+glob, and CI errors only when *zero* proofs are found, so the file the front matter names as the
+second custodian of the deleted prose can vanish silently.
+
+**One critic finding corrected a claim in this record** — the bequest list is a per-trim growth seam
+(above) — and **one corrected my own prompt**: commit `020ba3f`, which I cited to the agents as the
+losslessness counterexample, is not an object in this repository. It is a sibling-repo commit reached
+through a quotation. A later session should not go looking for it here.
 
 ### Session 253 Handoff Evaluation (by Session 254)
 
@@ -224,12 +269,14 @@ apparatus itself. It named the deliverable, named the trap, and was right about 
 
 ### Session 254 Self-Assessment
 
-**Score: 8/10.** The deliverable is complete, verified in both modes, measured with controls before
-and after, and it ends a condition §2 of the review document says has held since the first trim —
-the front matter is no longer the half of this file that grows, and the rule that keeps it that way
-is asserted rather than announced. What holds it at 8 is that I introduced a silent weakening into a
-proof I was repairing and found it only because I ran a sweep I had already decided to run for a
-different reason, and that I typed two figures without measuring them first.
+**Score: 7/10 — revised down from 8 after the adversarial review landed.** The deliverable is
+complete and now genuinely sound: it ends a condition §2 of the review document says has held since
+the first trim, and the rule that keeps it that way is asserted rather than announced. But I
+committed `a7d3b29` with a **no-green-state trap inside my own new assertion** — the exact trap this
+lineage documents twice and my own record names — and I found it only because a review I had
+launched happened to finish before I stopped working. Had it finished an hour later, the ninth trim
+would have hit an unreachable state with my record telling it the arm was correct. Everything below
+the first minus is what an 8 would have looked like; the trap is what it actually was.
 
 **+ I measured the premise before acting on it, with a control**, including the perturbation that
 matters most — deleting all three blocks and watching nine proofs stay green. That converted "the
@@ -244,6 +291,12 @@ found it by re-measuring a claim rather than by reading it.
 exemptions rather than re-pointing them, after verifying the scan was clean without them.
 **+ I corrected my own `mypy` claim** rather than reporting a regression that was my invocation.
 
+**− I shipped `R7/FRONTIER` with no green state after the next trim.** It mixed a frozen operand
+with a live one. Both modes green, all 48 mutants caught, my own controls green — because every one
+of them tested *this* world, and the defect only exists in the *next* one. **The lesson is sharper
+than "run the sweep": an assertion that reads both a frozen declaration and a live artifact must be
+tested against a simulated future state, and nothing in this project's toolkit does that.** I
+simulated a ninth trim only after a reviewer told me to.
 **− I introduced a real weakening into the `C`-series and neither verification mode saw it.**
 `C0/FIGURE` and `C3/FIGURE` lost their unique mutants the moment I re-anchored `C6`. Both modes were
 green across the regression. Only the per-arm neuter sweep found it — and I ran that because
@@ -256,26 +309,30 @@ figures.** Wrong by one. I caught it by measuring, but I wrote it first — the 
 **− I exceeded §13.3's front-matter projection by 42%** and only justified it after the fact. The
 justification holds (K is unchanged at 5), but I should have computed the budget before writing the
 prose, not after.
-**− The adversarial inventory did not finish inside the session.** I launched a 5-lens, ~78-agent
-review at the start, completed the deliverable from my own measurements while it ran, and it was
-still running at close-out. Its labels show it independently found at least two things I found
-(`c0-c6-already-stale`, the stranded `FROZEN` literals), which is corroboration — but I shipped
-without it, and a review that lands after the commit is a follow-up, not a gate. **Filed as
-what's-next #1.**
+**− The adversarial inventory did not finish before I committed, and it should have gated.** I
+launched it at Phase 2 and completed the deliverable from my own measurements while it ran; it
+returned ~100 minutes later, after `a7d3b29`. It then found five real defects including the blocker
+above. **Eight of its survivors also re-derived my rows field-for-field and agreed exactly**, so the
+measurement half of my work was independently confirmed — but the design half was not reviewed until
+after it shipped. A ~10.3M-token review that lands after the commit buys a follow-up commit instead
+of a correct one.
+**− ~10.3M subagent tokens**, the most expensive verification in this lineage by a factor of two. It
+paid — it caught a trap that would have blocked the next session — but the bill belongs on the record.
 
 **Against the bar:** S252 showed a document's conclusions had expired; S253 showed the apparatus's
-verification recipe was wrong everywhere it was written down. S254's equivalent is showing that
-**the recipe is still not sufficient** — a proof can be weakened while both mandated modes report
-success, and the only instrument that sees it is the per-arm sweep this project treats as a
-new-proof formality rather than a change-detection tool. Learning #237 is that finding.
+verification recipe was wrong everywhere it was written down. S254's equivalent is showing the
+recipe is **still not sufficient, in two independent directions.** A proof can be weakened while
+both mandated modes report success — only the per-arm sweep sees it (learning #237). And an
+assertion can be green against every state that exists while having **no reachable green state in
+the next one** — nothing in this project tests that, and the only reason it was caught here is that
+a review outlived the commit. Learning #241.
 
 **What's next.**
 
-1. **Read the adversarial inventory's output and act on anything it found that I did not.** It was
-   still running at close-out; its journal is at the key-file path below. Its five lenses were:
-   what-must-survive, what-the-collapse-falsifies, external citations, proof impact, and the live
-   guards plus budget arithmetic. **Treat any surviving finding as a defect in this commit**, and
-   note that its refuters were instructed to default to *refuted* when they could not confirm.
+1. **Nothing outstanding from the review — it landed and was acted on in-session.** 110 findings
+   verified, 19 survived, 12 from the critic; five were real defects and all five are fixed in the
+   follow-up commit, two are filed in `BACKLOG.md`, and the rest were corroboration or no-action.
+   The table above lists every one. **Start at #2.**
 2. **Then Option D, widened** — the front-matter budget, K in **bytes**, over the four mandated-read
    files. §13.8 and §13.11. **E has now made it reachable**: front matter is 13.1% of the delivered
    prefix, and §13.3's precondition was that D at K=3 is unreachable above ~33%.
@@ -283,10 +340,15 @@ new-proof formality rather than a change-detection tool. Learning #237 is that f
    **2,538 lines** before this record lands — **re-measure**, it moves with every edit — against the
    1,500-line trigger. The front matter is no longer the binding quantity, which is exactly what E
    was for. **The ninth trim must write a ROW, not a block**, and `R8` will go red if it does not.
-4. **`R7`'s frontier arm binds the ninth trim in a way no earlier assertion did.** After a trim, the
-   oldest live record id changes, so the new row's `archived` span must extend the tiling *and* the
-   frontier must still equal `newest_archived + 1`. Both are asserted; a trim that writes the row
-   wrongly cannot go green.
+4. **`R7`'s frontier arm binds the ninth trim, and it took a review plus a repair to make that
+   possible.** As first shipped it compared the FROZEN declared `ROWS` (max archived 241) against
+   the LIVE oldest record id, so the ninth trim had **no green state at all** — the C3
+   "rows cannot be extended" trap reproduced one level up, inside the new arm, in the session whose
+   own record calls that trap out. Found by the adversarial review, reproduced here by simulating a
+   ninth trim, and **fixed**: `R7`'s live arms now parse the `archived` column out of the WORKING
+   TREE. Verified by simulation — a trim that archives records **and** adds its row is GREEN; one
+   that archives without adding the row is RED (`R7 FRONTIER`); one whose row overlaps is RED
+   (`R7 LIVE-OVERLAP`). **So: add the row and archive the records, in the same trim.**
 5. **Push.** This clone is now **10 commits ahead of `origin/master`**, which last saw Session 249.
    The CI `proofs` job added in Session 253 still has never run.
 6. **Carried, unchanged:** sync the local dashboard (v2.15.2 vs canonical v2.17.0, outside this

@@ -153,12 +153,15 @@ Six sites in four files assert it as fact — the actual repair set:
 | `BACKLOG.md:62` | `nothing has re-derived that cap since Session 222` — *this item; now answerable* |
 | `BACKLOG.md:465` | `truncates at 2,000 lines with no error and no missing-data marker` |
 | `PROJECT_CONVENTIONS.md:73` | `past the 2,000-line agent read cap is silently truncated on every Read, with no error and no missing-data marker` |
-| `SESSION_NOTES.md:277` | `an agent Read stops at 2,000 with no error and no marker` |
+| `SESSION_NOTES.md:277` | `an agent Read stops at 2,000 with no error and no marker` — **DELETED at Session 254** (Option E retroactive; the line was inside the collapsed region). Still readable at `8c9bb35`. **And the backticked string was never verbatim in that file at any commit**, so this row was unverifiable before the collapse too — found by an adversarial review, 2026-09-09. |
 
 `tests/test_session_notes_census.py:336` and `:361` name the phrase inside the guard's `FROZEN`
 allowlist and must be re-matched if the wording changes, or the companion staleness test fires.
 `SESSION_NOTES.md:185` and `:1519` **quote frozen banner text inside historical records and must not be
-repaired.** One false positive: `docs/wiki/model_project_constructor/Changelog.md:32` is about LLM
+repaired.** **`:185` no longer exists — Session 254's collapse deleted the sixth trim's pointer block
+that contained it; the quotation survives at `8c9bb35`, in the S235 shard's own banner, and embedded
+verbatim in `SESSION_NOTES-pointer-collapse-S254.verify.sh`. `:1519` is unaffected. Locate by content,
+never by line number — this row is the worked example of why.** One false positive: `docs/wiki/model_project_constructor/Changelog.md:32` is about LLM
 `max_tokens`.
 
 **The 43 frozen occurrences can never be corrected.** They join the six stale shard banners the project
@@ -411,11 +414,11 @@ edited tree].
 
 | # | site | says | measured |
 |---|---|---|---|
-| 1 | `CLAUDE.md:87` | collapse proof ships **36 mutants** | **46** `M`-labels; the proof's own header says 46 |
-| 2 | `CLAUDE.md:87` | assertions **C0–C6** | **C0–C7** (8 `def C…`); `README.md:136` says C0–C7 and is right |
+| 1 | `CLAUDE.md:87` | collapse proof ships **36 mutants** | **46** `M`-labels; the proof's own header says 46. **FIXED, Session 254** — the rewritten bullet states no assertion or mutant count at all, so there is no second copy to go stale |
+| 2 | `CLAUDE.md:87` | assertions **C0–C6** | **C0–C7** (8 `def C…`); `README.md:136` says C0–C7 and is right. **FIXED, Session 254**, the same way as row 1 |
 | 3 | `CLAUDE.md:58` | live file holds the newest **4** sessions | **7** record headings |
 | 4 | `CLAUDE.md:81` | **~184** lines/record | **234.8**; no window measures 184 |
-| 5 | `SESSION_NOTES.md:256` | *"lettered **C0–C6**"* | same error, second copy |
+| 5 | `SESSION_NOTES.md:256` | *"lettered **C0–C6**"* | same error, second copy. **GONE, Session 254** — the line was inside the collapsed region |
 | 6 | `…pointer-collapse.verify.sh:395` | *"lettered **C0–C6**"* — **inside the pinned `NEW_TABLE` literal** | same error, third copy |
 | 7 | `…S238-through-S236.md.verify.sh:1792` [W] | *"the six an adversarial review forced"* | **seven** mutants (M78–M84) follow. Unrepairable — `L10` pins it |
 | 8 | `…S235-through-S232.md.verify.sh:1548` | `if any(f.startswith("L1") for f in fails)` | a **code** bug, not prose: the prefix also matches `L10`–`L14`. Learning #177; shipped by S239, found by S242 three sessions later, **live and unrepairable today** |
@@ -573,7 +576,8 @@ have not pretended to.
 6. **Probes C and E deliberately break `grep`-never-`Read`.** Re-running Appendix A is read-only and
    safe; do not let the technique leak into ordinary work.
 7. **`grep` here is a `ugrep --ignore-files` wrapper.** `command grep` or `git grep` for every count.
-8. **`SESSION_NOTES.md:185` and `:1519` quote frozen banner text.** They look like repair targets. They
+8. **`SESSION_NOTES.md:185` and `:1519` quote frozen banner text.** **`:185` was deleted by Session 254's
+   collapse — see §1.4.** They look like repair targets. They
    are not.
 9. **Density figures move under you.** Everything in §3 was measured at `b95c39e`. Re-derive at Phase 0 —
    this document's whole subject is figures that were true once.

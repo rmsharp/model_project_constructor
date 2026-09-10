@@ -63,6 +63,10 @@ rows below it are the smaller residue that closing it exposed.
 | Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249.** **RULED by the operator, Session 252 (2026-09-07)** — see [`§13`](docs/planning/ledger-budgets-review.md): **E retroactive first, then D (widened to the four mandated-read files, K expressed in bytes), then a CI step running `--self-test`; F ruled with that CI step as its substitute; B, C, G and H declined.** Three sessions, in that order. **The `--self-test` repair that came ahead of all three LANDED in Session 253**, so Option E (collapse-on-write, retroactive) is next. Two of the ruling's premises were re-measured and had **moved**: the retention rule is *satisfiable* at HEAD (an abandoned Session 251 left a 15-line record that bought exactly the one-trim reprieve B and C were priced to buy), and §12.1's `K = 1` is now `K = 4`. |
 
 | The NO-OP guard cannot see a partially inert mutant | Session 253 repaired the broken proof and added a guard: a mutant that corrupts nothing is now reported as a broken *fixture* rather than a missed *assertion*. The guard compares the whole argument list, so it catches a mutant that has gone completely inert — and misses one that mutates three things and loses one of them. Measured: 7 of 46 are exposed, all of them reading frozen inputs that cannot drift, so nothing is broken today. | **Small.** Compare slot-by-slot, or accept the seven and say so. |
+| The ledger's front matter is guarded only at the table rows | Session 254 collapsed 276 lines of unread pointer prose into an eight-row table and a short block of standing rules. An adversarial review then measured what the new block's own proof can actually see: the eight table rows, its opening line, and the routing spans. Delete the routing sentence, the write-once rule, the banner-snapshot rule or the column legend and **every proof stays green**. The prose got 3× shorter and no better guarded, which is an improvement in cost and not in safety. | **Operator call.** Either accept it (the block is short enough to re-read), or give the standing rules the treatment the census guard gives the four prose files. |
+| Neither collapse proof is guarded by anything | `L10` enforces write-once over the ancestor *shard* proofs by a hand-declared list; `R4/GONE` covers every shard the table declares, and its proof. Nothing covers `SESSION_NOTES-pointer-collapse.verify.sh` or `SESSION_NOTES-pointer-collapse-S254.verify.sh` — and the second is the declared second custodian of the 276 deleted lines, the reason "nothing was lost" does not rest on git alone. Delete either file and the remaining proofs pass; CI errors only when *zero* proofs are found. | **Small.** Add both to a write-once list, or have each assert the other exists. |
+| The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: *"Three things are bequeathed to the ninth trim"* is 12 lines / 1,013 B, **14% of the front matter**, and it is per-trim by content. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
+| Option E's completion criterion needs Option D's deliverable | §11's E criterion is *"the ninth trim's pointer block is a table row; front matter measured at the trim commit is ≤ **the declared budget**; C-series extended with a mutant."* **No front-matter budget is declared anywhere in the repository**, so that clause is unsatisfiable, and the first clause cannot be met until a ninth trim happens. §13.1 ruled E ahead of D, but E's criterion consumes D's output. | **No action needed now** — recorded so the next session does not treat E as unfinished. Option D declares the budget; the ninth trim exercises the row. |
 | CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk.
 
@@ -494,6 +498,49 @@ dead replace sites today, so nothing is currently broken; the item is that nothi
 **DONE** = either the guard compares slot-by-slot and reports which slot went inert, or a documented
 decision that whole-tuple comparison is sufficient with the seven named above accepted as residual.
 **VERIFY:** re-run the slot census; every mutant is either 1-slot or explicitly accepted.
+
+### The ledger's front matter is guarded only at its table rows
+
+Filed Session 254, from an adversarial review of that session's own commit `a7d3b29`.
+
+Option E replaced 276 lines of pointer prose with an 8-row table plus ~40 lines of standing rules
+(routing, `grep`-never-`Read`, write-once, banner-snapshot, three bequests). The new proof's live
+arms read **the eight composed rows, the block's opening line, and the `archived` spans** — and
+nothing else. The review ran a six-way control through those arms: deleting the standing routing
+sentence, falsifying the self-arithmetic numeral, deleting the write-once rule, deleting the
+banner-snapshot rule, or deleting the column legend leaves **every proof green**.
+
+That is not a regression — the 276 lines it replaced were guarded by nothing either, which is the
+measurement that justified the collapse. But the improvement is in **cost**, not in **safety**, and
+the session's record should not be read as claiming otherwise.
+
+- **Option 1 — accept it.** The block is ~40 lines and a session reads it every time. Say so and close.
+- **Option 2 — extend the guard.** `tests/test_session_notes_census.py` already holds four prose
+  files against the shards on every CI run and is fail-closed. The standing rules are a fifth
+  surface of the same kind. This is the larger, and the one that generalises.
+
+**Operator call**, because option 2 is a design change and option 1 is a decision, not a fix.
+
+### Neither collapse proof is guarded by anything
+
+Filed Session 254, same review.
+
+`L10` enforces write-once over the ancestor shard proofs from a hand-declared list. `R4/GONE`
+asserts every shard the table declares, and its `.verify.sh`, are on disk. **Nothing covers either collapse
+proof.** `SESSION_NOTES-pointer-collapse.verify.sh` and
+`SESSION_NOTES-pointer-collapse-S254.verify.sh` are not shards, are not in any declared list, are
+not matched by the census guard's `SESSION_NOTES-*.md` glob, and CI's loop errors only when it finds
+**zero** proofs — so deleting one leaves the gate green.
+
+This matters most for the S254 proof, which the front matter names as the **second custodian** of the
+276 replaced lines: *"the retired prose is readable byte-for-byte in three places … embedded verbatim
+inside the proof named below."* If that file can vanish silently, one of the three custodians is
+unasserted. (Nothing is actually at risk today: the pre-collapse commit `8c9bb35` and each shard's
+own banner both survive independently.)
+
+**Small.** Either add both files to a declared write-once list in the style of `L10`, or have each
+collapse proof assert the other exists and matches its add-commit blob. The second is symmetric and
+needs no new list to maintain.
 
 ### CI runs the proofs on push, and this repository pushes in bursts
 

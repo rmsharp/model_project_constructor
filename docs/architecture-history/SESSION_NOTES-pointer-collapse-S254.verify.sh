@@ -117,13 +117,13 @@
 #   WHOLE ASSERTION -- neuter one function at a time to `return []`; every one of the nine is
 #   load-bearing, and each is the SOLE objector to at least two mutants:
 #     R0  -> M2, M3, M4, M5, M48                    R1  -> M6, M7, M8
-#     R2  -> M9, M10, M11                           R3  -> M12-M23 (twelve)
+#     R2  -> M9, M10, M11                           R3  -> M12-M16, M18-M23 (eleven)
 #     R4  -> M27, M28, M29                          R5  -> M32, M33
-#     R6  -> M34, M35, M37                          R7  -> M43, M46, M47
+#     R6  -> M34, M35, M37                          R7  -> M43, M49, M50, M46, M47
 #     R8  -> M44, M45
 #
-#   PER ARM -- 44 failure-emitting statements inside R0-R8 (42 `out.append` plus 2 early
-#   `return ["R...`); **17 uniquely catch a mutant, 27 do not.** An arm no mutant can reach is the
+#   PER ARM -- 48 failure-emitting statements inside R0-R8 (46 `out.append` plus 2 early
+#   `return ["R...`); **17 uniquely catch a mutant, 31 do not.** An arm no mutant can reach is the
 #   defect Session 224 and Session 228 each shipped, and the only way to find one is to neuter arms
 #   one at a time. Both lists are below: what uniquely catches, then what does not and why.
 #
@@ -132,26 +132,35 @@
 #     arm 10 R2 RECORD ORDER, arm 13 R3 SIZE `%s`, arm 19 R3 FIGURE
 #     arm 24 R4 LEFT-LIVE `%s`, arm 25 R4 GONE `%s`, arm 26 R5 `%s`
 #     arm 30 R6 LIVE, arm 31 R6 LIVE, arm 33 R6 SUBSTITUTED
-#     arm 36 R7 OVERLAP, arm 37 R7 GAP, arm 41 R7 FRONTIER
-#     arm 43 R8 THE RULE, arm 44 R8 THE RULE
+#     arm 41 R7 LIVE-OVERLAP, arm 42 R7 LIVE-GAP, arm 45 R7 FRONTIER
+#     arm 47 R8 THE RULE, arm 48 R8 THE RULE
 #
-#   THE 27 ARMS WITH NO UNIQUELY-CATCHING MUTANT, grouped by cause:
+#   THE 31 ARMS WITH NO UNIQUELY-CATCHING MUTANT, grouped by cause:
 #
+#   * PROVABLY SUBSUMED BY THE LIVE ARMS -- R7/OVERLAP and R7/GAP read the DECLARED spans, and a
+#     declared span cannot break tiling without breaking it on disk too: R3/ROW requires the
+#     composed row (which carries that span) to be in NEW_BLOCK, and R6 requires every NEW_BLOCK row
+#     to be in the working tree, so R7/LIVE-OVERLAP or R7/LIVE-GAP always fires with them. They are
+#     kept because they name the SHARD in the message where the live arms can only name numbers.
+#     **Measured, and it is a deliberate trade:** before R7 was split, M46/M47 isolated the declared
+#     arms and the live arms did not exist. Splitting moved their unique coverage to the live half --
+#     which is the half that binds a later trim, so this is the direction the coverage should move.
 #   * MUTANT TAKEN BY A SIBLING -- mutating any declared ROW field also changes the line R3/ROW
-#     composes, so ROW and SET fire alongside whatever the mutant was written for. This accounts
-#     for R3/SESSION, R3/ORDINAL, R3/ROW, both R3/SET arms, R4/PROVENANCE, R4/SPAN,
-#     R5/ASSERTIONS, and both R7/SPAN grammar guards. R0/SIZE loses its mutant the same way:
-#     M2 moves DECLARED_OLD_LINES, and R0/FIGURE requires that same integer in the prose.
-#   * REACHABLE, NEVER ALONE -- degradation guards that only fire in company, because a world
-#     broken enough to reach them breaks a sibling too: R3/unreadable, R3/no-headings,
-#     R4/no-add-commit, R4/LEFT-LIVE-unreadable, R5/no-def-L, all three R7/FRONTIER guards, and
-#     the two `is MISSING` early returns in R6 and R8 -- M38 removes the file and R6, R7 and R8
-#     all object at once, which is the correct behaviour and costs each of them a unique mutant.
-#   * MUTUALLY SHADOWING -- R2's LOST-OR-EDITED and ADDED always fire together (an edited record
-#     is one lost and one added), and R2 as a whole uniquely catches M9, M10 and M11.
-#   * PROVABLY SUBSUMED -- R1/BLOCK MISSING cannot fail without R1/CONFINEMENT failing, since
-#     `want` contains the block by construction. It is kept because it is a better message than a
-#     byte-offset diff. R1/ANCHOR and R1/CONFINEMENT shadow each other for the same reason.
+#     composes, so ROW and SET fire alongside whatever the mutant was written for: R3/SESSION,
+#     R3/ORDINAL, R3/ROW, both R3/SET arms, R4/PROVENANCE, R4/SPAN, R5/ASSERTIONS, and both
+#     R7/SPAN grammar guards. R0/SIZE loses its mutant the same way -- M2 moves DECLARED_OLD_LINES
+#     and R0/FIGURE requires that same integer in the prose.
+#   * REACHABLE, NEVER ALONE -- degradation guards that only fire in company, because a world broken
+#     enough to reach them breaks a sibling too: R3/unreadable, R3/no-headings, R4/no-add-commit,
+#     R4/LEFT-LIVE-unreadable, R5/no-def-L, R7/LIVE-TABLE-unparseable, the two remaining
+#     R7/FRONTIER degradation guards, and the two `is MISSING` early returns in R6 and R8 -- M38
+#     removes the file and R6, R7 and R8 all object at once, which is correct and costs each of them
+#     a unique mutant.
+#   * MUTUALLY SHADOWING -- R2's LOST-OR-EDITED and ADDED always fire together (an edited record is
+#     one lost and one added); R2 as a whole uniquely catches M9, M10 and M11.
+#   * PROVABLY SUBSUMED -- R1/BLOCK MISSING cannot fail without R1/CONFINEMENT failing, since `want`
+#     contains the block by construction. Kept as a better message than a byte-offset diff.
+#     R1/ANCHOR and R1/CONFINEMENT shadow each other for the same reason.
 #
 # A green --self-test whose mutants never exercise a NEW arm is the same lie as a green run. R7 and
 # R8 are new in this lineage, so each carries mutants of its own, and R6's new fourth arm does too.
@@ -176,7 +185,12 @@ TABLE_ROW    = re.compile(r"^\| \d+ \| ")
 # R8's two families. BLOCK_HEAD is a prose pointer block's first line; BLOCKS_BELOW is the
 # positional claim family C7 had to derive a count for. Both must be ABSENT after this collapse.
 BLOCK_HEAD    = re.compile(r"^\*\*(\w+) trim \(Session \d+\)", re.M)
-BLOCKS_BELOW  = re.compile(r"\*\*The (\w+) blocks? below (?:are|is) frozen", re.M)
+BLOCKS_BELOW  = re.compile(r"\*\*The (\w+ )?blocks? below (?:are|is) frozen", re.M)
+# The count word is OPTIONAL. Inherited from C7, this read `The (\w+) blocks?` and therefore
+# matched "**The two blocks below are frozen" but NOT "**The block below is frozen" -- and BOTH
+# forms stood in the front matter this collapse removed. C7 could only ever have caught one of
+# the two members of the family it was written for. Found by an adversarial review of THIS
+# commit; the gap is closed here rather than inherited.
 SPELLED = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven",
            8: "eight", 9: "nine", 10: "ten"}
 ORDINAL = {1: "first", 2: "second", 3: "third", 4: "fourth", 5: "fifth", 6: "sixth",
@@ -643,6 +657,20 @@ def rows_of(text):
     return [l for l in text.split("\n") if TABLE_ROW.match(l)]
 
 
+LIVE_SPAN = re.compile(r"^\| \d+ \| [^|]+\| (\d+) \u2192 (\d+) \|")
+
+
+def live_spans(front):
+    """The archived spans as the WORKING TREE's table states them. R7's live arms read these, never
+    the declared ROWS -- see R7's docstring for the trap that forced it."""
+    out = []
+    for l in rows_of(front):
+        m = LIVE_SPAN.match(l)
+        if m:
+            out.append((int(m.group(2)), int(m.group(1))))     # (oldest, newest)
+    return sorted(out)
+
+
 def declared_front(before_front, old_prose, new_block):
     """The front matter this collapse is ALLOWED to produce. ONE replacement, no substitutions --
     see R1's docstring for why the list is empty rather than merely short."""
@@ -893,10 +921,24 @@ def R6(live_wt, old_prose, new_block):
 
 
 def R7(rows, live_wt):
-    """The assertion that licenses DELETING the routing clauses. Two arms, and the second is the
-    one that matters: internal tiling proves the table is self-consistent, but only a comparison
-    against the WORKING TREE proves it routes to the file a session actually opens."""
+    """The assertion that licenses DELETING the routing clauses -- in two halves, and the split is
+    the whole point.
+
+    The DECLARED half tiles the hand-written ROWS: frozen at this commit, so it can only ever
+    restate what R3 and R4 already prove. The LIVE half reads the table out of the WORKING TREE and
+    is the one that binds a FUTURE trim.
+
+    THE FIRST DRAFT MIXED THEM AND HAD NO GREEN STATE, which an adversarial review of this very
+    commit measured and this session then reproduced by simulating a ninth trim. It compared the
+    max archived session of the FROZEN ROWS (241) against the LIVE oldest record id. After a ninth
+    trim the live file begins at, say, 250 and the arm fails; extending ROWS to nine entries fails
+    R3 SET, because NEW_BLOCK is pinned at this file's add-commit with eight rows; and editing
+    NEW_BLOCK fails R1. That is the C3 "rows cannot be extended" trap reproduced one level up,
+    inside the brand-new arm, in the session whose own record calls that trap out. Reading the
+    frontier from the LIVE table instead gives a ninth trim exactly one green state: add the row
+    AND archive the records. Which is the behaviour this assertion is supposed to compel."""
     out = []
+    # ---- (a) the DECLARED spans, as hand-written in ROWS ----
     spans = []
     for (_o, _s, _sha, span, _r, _al, shard, _t, _lv, _a) in rows:
         try:
@@ -911,7 +953,7 @@ def R7(rows, live_wt):
             continue
         spans.append((oldest, newest, shard))
     if not spans:
-        return out + ["R7 TILING: no evaluable spans -- nothing to tile"]
+        out.append("R7 TILING: no evaluable declared spans -- nothing to tile")
     spans.sort()
     for (lo1, hi1, s1), (lo2, hi2, s2) in zip(spans, spans[1:]):
         if lo2 <= hi1:
@@ -921,10 +963,25 @@ def R7(rows, live_wt):
         elif lo2 != hi1 + 1:
             out.append("R7 GAP: `%s` ends at %d and `%s` starts at %d -- Sessions %d-%d are routed "
                        "to no file at all" % (s1, hi1, s2, lo2, hi1 + 1, lo2 - 1))
-    newest_archived = max(hi for _lo, hi, _s in spans)
+    # ---- (b) the LIVE table -- the half that survives a later trim ----
     if live_wt is MISSING:
-        out.append("R7 FRONTIER: %s is not on disk -- the second arm cannot run" % LIVE)
+        out.append("R7 FRONTIER: %s is not on disk -- the live arms cannot run" % LIVE)
         return out
+    front = zones(live_wt)[0]
+    lspans = live_spans(front)
+    if not lspans:
+        out.append("R7 LIVE-TABLE: no `archived` spans could be parsed out of the working tree's "
+                   "front-matter table -- the routing information a session reads is gone")
+        return out
+    for (lo1, hi1), (lo2, hi2) in zip(lspans, lspans[1:]):
+        if lo2 <= hi1:
+            out.append("R7 LIVE-OVERLAP: the table on disk covers %d-%d and %d-%d -- a session in "
+                       "the overlap has two homes" % (lo1, hi1, lo2, hi2))
+        elif lo2 != hi1 + 1:
+            out.append("R7 LIVE-GAP: the table on disk ends a span at %d and starts the next at "
+                       "%d -- Sessions %d-%d are routed to no file at all"
+                       % (hi1, lo2, hi1 + 1, lo2 - 1))
+    newest_archived = max(hi for _lo, hi in lspans)
     live_ids = ids(live_wt)
     if not live_ids:
         out.append("R7 FRONTIER: the working tree's %s holds no records -- the frontier is "
@@ -937,9 +994,9 @@ def R7(rows, live_wt):
                    "integer -- the frontier cannot be compared" % (live_ids[-1],))
         return out
     if oldest_live != newest_archived + 1:
-        out.append("R7 FRONTIER: the newest archived session is %d, so this file should begin at "
-                   "%d; the working tree's oldest record is Session %d. The table's routing and "
-                   "the file a session opens disagree."
+        out.append("R7 FRONTIER: the table on disk archives up to Session %d, so this file should "
+                   "begin at %d; its oldest record is Session %d. A trim that archived records "
+                   "without adding its row -- or added a row without archiving -- lands here."
                    % (newest_archived, newest_archived + 1, oldest_live))
     return out
 
@@ -1083,6 +1140,25 @@ def self_test(before, after, live_wt, pre_live, world):
         3, ("227", "224"), "### What Session 225 Did", "### What Session 224 Did")
     gp_rows, gp_after, gp_live, gp_block, gp_world = isolate(
         2, ("224", "222"), "### What Session 221 Did", "### What Session 222 Did")
+
+    # --- R7 LIVE-arm fixtures. An ADDED row is invisible to R6 (which checks only NEW_BLOCK's own
+    # --- rows) and to R3/SET (which reads the frozen literal), so it isolates the live arms. This
+    # --- is also the shape of the hole an adversarial review found: a bogus row naming a shard that
+    # --- does not exist is caught by NOTHING except these arms.
+    def live_plus_row(span, retitle_oldest=None):
+        if live_wt is MISSING:
+            return live_wt
+        last = rows_of(NEW_BLOCK)[-1]
+        assert live_wt.count(last) == 1, "self-test fixture: last table row not unique on disk"
+        bogus = ("| 9 | S258 `deadbee` | %s \u2192 %s | 8 | 1,500 | "
+                 "`SESSION_NOTES-S999-through-S998.md` | 1,560 | 258 \u2192 250 | L15 |"
+                 % (span[0], span[1]))
+        out = live_wt.replace(last, last + "\n" + bogus, 1)
+        if retitle_oldest is not None:
+            i = out.rfind("### What Session ")
+            j = out.find(" Did", i)
+            out = out[:i] + "### What Session %s" % retitle_oldest + out[j:]
+        return out
 
     a_rec = ar[0]
 
@@ -1236,6 +1312,15 @@ def self_test(before, after, live_wt, pre_live, world):
          ROWS, OLD_PROSE, NEW_BLOCK, pre_live, world),
 
         # ---------------- R8 -- NEW IN THIS LINEAGE ----------------
+        # --- R7's LIVE arms. M43 already isolates LIVE-FRONTIER (it moves the oldest record id and
+        # --- leaves the table alone). These two isolate LIVE-OVERLAP and LIVE-GAP.
+        ("M49 a row added to the table ON DISK whose span OVERLAPS an existing one "
+         "(R7/LIVE-OVERLAP alone -- an added row is invisible to R6 and to R3/SET)",
+         before, after, live_plus_row(("241", "236")), ROWS, OLD_PROSE, NEW_BLOCK, pre_live, world),
+        ("M50 a row added ON DISK leaving a GAP, with the frontier moved to match so R7/LIVE-GAP "
+         "is the sole objector",
+         before, after, live_plus_row(("250", "244"), retitle_oldest="251"),
+         ROWS, OLD_PROSE, NEW_BLOCK, pre_live, world),
         ("M44 a PROSE POINTER BLOCK planted in the live front matter (R8 -- the rule broken by a "
          "future trim)",
          before, after,
