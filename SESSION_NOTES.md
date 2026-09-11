@@ -94,13 +94,132 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 255 Did
-**Deliverable:** Option D, widened — replace the file-length retention rule with a byte-denominated
-front-matter budget (*front matter + the K newest non-stub records return in one `Read`*) over the
-four mandated-read files (`SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md`, `PROJECT_LEARNINGS.md`),
-demonstrated by a probe and enforced with its own mutants — `docs/planning/ledger-budgets-review.md`
-§8 row D, §11, §13.1, §13.8 (IN PROGRESS)
-**Started:** 2026-09-10 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **Option D, widened — COMPLETE.** The four mandated-read files have byte budgets,
+held against the working tree on every CI run by `tests/test_read_budget.py`; the line rule
+(1,500 / 1,050 / 4) is retired. Ruling recorded in `docs/methodology/PROJECT_CONVENTIONS.md` §5;
+rule in `CLAUDE.md`'s retention bullet; premises corrected in `docs/planning/ledger-budgets-review.md`
+§14. No trim; no record moved.
+
+**Started / completed:** 2026-09-10 (UTC). **Commits:** `85865d5` (claim, alone), `e768e1f` (guard,
+rule and prose), `078ee60` (BACKLOG items, CHANGELOG, review §14), and this close-out.
+**`CHANGELOG.md` entry: YES** — `tests/` logic (PROJECT_CONVENTIONS §2).
+
+#### The ruling was measured before it was asked
+
+§13.1 ruled D at K=3, "reachable once E lands". Measured first, with default-`Read` probes: one
+`Read` of this file delivered the front matter and **two** complete records, and K=3 had fit at a
+minority of the 41 commits since Session 239 (K=2 at all 41). Every K figure in circulation —
+§13.4's 4, Session 254's 5 — had counted claim stubs. The operator was asked three questions and
+chose all three recommendations (2026-09-10): **K=2 with a byte trim trigger** (fire above
+196,608 B, cut to ≤98,304 B, keep ≥4 non-stub records); for the two files refused outright,
+**declare, guard, file**; for `BACKLOG.md`, **its index arrives whole**.
+
+**I put three wrong figures into that question.** I summarised a 41-row table by eye as "44", and
+both K=3 counts were off. A script caught it before any file carried them; the conclusion held.
+Learning #246.
+
+#### What the probes found (review §14.3, against the premises they falsify)
+
+- **The page is sized by the whole file.** Past the cap one `Read` delivers
+  `floor(0.85 × 25,000 × L / T)` lines. Twenty long lines appended at the bottom cut an identical
+  head from 730 lines to 299.
+- **A second regime:** 0.7 of that page when `T × bytes(page) / B` exceeds the cap — six of
+  thirteen real probes; a sparse tail alone triggers it. Found by the first review, pinned by the
+  second.
+- **Refusal is strictly over 262,144 bytes**, and an explicit `offset`/`limit` `Read` over the cap
+  meters even a refused file exactly (`CHANGELOG.md` 264,293 tokens, `PROJECT_LEARNINGS.md`
+  104,523).
+- **No tokenizer runs offline**, so §11's "probe script" cannot exist; the guard is a deliberately
+  conservative byte proxy, worst case over the measured 2.49–2.9 B/token range.
+
+#### The guard
+
+Ten checks; eighteen mutants; a synthetic test proving the reduced-page branch load-bearing; unit
+tests pinning the stub classifier and the fence rule against every historical shape; and a battery
+that fails if any check is the sole catcher of none, re-run in the states the next close-out, the
+next claim and the next trim produce. **Run it at every close-out.**
+
+#### Two reviews gated the commit — and the second found my fixes' defects
+
+**First** (11 agents): 45 findings, 36 survived refutation, plus 3 from a critic — the second
+regime (G1); an empty heading and a trim session's off-template claim counted as records (G2, N1);
+mutants vacuous in a plausible next state (F1–F8); a remedy wrong for the lines arm (P2); a
+front-matter budget whose justification ignored stubs (10,240 → 8,192 B); a K=2 rationale that
+misread `SESSION_RUNNER.md` (both mandated reads need ONE non-stub record; K=2 is margin, by
+ruling).
+
+**Second** (5 agents, verification only): **a blocker in my fixes** — no green state for this very
+close-out, because two mutants had fixed geometry and the next-state test never modelled a close-out
+at a claim commit; a classifier regression on two historical stubs (Sessions 193, 226); and a page
+arm with no margin (a real `Read` cut K where the guard stayed green). Fixed with the reviewers'
+validated patches, a paragraph-based classifier, a close-out successor, and M19 moved into a
+state-independent test after my own sweep showed it unbuildable in small states. Learning #248.
+
+#### Verification
+
+- Gate: **1,382 passed + 9 live-skipped**; `ruff` and `uv run mypy` clean (68 files); ten proofs
+  green in both modes; census guard 25/25; the read-budget guard 44/44.
+- My 30-state sweep: green in every healthy state (close-outs 2–18 KiB, a wide table, claim →
+  close-out → claim, growth to 258 KB, the ninth trim and its cycle). Its reds are real breaches: a
+  19 KiB close-out leaves no room for the next claim; at Session 257's claim the next close-out
+  would cross the ceiling.
+- The page model never predicts more than a real `Read` delivered, on all ten recorded probes; its
+  two disagreements are conservative. No close-out among 119 in history classifies as a stub.
+- **Probe after this record landed** (learning #214; measured before this bullet was added):
+  `showing lines 1-749 of 2964 total (83982 tokens, cap 25000)` — the front matter plus Sessions
+  255, 254 and 253 whole, 252 cut. K=2 holds with a record to spare; the guard predicted 705 lines.
+
+### Session 254 Handoff Evaluation (by Session 255)
+
+**Score: 8/10.** What's-next #2 was this session, and its pointers (§13.8, §13.11) were the right
+ones. #3 and #4 (a row, never a block; `R7`'s live arms) remain correct and now bind the ninth
+trim. Gotchas 6–8 (`uv run mypy` with no path, `command grep`, the refused files) saved real time.
+**−** Its central figure was wrong in the direction that mattered: "front matter + 5 complete
+records" and "K is unchanged at 5" counted claim stubs — three non-stub records at `a7d3b29`, two at
+HEAD — so "E has now made it reachable" (D at K=3) was the premise this session had to take back to
+the operator. **−** Its own 25,123 B record is what moved K from three to two: learning #214
+happening to the record that cites it. #5 (push) had already been done when I arrived. **ROI:
+high** — minutes to read, and it set the deliverable exactly.
+
+### Session 255 Self-Assessment
+
+**Score: 7/10.**
+**+ Measured before designing, and before asking** — the operator ruled on numbers re-derived that
+hour, not on the ones §13.1 inherited.
+**+ The review gated the commit, twice** — Session 254's lesson applied, and the second pass was the
+one that caught a blocker in my own next commit.
+**+ The neuter loop and the next-state batteries are mechanised**, the close-out included.
+**− Three wrong figures reached the operator.** **− My first draft carried underived prose** (the K
+rationale, one remedy for two arms, a budget justified without its stubs). **− My fixes shipped the
+#241 class again** — green now, no green successor — the fourth time in this lineage, and only the
+second review saw it. **− `CLAUDE.md` grew ~1 KB** against a ~25 KB budget it already exceeds.
+**− Cost:** ~5.7M subagent tokens over three workflows.
+
+**What's next.**
+1. **The ninth trim — due now.** This file is past the new 196,608 B trigger, and my sweep shows the
+   guard going red at Session 257's claim (the next close-out would cross the refusal ceiling). The
+   trim must: add a table ROW (`R8`); archive and add the row together (`R7`); **rewrite `L11` to
+   the byte rule** and re-target every operand that reads retired prose (find them by running the
+   S241 proof's declarations against the working tree); build `L15` (the bequeathed file census);
+   keep ≥4 non-stub records and land ≤98,304 B. Run both guards and both proof modes.
+2. **Two remediation items, each an operator call:** `PROJECT_LEARNINGS.md` and `CHANGELOG.md`.
+3. **Carried:** sync the local dashboard (v2.15.2 → canonical v2.17.0, outside this repo);
+   `README.md`'s hand-typed test counts; the census guard's number words stop at sixteen.
+
+**Key files.** `tests/test_read_budget.py` (read its docstring first); `PROJECT_CONVENTIONS.md` §5;
+`CLAUDE.md`'s retention bullet; review §14; scratchpad `review1.json`, `review2.json`, `sweep.py`.
+
+**Gotchas.**
+1. **Run `uv run pytest tests/test_read_budget.py --no-cov` before every close-out commit.** A red
+   `after-the-next-claim` test means your record leaves no room for the next claim: shorten it.
+2. **At a claim commit the guard models your close-out** at the ledger's median record size; near
+   the ceiling your CLAIM goes red — that means trim first.
+3. **Long lines near the top shrink the page:** wrap at ~100 columns; keep wide tables out of the
+   newest records.
+4. **`check_declared` wants each budget sentence exactly once** in `CLAUDE.md` and in
+   `PROJECT_CONVENTIONS.md`; quoting one elsewhere in those files turns it red.
+5. The census guard's 30-character window around "shard" still applies to those files.
+6. `command grep`; the two refused files; `uv run mypy` with no path.
 
 ### What Session 254 Did
 **Deliverable:** **Option E, applied RETROACTIVELY — COMPLETE.** The three prose pointer blocks
