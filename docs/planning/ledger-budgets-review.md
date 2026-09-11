@@ -1,9 +1,10 @@
 # Are the ledger budgets worth what they cost?
 
-**Status:** **RULED — see §13 (Session 252, 2026-09-07).** A is executed (Session 249); **E then D**
-are ruled for execution, **F** is ruled with a CI substitute, **B, C, G and H are declined.** The
-analysis below stands as written except where §13 records a figure that has since moved; §13 corrects
-rather than rewrites, for the reason §12 gives.
+**Status:** **RULED — see §13 (Session 252, 2026-09-07); EXECUTED — see §14 (Session 255).** A was
+executed in Session 249, E in Session 254 and D, widened, in Session 255; **F** is ruled with a CI
+substitute (landed Session 253); **B, C, G and H are declined.** The analysis below stands as
+written except where §13 and §14 record a figure that has since moved or a premise since measured
+false; they correct rather than rewrite, for the reason §12 gives.
 **Session:** 248, 2026-08-26, at `b95c39e`. Per the operator assignment recorded at `c6aa37b` and filed
 as `BACKLOG.md:62`. **Deliverable:** this document (`SESSION_RUNNER.md` FM #18 — the plan is the
 deliverable; every repair named below is a *proposal*).
@@ -1048,3 +1049,70 @@ fourth is corroborated here, arithmetically, by Session 250's `47fcd90`.
 Option A's DONE and Option D's VERIFY both require a green/self-testing apparatus, and §13.6 shows one
 proof cannot currently be trusted. **Any option whose gate is "all nine green" would certify it.** That
 is why the `--self-test` repair is ruled ahead of E, D and the CI step rather than inside them.
+
+---
+
+## 14. Option D, widened — executed Session 255, 2026-09-10
+
+**What landed.** `tests/test_read_budget.py`, a CI guard over the working tree; the byte rule in
+`CLAUDE.md`'s retention bullet; and its record in `docs/methodology/PROJECT_CONVENTIONS.md` §5,
+which carries every constant and its derivation. The line rule (1,500 / 1,050 / 4) is retired, not
+re-tuned. This section records the ruling and the premises of this document that Session 255
+measured false; per §12's rule it corrects rather than rewrites.
+
+### 14.1 The ruling — three questions, put after measurement
+
+| question | answer (operator, 2026-09-10) |
+|---|---|
+| K=3 held at a minority of the 41 commits since Session 239; K=2 at all 41. Which invariant? | **K=2 + a byte trigger**: fire above 196,608 B, cut to ≤98,304 B, keep ≥4 non-stub records |
+| `CHANGELOG.md` and `PROJECT_LEARNINGS.md` are refused outright. What now? | **Declare, guard, file**: a self-expiring exemption; each remediation its own session |
+| `BACKLOG.md` has no record order. What must arrive? | **Its plain-language index, whole** |
+
+### 14.2 §11's D criterion, clause by clause
+
+- *"`CLAUDE.md:81` states the K-newest-records invariant"* — met, with K=2, in bytes and in lines.
+- *"a probe script demonstrates it holds at HEAD"* — **the probe cannot be a script**: it is a default
+  `Read`, which exists only inside an agent session, and no tokenizer runs offline. The probe was run
+  (§14.4); the guard is a byte-derived, deliberately conservative proxy for it.
+- *"`L11` rewritten to compose from the probe, with its own mutant"* — every `L11` lives in a
+  write-once proof. What must hold BETWEEN trims now lives in the CI guard (§9's reasoning for F);
+  the ninth trim must rewrite its `L11` to the byte rule, and `CLAUDE.md` says so.
+- *VERIFY: "the new arm is not deletable with the suite green"* — mechanised: a battery requires every
+  check to be the sole catcher of some mutant, and re-runs that requirement in the states the next
+  close-out, the next claim and the next trim produce.
+
+### 14.3 Premises of this document that Session 255 measured false
+
+- **§0 / §1.3, "appending a thousand more lines at the bottom would not change that by one byte."**
+  False past the cap. A partial view delivers `floor(0.85 × 25,000 × L / T)` lines — a page sized by
+  the WHOLE file — and 20 long lines appended to an otherwise identical file cut its delivered head
+  from 730 lines to 299. When the file's tokens pro-rated to the page's bytes, `T × bytes(page) / B`,
+  exceed the cap, the page is 0.7 of that: six of thirteen probes, and a sparse tail alone can do it.
+  Truncation is still ordered; the page is not fixed.
+- **§1.3's "K is 2 by Step 14 and Phase 3A."** That count included the session's own claim stub.
+  Excluding stubs, both mandated reads need one record; K=2 stands as the operator's ruling, for margin.
+- **§13.4's "2.231 B/token."** That is delivered-prefix bytes ÷ 25,000; pages are 0.85 of the cap, so
+  the method understates the ratio by ~15%. This file's whole-file ratio is ~2.65.
+- **Every K figure in circulation counted claim stubs.** §13.4's K = 4 was two non-stub records;
+  Session 254's K = 5 was three, at `a7d3b29`. At HEAD it is two.
+- **§13.1, "unreachable at K=3 until E lands."** Measured with the final guard and today's front
+  matter (7,398 B): K=2 fits at all 41 commits since Session 239 and K=3 at 6 (a seventh holds too
+  few records); at the fleet's 2.27 floor, K=2 would have failed at 8. K=3 needs the whole file to
+  return in one `Read` — a trim at nearly every close-out — or a hard per-record cap (G, declined).
+- **§13.11, "unmeasurable by the only method available."** An explicit `offset`/`limit` `Read`
+  spanning more than the cap returns the exact token count with zero content, refused files
+  included: `PROJECT_LEARNINGS.md` 104,523 tokens, `CHANGELOG.md` 264,293.
+- **§8 row D, "immune to record-density growth and to file length."** Not immune: the page moves with
+  whole-file density, and the newest records spend it — so K=2 is in effect a soft budget on the
+  newest PAIR of records.
+
+### 14.4 Reproduction
+
+```sh
+# the probe (inside an agent session): Read each file with NO offset/limit; copy the banner.
+#   PARTIAL view — ... showing lines 1-N of L total (T tokens, cap 25000)
+# the token meter: Read <file> with offset=1 limit=<all lines>
+#   File content (T tokens) exceeds maximum allowed tokens (25000)   -> exact T, even if refused
+# the refusal edge: files of 262,144 and 262,145 bytes -> a page / refused
+uv run pytest tests/test_read_budget.py --no-cov -q                # the guard, its mutants, the batteries
+```

@@ -60,13 +60,14 @@ rows below it are the smaller residue that closing it exposed.
 | `README.md`'s test counts are hand-typed and will drift again | Session 247 found three per-directory rows in `README.md`'s repo map stale by a combined 131 tests. **Session 250 fixed the numerals** — each re-measured against `pytest --collect-only`, not pasted from the filing — and every count in that block now agrees with the collection: the rows sum to the 1,347 collected, and the headline's 1,338 passing plus 9 live-skipped is the same figure. What remains is the design question the filing raised: nothing derives any of those counts, so the next test added re-opens the drift. | **Operator call.** Either accept periodic hand re-measurement (the verification command is in the item below), or build a sibling of the census guard that composes the rows from a collection pass — a design change, not a typo fix. |
 | The wiki's `Contributing.md` carries a second, older test census | The contributors' wiki page states how many test **functions** each `tests/` directory holds — a different measure from `README.md`'s collected-test counts, since one parametrized function collects as many tests, and the page says so. Measured in Session 250 with the page's own command: `data_agent_package/`, `eval/`, `scripts/` and the top-level files are stale, its total is (997, now 1,167), and its "1110 passed plus 12 skip" sentence is (now 1,338 and 9); it also names four top-level test files where five exist. Filed, not fixed: the wiki publishes to GitHub on commit, so this is an outward-facing edit the operator did not ask for. | **Small**: one paragraph and a table, plus the same derive-or-accept decision as the `README.md` row above. Anything under `docs/wiki/` publishes via the post-commit hook. |
 
-| Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249.** **RULED by the operator, Session 252 (2026-09-07)** — see [`§13`](docs/planning/ledger-budgets-review.md): **E retroactive first, then D (widened to the four mandated-read files, K expressed in bytes), then a CI step running `--self-test`; F ruled with that CI step as its substitute; B, C, G and H declined.** Three sessions, in that order. **The `--self-test` repair that came ahead of all three LANDED in Session 253**, so Option E (collapse-on-write, retroactive) is next. Two of the ruling's premises were re-measured and had **moved**: the retention rule is *satisfiable* at HEAD (an abandoned Session 251 left a 15-line record that bought exactly the one-trim reprieve B and C were priced to buy), and §12.1's `K = 1` is now `K = 4`. |
+| Are the ledger budgets worth what they cost? | **Operator question, 2026-08-26.** The trim trigger (>1,500 lines), target (≤1,050) and floor (4 records) were each derived as a fraction of an agent read cap nobody had re-derived since Session 222. Measured at Session 247: **3 of the last 10 sessions were lossless trims, 5 of 10 were ledger-apparatus work, and the last 3 consecutively were.** Filed here rather than left in a handoff, because an item that lives only in a what's-next list gets carried ([#180](PROJECT_LEARNINGS.md)). | **ANSWERED — Session 248.** The analysis is [`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md): the read-cap premise was measured and is false, the retention rule is unsatisfiable as declared, and the options are laid out with mechanisms and costs. **What remains is an operator ruling**, then one session per option ruled. Re-tuning anything is still a SEPARATE session. **And the target is INSUFFICIENT, not merely unjustified** — measured Session 249, a trim that hits ≤1,050 lines exactly still produces 80,349 bytes against a one-`Read` budget of ~56,750, so no value the floor permits can deliver a one-pass file. **Option A landed in Session 249.** **RULED by the operator, Session 252 (2026-09-07)** — see [`§13`](docs/planning/ledger-budgets-review.md): **E retroactive first, then D (widened to the four mandated-read files, K expressed in bytes), then a CI step running `--self-test`; F ruled with that CI step as its substitute; B, C, G and H declined.** Three sessions, in that order. **The `--self-test` repair that came ahead of all three LANDED in Session 253, E in Session 254, and D, widened, in Session 255** (`PROJECT_CONVENTIONS.md` §5, `tests/test_read_budget.py`): the ruling is fully executed, and this row can close once read. Session 255 measured two more premises moved — every K figure in circulation, this row's old `K = 4` included, had counted claim stubs (one `Read` delivers two non-stub records), and the page is sized by the whole file, not the front matter alone (review §14). |
 
 | The NO-OP guard cannot see a partially inert mutant | Session 253 repaired the broken proof and added a guard: a mutant that corrupts nothing is now reported as a broken *fixture* rather than a missed *assertion*. The guard compares the whole argument list, so it catches a mutant that has gone completely inert — and misses one that mutates three things and loses one of them. Measured: 7 of 46 are exposed, all of them reading frozen inputs that cannot drift, so nothing is broken today. | **Small.** Compare slot-by-slot, or accept the seven and say so. |
 | The ledger's front matter is guarded only at the table rows | Session 254 collapsed 276 lines of unread pointer prose into an eight-row table and a short block of standing rules. An adversarial review then measured what the new block's own proof can actually see: the eight table rows, its opening line, and the routing spans. Delete the routing sentence, the write-once rule, the banner-snapshot rule or the column legend and **every proof stays green**. The prose got 3× shorter and no better guarded, which is an improvement in cost and not in safety. | **Operator call.** Either accept it (the block is short enough to re-read), or give the standing rules the treatment the census guard gives the four prose files. |
 | Neither collapse proof is guarded by anything | `L10` enforces write-once over the ancestor *shard* proofs by a hand-declared list; `R4/GONE` covers every shard the table declares, and its proof. Nothing covers `SESSION_NOTES-pointer-collapse.verify.sh` or `SESSION_NOTES-pointer-collapse-S254.verify.sh` — and the second is the declared second custodian of the 276 deleted lines, the reason "nothing was lost" does not rest on git alone. Delete either file and the remaining proofs pass; CI errors only when *zero* proofs are found. | **Small.** Add both to a write-once list, or have each assert the other exists. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: *"Three things are bequeathed to the ninth trim"* is 12 lines / 1,013 B, **14% of the front matter**, and it is per-trim by content. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
-| Option E's completion criterion needs Option D's deliverable | §11's E criterion is *"the ninth trim's pointer block is a table row; front matter measured at the trim commit is ≤ **the declared budget**; C-series extended with a mutant."* **No front-matter budget is declared anywhere in the repository**, so that clause is unsatisfiable, and the first clause cannot be met until a ninth trim happens. §13.1 ruled E ahead of D, but E's criterion consumes D's output. | **No action needed now** — recorded so the next session does not treat E as unfinished. Option D declares the budget; the ninth trim exercises the row. |
+| `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
+| `CHANGELOG.md` is refused, and its top is out of order | The maintainer changelog is 2.5× the same limit, so a default `Read` returns nothing; sessions only write to it. The fleet's archiving tool cannot parse it, and four July entries sit above the September ones. | **Operator call** — three remedies in the item, each a session. Same self-expiring tolerance. |
 | CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk.
 
@@ -562,6 +563,54 @@ hook under `.githooks/` (the directory exists and `core.hooksPath` is already th
 running the two-mode loop; (c) push every session. **DONE** = an operator ruling recorded here.
 
 
+### `PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom
+
+**Filed Session 255, under the operator's ruling of 2026-09-10 (Option D widened: declare, guard,
+file).** `tests/test_read_budget.py` lists this file in `KNOWN_REFUSED`, so the guard tolerates it
+over the refusal ceiling — and fails the moment it drops under, until it is removed from that list
+and from the sentence in `CLAUDE.md` and `docs/methodology/PROJECT_CONVENTIONS.md` §5 naming it.
+
+Measured Session 255: **298,720 B**, 247 lines, **104,523 tokens** (an explicit `offset`/`limit`
+`Read` over the whole file meters it exactly; a default `Read` is refused with zero content). It
+crossed 262,144 B at the Session 246 close-out (`ea82065`, 267,155 B) and has grown ~4.6 KB per
+session since. **It is oldest-first** — learning #1 at the top, the newest at the bottom — so even
+under the ceiling a default `Read` would deliver the oldest learnings and cut the newest.
+
+Constraints any remedy meets: `CLAUDE.md` tells sessions to `grep` it or `Read` it with
+`offset`/`limit`, so a default `Read` is not its instructed access path; learnings are cited by
+number on ~250 lines across ~19 files outside it; canonical gives on-demand learnings files no token
+verdict at all.
+
+- **(a) Archive the oldest rows** into a frozen part beside a `.verify.sh` proving the move lossless
+  (PROJECT_CONVENTIONS §3). Row numbers survive; citations of archived rows then point at the wrong file.
+- **(b) Reorder newest-first.** One large rewrite; citations by number still resolve by `grep`.
+- **(c) Split into an index** (one short line per learning) plus detail.
+- **(d) Re-scope**: rule that a grep-only file is outside the read budget, and drop it from D's scope.
+
+**Operator call.** Each is a session of its own.
+
+### `CHANGELOG.md` is refused by a default `Read`, and its top is not newest-first
+
+**Filed Session 255, same ruling.** Also in `KNOWN_REFUSED`, with the same self-expiring exemption.
+
+Measured Session 255: **658,423 B** (2.51× the refusal ceiling), **264,293 tokens** — 2.491 B/token,
+the densest of the four mandated-read files, which is why the guard budgets a page at 2.49. Over the
+ceiling since `13e3e3a` (2026-05-13). This repository's runner never default-`Read`s it; sessions
+only write to it, and PROJECT_CONVENTIONS §3 makes it append-only, archivable only as a frozen part
+beside a `.verify.sh`.
+
+Two things block the canonical remedy. The canonical trimmer (Class A: fire above 192 KiB, cut to
+96 KiB) refuses this file with `GRAMMAR_MISMATCH` — the headings use an em dash and no `[SOURCE]`
+tag, under Keep-a-Changelog `## [x.y.z]` sections. And the file is not newest-on-top: four entries
+(Sessions 191, 193, 203 and 205) sit above the September entries, so "newest by position" is not
+"newest by date".
+
+- **(a) A hand-built lossless archive** of the oldest release sections, with a proof.
+- **(b) Convert to the canonical grammar** so `methodology_trim.py` applies — and reorder the four.
+- **(c) Re-scope**: rule that a write-only file is outside the read budget.
+
+**Operator call.** Each is a session of its own.
+
 ### The `SESSION_NOTES.md` shard is past the agent read cap and nothing watches it
 
 **Filed Session 222 by the session that created it**, deliberately not fixed there — the fix lives
@@ -618,8 +667,9 @@ and this file truncate with an announced notice. `CLAUDE.md`'s Learnings pointer
 to read `PROJECT_LEARNINGS.md` when a task resembles earlier work, and that instruction currently
 returns nothing at all. This **corrects** Session 248 §12.3, which derived "4.19x the cap" from a
 bytes-per-token ratio and therefore predicted truncation: the observed behaviour is refusal, which
-delivers none of the file rather than part of it. Not fixed here — Option A is the premise correction,
-and sizing these files is a decision for whoever rules on the §8 options.
+delivers none of the file rather than part of it. Not fixed here — Option A was the premise
+correction. **Ruled 2026-09-10 (Session 255):** both files are declared over the ceiling and each is
+filed as its own remediation item above; at that ruling they measured 291.7 KB and 643.0 KB.
 
 **The same false claim is repeated inside the write-once shards and their proofs, where it can
 never be repaired.** Those copies join the stale banners this project already documents as
