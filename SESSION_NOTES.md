@@ -28,10 +28,11 @@ and the reason.
 route sessions to this live file that have since moved into a shard. Each was true when it was
 written, none may be repaired, and no proof can notice: every shard proof reads its prose at its own
 trim commit, so from the moment a trim lands its prose is checked by nothing until the next one.
-That is this apparatus's largest hole, it is measured rather than suspected, and only two mechanisms
-close any of it: the working-tree arms `R6` and `C6` below, and
+That is this apparatus's largest hole, it is measured rather than suspected, and only three
+mechanisms close any of it: the working-tree arms `R6`, `R7`, `R8` and `C6` below;
 `tests/test_session_notes_census.py`, which holds the prose files outside this one against the
-shards on every CI run.
+shards on every CI run; and `tests/test_read_budget.py`, which holds the read-budget sentences and
+this file's front matter to their budgets.
 
 **Three things are bequeathed to the ninth trim. They are instructions, not notes.**
 
@@ -73,10 +74,10 @@ and both COMPOSE each row of the table above from figures measured at a shard's 
 instead of comparing against a typed one. `R` re-derives **every** row rather than only the ones it
 added, so the table has exactly one owner; and it proves the `archived` spans tile the history with
 no gap and no overlap, which is what allows the routing clauses to be deleted rather than kept in
-parallel. `R6` and `C6`
-are the only assertions in this repository that read the WORKING TREE; everything else reads its
-operands at a commit that has already passed, which is why the census guard exists for the four
-files outside this one. **Run both modes over every proof in `docs/architecture-history/`** — a plain
+parallel. `R6`, `R7`, `R8` and `C6`
+are the only proof assertions that read this file from the WORKING TREE; every other proof reads
+this file at a commit that has already passed. That is why the census guard exists for the prose
+files outside this one, and the read-budget guard for this file's size and the budget sentences. **Run both modes over every proof in `docs/architecture-history/`** — a plain
 run proves the world is intact and cannot see a proof that has stopped being able to fail;
 `--self-test` proves the proof can fail and is blind to real corruption. `CLAUDE.md` carries the
 loop and the reason neither half is sufficient.

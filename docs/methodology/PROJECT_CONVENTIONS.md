@@ -141,3 +141,90 @@ Evolution rewrites use an **explicit review gate**, unlike all other sessions in
 - The session commits only after explicit approval.
 
 **Why the gate is here and nowhere else.** Evolution is outward-facing and persistent between rewrites. Errors are audience-visible and can hide for months before the next rewrite catches them. The review cost (one round-trip) is small relative to the audience-visibility risk. Every other session in this project continues the autonomous-commit pattern.
+
+---
+
+## 5. Read budgets for the mandated-read files
+
+**Operator ruling, 2026-09-10 (Session 255) — Option D of `docs/planning/ledger-budgets-review.md`,
+widened to `SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md` and `PROJECT_LEARNINGS.md`.** It
+replaces the line-count retention rule, which governed a quantity no session reads by.
+`tests/test_read_budget.py` holds budgets 1–4 below, and the satisfiability of budget 5, against
+the working tree on every CI run; budget 5's thresholds are enforced at a trim, by that trim's
+proof. **Nothing checks the fire threshold between trims**, so a Phase 0 that sees
+`wc -c SESSION_NOTES.md` above it knows a trim is due. The guard also requires each sentence
+stating a budget to appear exactly once here and once in `CLAUDE.md`, so a budget cannot be
+re-tuned by editing prose alone — the hazard that document's §10 names first.
+
+**What one default `Read` delivers — measured in Session 255; harness behaviour, not a contract.**
+
+- More than 262,144 bytes: refused, zero content. A file of exactly 262,144 B still returns a page.
+- At most 25,000 tokens: the whole file. Above that: the first `floor(0.85 × 25,000 × L / T)` lines
+  of a file of L lines and T tokens — or **0.7** of it when the file's tokens pro-rated to those
+  lines' bytes, `T × bytes(page) / B`, exceed the cap. That trigger separated all thirteen probes; a
+  head metered over the cap on its own did not. The page is sized by the **whole** file: a dense
+  tail shrinks it, and a dense band just past it can trigger the reduced page.
+- No tokenizer runs offline, so T is unknown in CI. The guard applies both rules at every ratio from
+  its floor up to **2.9 B/token** and keeps the smallest page. Its bytes arm budgets a page as
+  **21,250 tokens** at **2.49 B/token**, the lowest whole-file ratio measured across the four files
+  (`CHANGELOG.md`; the ledger's prose runs ~2.65). The fleet's 2.27 floor was set by another
+  repository's content; here it would have failed K=2 at commits where one `Read` delivered two
+  records (that document's §14 has the count).
+- The probe runs only inside a session: a default `Read`, whose banner gives the lines delivered and
+  the file's tokens; and an explicit `offset`/`limit` `Read` spanning more than the cap, which
+  returns the exact token count with zero content, even for a refused file. Reproduction: that
+  document's Appendix A and §14. **Re-run it; never quote these figures without it.**
+
+**The budgets.**
+
+1. **Ceiling.** no mandated-read file may exceed **262,144 B** — except `CHANGELOG.md` and `PROJECT_LEARNINGS.md`, declared over it and each filed in `BACKLOG.md` as a remediation
+   needing its own ruling. The exemption expires by itself: the guard fails the moment either file
+   drops under the ceiling, until it is removed from the guard and from this sentence.
+2. **Page.** In `SESSION_NOTES.md`, the front matter plus the **2** newest non-stub records must fit in **52,912 B**, and inside the predicted page in lines — a BYTES arm and a LINES
+   arm. Both mandated reads (Phase 0, and Phase 3A before the close-out overwrites the claim stub)
+   need only the newest non-stub record; K=2 is the operator's ruling, one record of margin and
+   context. At all 41 commits since Session 239 two records fit; three fit at a minority (that
+   document's §14 has the count). Because the newest records carry the page, this is in effect a
+   soft budget on the newest PAIR of records — distinct from the hard per-record cap that
+   document's §13.5 declined. **Remedies differ by arm.** A red BYTES arm: the newest records are
+   too long — shorten them, moving detail into a planning doc; a trim cannot help, because
+   truncation starts at the top. A red LINES arm: the tail is dense (the trim that archives it, or
+   reflowing its long lines, widens the page) or the head is (reflow long lines near the top —
+   tables, one-paragraph-per-line prose). The guard errs conservative by design, by about 6% on
+   this file's prose: a red it raises where a real `Read` would still deliver the records costs a
+   shorter record, never a missing one.
+   **Every close-out runs `uv run pytest tests/test_read_budget.py --no-cov` before committing**:
+   the close-out is the commit that grows the newest record, and the guard models the next
+   session's claim stub, at least **1,024 B**, on top of it.
+3. **Front matter.** front matter at most **8,192 B** — Session 255's judgment, not part of the
+   ruling. It is the part of the page the ledger apparatus writes; at the budget the newest records
+   and any claim stub above them keep **44,720 B**, more than the largest such prefix measured at
+   those 41 commits, stubs included (44,139 B at `28879a0`). A trim adds one table row to it (§3),
+   never prose.
+4. **Index.** `BACKLOG.md`'s plain-language index must fit in **52,912 B**, and inside the predicted
+   page in lines. Item bodies past the page stay reachable by `offset`/`limit` or `grep`; keeping
+   each item's index row current is `BACKLOG.md`'s own rule.
+5. **Retention, in bytes.** For `SESSION_NOTES.md`: fire a new trim when the live file exceeds **196,608 B** (192 KiB); cut back to **≤98,304 B** (96 KiB); never retain fewer than **4** non-stub records. This is the canonical trimmer's Class A fire/stop pair — a level with hysteresis.
+   The guard checks the rule stays **satisfiable**: that a cut keeping the floor, plus a table row,
+   lands under the stop. That document's §3.2 found that failure by hand.
+
+**A stub** is a record with no body, or one whose leading metadata — its run of leading paragraphs
+that each open with a `**Field:**` line, read outside fences — still carries a Status line
+beginning `Session claimed`: the Phase 1B template in `SESSION_RUNNER.md` §1B, or a variant
+(Sessions 193, 226 and 242 each wrote one). It counts toward neither K nor the floor, and the guard
+fails if the runner's template is reworded.
+
+**Enforcement is split by when a thing can be checked.** Between trims: `tests/test_read_budget.py`,
+which reads files and never git. At a trim: that trim's proof. Its `L11` must be **rewritten** to
+budget 5 — fire, target and floor in bytes and non-stub records — rather than copied forward, and so
+must every inherited operand that reads retired prose. Find them by running the proof's
+declarations against the working tree and flagging each literal present at HEAD and absent now; at
+Session 255 that is `L12`'s `read_cap` arm and its two retained-count sentences, `L8`'s required
+`Copy all of L0–L14 forward`, and the `L5`/`L12`/`L13`/`L14` operands that read the live pointer
+block (retired in Session 254). `BACKLOG.md`'s read-cap item lists the five `read_cap` sites a
+ninth trim must change: three in `L12`, plus the `M63` mutant and the self-test summary line.
+
+**Limits.** The page rules are measured, not documented, and the reduced page rests on six probes of
+thirteen. The rule also failed on one real file (an oldest-first table with long head lines), so the
+guard predicts a page only for the two files whose head is what a session needs. A default `Read`
+that disagrees with the guard is the authority.

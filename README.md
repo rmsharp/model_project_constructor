@@ -115,6 +115,7 @@ tests/
   test_vocab_guard.py                   # Literal-derived vocabulary/enum guard (6 tests)
   test_wiki_no_line_citations.py        # wiki fragile-citation guard (3 tests)
   test_session_notes_census.py          # shard-census guard: the four prose files vs the shards on disk (25 tests)
+  test_read_budget.py                   # read-budget guard: what one default Read delivers of the four mandated-read files (44 tests)
 docs/planning/                          # active (not-yet-archived) plans
 docs/architecture-history/              # archived plans (concept-era + delivered): architecture-plan.md + 19 others + initial_purpose.txt
   SESSION_NOTES-through-S216.md         # frozen SESSION_NOTES records, Sessions 216->1 (grep it; do not Read it)
@@ -137,7 +138,7 @@ docs/architecture-history/              # archived plans (concept-era + delivere
   SESSION_NOTES-pointer-collapse-S254.verify.sh  # NOT a shard proof: R0-R8 for Session 254's RETROACTIVE collapse of the three blocks still standing, and for the collapse-on-write rule that replaces them; R6/R7/R8 read the WORKING TREE, and R8 goes red if a later trim writes a prose block instead of a table row
 SESSION_RUNNER.md                       # per-session operating procedure
 SAFEGUARDS.md                           # commit discipline and blast-radius rules
-SESSION_NOTES.md                        # session-by-session continuity log (newest 4 sessions; older in the eight shards above)
+SESSION_NOTES.md                        # session-by-session continuity log (the records the last trim kept, plus every one since; older in the eight shards above)
 ```
 
 ## Getting started
@@ -149,7 +150,7 @@ uv sync --extra agents --extra ui --extra dev
 uv run pytest
 ```
 
-All 1338 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈97.98%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
+All 1382 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈97.98%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
 
 Production deployments read every secret and every deployment-variable parameter from the environment (or from a `.env` file loaded by the caller). See `.env.example` for the full matrix and `OPERATIONS.md` for the runbook. Common failure modes live in `TROUBLESHOOTING.md`; resume a halted run with `scripts/run_pipeline.py --resume <run_id>` (see `OPERATIONS.md` §5).
 
