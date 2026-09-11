@@ -93,6 +93,14 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 256 Did
+**Deliverable:** The ninth trim of `SESSION_NOTES.md` — retire the oldest records into a ninth
+write-once shard under `docs/architecture-history/` with its own proof, add its row to the table
+above (`R7`, `R8`), rewrite `L11` to the byte rule (`CLAUDE.md` retention bullet, Session 255),
+build `L15` (the bequeathed file census), and land ≤98,304 B keeping ≥4 non-stub records (IN PROGRESS)
+**Started:** 2026-09-11 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 255 Did
 **Deliverable:** **Option D, widened — COMPLETE.** The four mandated-read files have byte budgets,
 held against the working tree on every CI run by `tests/test_read_budget.py`; the line rule
