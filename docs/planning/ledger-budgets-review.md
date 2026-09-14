@@ -1116,3 +1116,15 @@ measured false; per §12's rule it corrects rather than rewrites.
 # the refusal edge: files of 262,144 and 262,145 bytes -> a page / refused
 uv run pytest tests/test_read_budget.py --no-cov -q                # the guard, its mutants, the batteries
 ```
+
+## 15. The ninth trim — Session 256, 2026-09-14
+
+Recorded because two statements above moved; it executes no option of §8.
+
+- §14.2 says "the ninth trim must rewrite its `L11` to the byte rule, and `CLAUDE.md` says so".
+  Done: `docs/architecture-history/SESSION_NOTES-S248-through-S242.md.verify.sh` carries `L11`
+  rewritten to budget 5 — fire and target in bytes, the floor in non-stub records.
+- F's completion criterion (§11) has two parts, and neither was done when §13.1 ruled: `CLAUDE.md`'s
+  trim bullet stating that no assertion is owed per trim and naming its substitute (the CI step
+  running `--self-test`), and `L15`'s deferral recorded as a decision. Session 256 did both, after
+  the operator confirmed that ruling F covers the `L15` Session 254 had bequeathed.
