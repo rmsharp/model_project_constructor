@@ -147,14 +147,25 @@ Evolution rewrites use an **explicit review gate**, unlike all other sessions in
 ## 5. Read budgets for the mandated-read files
 
 **Operator ruling, 2026-09-10 (Session 255) — Option D of `docs/planning/ledger-budgets-review.md`,
-widened to `SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md` and `PROJECT_LEARNINGS.md`.** It
-replaces the line-count retention rule, which governed a quantity no session reads by.
+widened from `SESSION_NOTES.md` to the mandated-read files; narrowed by the operator on 2026-09-14
+(Session 257).** The read budget covers `SESSION_NOTES.md`, `BACKLOG.md` and `PROJECT_LEARNINGS.md`.
+It replaces the line-count retention rule, which governed a quantity no session reads by.
 `tests/test_read_budget.py` holds budgets 1–4 below, and the satisfiability of budget 5, against
 the working tree on every CI run; budget 5's thresholds are enforced at a trim, by that trim's
 proof. **Nothing checks the fire threshold between trims**, so a Phase 0 that sees
 `wc -c SESSION_NOTES.md` above it knows a trim is due. The guard also requires each sentence
 stating a budget to appear exactly once here and once in `CLAUDE.md`, so a budget cannot be
 re-tuned by editing prose alone — the hazard that document's §10 names first.
+
+**`CHANGELOG.md` is outside the read budget.** The operator's ruling of 2026-09-14 was *"Rule (c) for
+CHANGELOG.md — take it off the read budget"* — remedy (c) of the `BACKLOG.md` item that filed it —
+given because the file is never read whole, only searched for something, and even then what is
+found is not kept in the session. What a default `Read` of it delivers therefore decides nothing, and
+its size is no longer a defect. **The ruling names this file alone:** `PROJECT_LEARNINGS.md` is also
+searched rather than read whole, and its own item offers a like remedy, (d), but it stays in scope —
+that document's §13.8 ruled it in — until the operator rules on it. `CHANGELOG.md` stays an
+append-only log (§3). The synced dashboard still watches it for the read cap (`READ_CAP_CLASS_A`);
+under this ruling that flag is expected, and the dashboard is not edited here.
 
 **What one default `Read` delivers — measured in Session 255; harness behaviour, not a contract.**
 
@@ -166,10 +177,11 @@ re-tuned by editing prose alone — the hazard that document's §10 names first.
   tail shrinks it, and a dense band just past it can trigger the reduced page.
 - No tokenizer runs offline, so T is unknown in CI. The guard applies both rules at every ratio from
   its floor up to **2.9 B/token** and keeps the smallest page. Its bytes arm budgets a page as
-  **21,250 tokens** at **2.49 B/token**, the lowest whole-file ratio measured across the four files
-  (`CHANGELOG.md`; the ledger's prose runs ~2.65). The fleet's 2.27 floor was set by another
-  repository's content; here it would have failed K=2 at commits where one `Read` delivered two
-  records (that document's §14 has the count).
+  **21,250 tokens** at **2.49 B/token**, the lowest whole-file ratio Session 255 measured across the
+  four files then in scope (`CHANGELOG.md`'s; the ledger's prose runs ~2.65). That file has left the
+  budget and the figure stays: it is below every file still in scope, and a re-tune needs its own
+  ruling. The fleet's 2.27 floor was set by another repository's content; here it would have failed
+  K=2 at commits where one `Read` delivered two records (that document's §14 has the count).
 - The probe runs only inside a session: a default `Read`, whose banner gives the lines delivered and
   the file's tokens; and an explicit `offset`/`limit` `Read` spanning more than the cap, which
   returns the exact token count with zero content, even for a refused file. Reproduction: that
@@ -177,8 +189,8 @@ re-tuned by editing prose alone — the hazard that document's §10 names first.
 
 **The budgets.**
 
-1. **Ceiling.** no mandated-read file may exceed **262,144 B** — except `CHANGELOG.md` and `PROJECT_LEARNINGS.md`, declared over it and each filed in `BACKLOG.md` as a remediation
-   needing its own ruling. The exemption expires by itself: the guard fails the moment either file
+1. **Ceiling.** no mandated-read file may exceed **262,144 B** — except `PROJECT_LEARNINGS.md`, declared over it and filed in `BACKLOG.md` as a remediation
+   needing its own ruling. The exemption expires by itself: the guard fails the moment the file
    drops under the ceiling, until it is removed from the guard and from this sentence.
 2. **Page.** In `SESSION_NOTES.md`, the front matter plus the **2** newest non-stub records must fit in **52,912 B**, and inside the predicted page in lines — a BYTES arm and a LINES
    arm. Both mandated reads (Phase 0, and Phase 3A before the close-out overwrites the claim stub)

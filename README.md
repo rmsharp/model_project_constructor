@@ -115,7 +115,7 @@ tests/
   test_vocab_guard.py                   # Literal-derived vocabulary/enum guard (6 tests)
   test_wiki_no_line_citations.py        # wiki fragile-citation guard (3 tests)
   test_session_notes_census.py          # shard-census guard: the four prose files vs the shards on disk (25 tests)
-  test_read_budget.py                   # read-budget guard: what one default Read delivers of the four mandated-read files (46 tests)
+  test_read_budget.py                   # read-budget guard: what one default Read delivers of the three mandated-read files (47 tests)
 docs/planning/                          # active (not-yet-archived) plans
 docs/architecture-history/              # archived plans (concept-era + delivered): architecture-plan.md + 19 others + initial_purpose.txt
   SESSION_NOTES-through-S216.md         # frozen SESSION_NOTES records, Sessions 216->1 (grep it; do not Read it)
@@ -152,7 +152,7 @@ uv sync --extra agents --extra ui --extra dev
 uv run pytest
 ```
 
-All 1382 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈97.98%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
+All 1385 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈97.98%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
 
 Production deployments read every secret and every deployment-variable parameter from the environment (or from a `.env` file loaded by the caller). See `.env.example` for the full matrix and `OPERATIONS.md` for the runbook. Common failure modes live in `TROUBLESHOOTING.md`; resume a halted run with `scripts/run_pipeline.py --resume <run_id>` (see `OPERATIONS.md` §5).
 

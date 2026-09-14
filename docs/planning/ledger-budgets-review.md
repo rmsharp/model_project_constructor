@@ -1,10 +1,11 @@
 # Are the ledger budgets worth what they cost?
 
 **Status:** **RULED — see §13 (Session 252, 2026-09-07); EXECUTED — see §14 (Session 255).** A was
-executed in Session 249, E in Session 254 and D, widened, in Session 255; **F** is ruled with a CI
+executed in Session 249, E in Session 254 and D, widened, in Session 255 — then narrowed by one file
+in Session 257 (§16); **F** is ruled with a CI
 substitute (landed Session 253); **B, C, G and H are declined.** The analysis below stands as
-written except where §13 and §14 record a figure that has since moved or a premise since measured
-false; they correct rather than rewrite, for the reason §12 gives.
+written except where §13–§16 record a figure that has since moved, a premise since measured false or
+a scope since narrowed; they correct rather than rewrite, for the reason §12 gives.
 **Session:** 248, 2026-08-26, at `b95c39e`. Per the operator assignment recorded at `c6aa37b` and filed
 as `BACKLOG.md:62`. **Deliverable:** this document (`SESSION_RUNNER.md` FM #18 — the plan is the
 deliverable; every repair named below is a *proposal*).
@@ -1128,3 +1129,22 @@ Recorded because two statements above moved; it executes no option of §8.
   trim bullet stating that no assertion is owed per trim and naming its substitute (the CI step
   running `--self-test`), and `L15`'s deferral recorded as a decision. Session 256 did both, after
   the operator confirmed that ruling F covers the `L15` Session 254 had bequeathed.
+
+## 16. `CHANGELOG.md` leaves the read budget — Session 257, 2026-09-14
+
+Recorded because four statements moved: §12.7's and §13.1 row D's widening of D, §13.8's four-file
+scope, and §14.1's second answer. It executes no option of §8.
+
+- §14.1 answered "`CHANGELOG.md` and `PROJECT_LEARNINGS.md` are refused outright. What now?" with
+  **declare, guard, file**. On 2026-09-14 the operator ruled, verbatim, *"Rule (c) for CHANGELOG.md —
+  take it off the read budget"* — remedy (c) of that file's `BACKLOG.md` item — because it is never
+  read whole, only searched, and what is found is not kept. The ruling names that file alone. Its
+  exemption, its place in the guard's `MANDATED` and its clause in the ceiling sentence are gone;
+  `PROJECT_LEARNINGS.md` keeps all three, as §13.8 ruled.
+- The page's **2.49 B/token** floor was that file's ratio (§14.3's token meter). It stays: it is
+  below every file still in scope (2.620–2.861 by the token meter, Session 257), and re-tuning a
+  budget needs its own ruling.
+- The budget's scope was prose that nothing read, and it was the one thing this ruling changed. The
+  guard now composes it into a sentence `CLAUDE.md` and `PROJECT_CONVENTIONS.md` must each state
+  once, full stop included, with a mutant that appends `CHANGELOG.md` to the list and is caught
+  only because of that full stop. A separate sentence elsewhere is not read.

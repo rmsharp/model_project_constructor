@@ -1,4 +1,4 @@
-"""Hold the four mandated-read files to their read budgets, on every CI run.
+"""Hold the three mandated-read files to their read budgets, on every CI run.
 
 WHY THIS EXISTS (Session 255 -- Option D of docs/planning/ledger-budgets-review.md,
 widened; operator ruling 2026-09-10, recorded in docs/methodology/PROJECT_CONVENTIONS.md
@@ -21,6 +21,11 @@ an announced PARTIAL view, or -- past a byte ceiling -- nothing at all.
   3A before the close-out overwrites the stub) need the newest non-stub record; the second
   is one record of margin and context. ``BACKLOG.md``: its plain-language index. The front
   matter has its own budget because it is the part of the page the apparatus writes.
+
+``CHANGELOG.md`` is outside the budget by the operator's ruling of 2026-09-14 (Session 257), which
+names that file alone: it is read only to find something, and what is found is not kept. The scope
+is ``MANDATED``. ``check_declared`` requires the sentence naming it, full stop included, so the
+list cannot be edited in place without going red; a separate sentence elsewhere is not read.
 
 Every page check has two arms. The BYTES arm is the operator's conservative page
 (``PAGE_BYTES``, the page at the lowest measured ratio); the LINES arm is the measured page
@@ -61,8 +66,8 @@ CLAUDE = "CLAUDE.md"
 CONVENTIONS = "docs/methodology/PROJECT_CONVENTIONS.md"
 RUNNER = "SESSION_RUNNER.md"
 
-MANDATED = (SESSION_NOTES, BACKLOG, CHANGELOG, LEARNINGS)
-KNOWN_REFUSED: tuple[str, ...] = (CHANGELOG, LEARNINGS)   # ruling 2026-09-10: declare, guard, file
+MANDATED = (SESSION_NOTES, BACKLOG, LEARNINGS)   # ruling 2026-09-14: CHANGELOG.md is outside
+KNOWN_REFUSED: tuple[str, ...] = (LEARNINGS,)   # ruling 2026-09-10: declare, guard, file
 DECLARING = (CLAUDE, CONVENTIONS)
 MIRRORED = (*MANDATED, *DECLARING, RUNNER)
 
@@ -70,7 +75,8 @@ READ_CAP_TOKENS = 25_000        # [M] the harness names it: "exceeds maximum all
 PAGE_FACTOR = 0.85              # [M] S255: a partial view is 0.85 of the cap, counted in lines
 REGIME_FACTOR = 0.7             # [M] S255: every reduced page probed was 0.7 of the rule's
 TOKEN_OVERHEAD = 5              # [M] S255: a banner's token total is content tokens + 5
-MIN_BYTES_PER_TOKEN = 2.49      # [M] S255: lowest whole-file ratio of the four (CHANGELOG.md)
+MIN_BYTES_PER_TOKEN = 2.49      # [M] S255: CHANGELOG.md's, the densest file then in scope --
+                                # kept at S257: below all three now, and a re-tune needs a ruling
 RATIO_MAX = 2.90                # judgment: above the highest measured (PROJECT_LEARNINGS 2.858)
 PAGE_TOKENS = round(READ_CAP_TOKENS * PAGE_FACTOR)           # 21,250
 PAGE_BYTES = int(PAGE_TOKENS * MIN_BYTES_PER_TOKEN)          # 52,912
@@ -94,10 +100,15 @@ _FENCE = re.compile(r"^(`{3,}|~{3,})")
 _TABLE_ROW = re.compile(rb"^\| \d+ \| S\d+ `")
 
 
+def _names(paths: tuple[str, ...]) -> str:
+    quoted = [f"`{p}`" for p in paths]
+    return quoted[0] if len(quoted) == 1 else ", ".join(quoted[:-1]) + " and " + quoted[-1]
+
+
 def _refused_clause() -> tuple[str, ...]:
     if not KNOWN_REFUSED:
         return ()
-    return ("except " + " and ".join(f"`{p}`" for p in KNOWN_REFUSED) + ", declared over it",)
+    return (f"except {_names(KNOWN_REFUSED)}, declared over it",)
 
 
 # Every budget sentence listed here is composed from the constants, so these cannot drift:
@@ -114,6 +125,7 @@ _BOTH = (
     f"no mandated-read file may exceed **{READ_REFUSE_BYTES:,} B**",
     *_refused_clause(),
     f"**{PAGE_TOKENS:,} tokens** at **{MIN_BYTES_PER_TOKEN} B/token**",
+    f"read budget covers {_names(MANDATED)}.",
 )
 DECLARED: dict[str, tuple[str, ...]] = {
     CLAUDE: _BOTH,
@@ -737,6 +749,14 @@ def _m18_a_claim_worded_off_template_hides_an_overflow(root: pathlib.Path) -> No
     _write(root, SESSION_NOTES, _cap(data[:front] + head + body + data[front:]))
 
 
+def _m20_the_prose_appends_changelog_to_the_scope(root: pathlib.Path) -> None:
+    """The operator's 2026-09-14 ruling took CHANGELOG.md out of MANDATED. Appending it to the
+    scope sentence must go red -- the sentence's full stop is declared, so nothing can trail the
+    list. A separate sentence claiming it is in scope is prose this module cannot read."""
+    scope = f"read budget covers {_names(MANDATED)}"
+    _sub(root, CONVENTIONS, scope + ".", scope + f" and `{CHANGELOG}`.")
+
+
 def _reduced_page_candidates(data: bytes, kth: Record) -> Iterator[bytes]:
     """Shapes that can put the page into the reduced regime. First a sparse tail -- blank lines
     at the bottom widen the page until its head holds more than the cap, the shape a real probe
@@ -811,6 +831,8 @@ MUTANTS: tuple[tuple[str, str, Mutation, str], ...] = (
      "declared"),
     ("M18", "an off-template claim stub hides an overflow",
      _m18_a_claim_worded_off_template_hides_an_overflow, "k_bytes"),
+    ("M20", "the prose appends CHANGELOG.md to the scope sentence",
+     _m20_the_prose_appends_changelog_to_the_scope, "declared"),
 )
 
 
