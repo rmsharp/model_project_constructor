@@ -115,7 +115,7 @@ tests/
   test_vocab_guard.py                   # Literal-derived vocabulary/enum guard (6 tests)
   test_wiki_no_line_citations.py        # wiki fragile-citation guard (3 tests)
   test_session_notes_census.py          # shard-census guard: the four prose files vs the shards on disk (25 tests)
-  test_read_budget.py                   # read-budget guard: what one default Read delivers of the four mandated-read files (45 tests)
+  test_read_budget.py                   # read-budget guard: what one default Read delivers of the four mandated-read files (46 tests)
 docs/planning/                          # active (not-yet-archived) plans
 docs/architecture-history/              # archived plans (concept-era + delivered): architecture-plan.md + 19 others + initial_purpose.txt
   SESSION_NOTES-through-S216.md         # frozen SESSION_NOTES records, Sessions 216->1 (grep it; do not Read it)

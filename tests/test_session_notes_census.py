@@ -4,7 +4,7 @@ WHY THIS EXISTS (Session 247, closing Session 246's what's-next #1).
 
 ``SESSION_NOTES.md`` is trimmed periodically: retired records move into frozen,
 write-once shards under ``docs/architecture-history/``, each beside a
-``.verify.sh`` proof. Those proofs carry fourteen ``L``-assertions that hold four
+``.verify.sh`` proof. Those proofs carry ``L``-assertions that hold four
 prose files -- ``CLAUDE.md``, ``README.md``, ``BACKLOG.md`` and
 ``docs/methodology/PROJECT_CONVENTIONS.md`` -- against the shard set.
 
@@ -80,9 +80,9 @@ green. Both mutants therefore make the MISTAKE CONSISTENT -- they rewrite all fo
 prose files to agree with the broken tree -- which is the realistic failure: a trim
 that mis-cuts and then documents its own mistake faithfully.
 
-A CONTROL, run both ways so a green result means something. With CLAUDE.md's
+A CONTROL, run both ways so a green result means something (Session 247). With CLAUDE.md's
 shard count corrupted 8 to 5 and one routing clause widened, all nine
-docs/architecture-history/*.verify.sh proofs stay GREEN and this module goes RED
+docs/architecture-history/*.verify.sh proofs of that day stay GREEN and this module goes RED
 on check_composed and check_scan. That is the hole this file exists to close,
 measured in both directions rather than asserted.
 """
@@ -700,8 +700,8 @@ def _m01_delete_a_shard(root: pathlib.Path) -> None:
 
 
 def _m02_prose_names_a_shard_that_does_not_exist(root: pathlib.Path) -> None:
-    _sub(root, README, "older in the eight shards above",
-         "older in the eight shards above, and SESSION_NOTES-S999-through-S998.md")
+    anchor = f"older in the {SPELLED[len(shards(root))]} shards above"
+    _sub(root, README, anchor, anchor + ", and SESSION_NOTES-S999-through-S998.md")
 
 
 def _m03_a_shard_grows_by_one_line(root: pathlib.Path) -> None:
@@ -710,8 +710,9 @@ def _m03_a_shard_grows_by_one_line(root: pathlib.Path) -> None:
 
 
 def _m04_claude_shard_count_is_wrong(root: pathlib.Path) -> None:
-    _sub(root, CLAUDE, "Retired records live in **eight** write-once shards",
-         "Retired records live in **nine** write-once shards")
+    n = len(shards(root))
+    _sub(root, CLAUDE, f"Retired records live in **{SPELLED[n]}** write-once shards",
+         f"Retired records live in **{SPELLED[n + 1]}** write-once shards")
 
 
 def _m05_a_routing_clause_is_wrong(root: pathlib.Path) -> None:
@@ -724,7 +725,9 @@ def _m06_backlog_size_figure_is_wrong(root: pathlib.Path) -> None:
 
 
 def _m07_conventions_instance_count_is_wrong(root: pathlib.Path) -> None:
-    _sub(root, CONVENTIONS, "**Eight instances so far**", "**Seven instances so far**")
+    n = len(shards(root))
+    _sub(root, CONVENTIONS, f"**{SPELLED[n].capitalize()} instances so far**",
+         f"**{SPELLED[n - 1].capitalize()} instances so far**")
 
 
 def _m08_readme_repo_map_span_is_wrong(root: pathlib.Path) -> None:
@@ -746,8 +749,9 @@ def _m10_a_frozen_entry_loses_its_subject(root: pathlib.Path) -> None:
 
 
 def _m11_a_composed_sentence_is_duplicated(root: pathlib.Path) -> None:
-    _sub(root, CLAUDE, "grep *all eight* — none is a prefix of another.",
-         "grep *all eight* — none is a prefix of another. grep *all eight*.")
+    word = SPELLED[len(shards(root))]
+    _sub(root, CLAUDE, f"grep *all {word}* — none is a prefix of another.",
+         f"grep *all {word}* — none is a prefix of another. grep *all {word}*.")
 
 
 def _m12_a_banner_names_the_wrong_trim_session(root: pathlib.Path) -> None:
@@ -770,8 +774,11 @@ def _m14_a_proof_is_deleted(root: pathlib.Path) -> None:
 
 
 def _m15_the_aggregate_size_list_is_wrong(root: pathlib.Path) -> None:
-    _sub(root, BACKLOG, "1,057 and 644 lines for the second through seventh",
-         "1,057 and 645 lines for the second through seventh")
+    found = shards(root)
+    tail = f" lines for the second through {ORDINAL[len(found) - 1]}"
+    middle = [_n(s.lines) for s in found[1:-1]]
+    wrong = middle[:-1] + [_n(found[-2].lines + 1)]
+    _sub(root, BACKLOG, _join_and(middle) + tail, _join_and(wrong) + tail)
 
 
 def _m16_a_consistent_mis_cut(root: pathlib.Path) -> None:
@@ -817,22 +824,24 @@ def _m17_a_bannerless_shard_with_prose_that_agrees(root: pathlib.Path) -> None:
     answer for a SECOND shard, and an author who trusts the derivation writes
     prose agreeing with it. Then only check_banners can tell.
     """
+    found = shards(root)
+    word = SPELLED[len(found)]
+    fallback = str(FIRST_SHARD_TRIM_SESSION)
+    trims = [str(sh.trim_session) for sh in found]
+    wrong = [fallback if sh.name == "SESSION_NOTES-S238-through-S236.md" else str(sh.trim_session)
+             for sh in found]
     target = _shard_path(root, "SESSION_NOTES-S238-through-S236.md")
     text = target.read_text(encoding="utf-8")
     assert text.count("(Session 242, ") == 1
     target.write_text(text.replace("(Session 242, ", "(the seventh trim, ", 1),
                       encoding="utf-8")
-    fallback = str(FIRST_SHARD_TRIM_SESSION)
     for relative, pairs in (
-        (CLAUDE, (("**Trimmed eight times (Sessions 222, 224, 228, 231, 235, 239, 242, 245):**",
-                   "**Trimmed eight times (Sessions 222, 224, 228, 231, 235, 239, "
-                   + fallback + ", 245):**"),
-                  ("is trimmed (Sessions 222, 224, 228, 231, 235, 239, 242, 245)",
-                   "is trimmed (Sessions 222, 224, 228, 231, 235, 239, "
-                   + fallback + ", 245)"))),
-        (BACKLOG, (("**Sessions 224, 228, 231, 235, 239, 242 and 245 widened this:**",
-                    "**Sessions 224, 228, 231, 235, 239, " + fallback
-                    + " and 245 widened this:**"),
+        (CLAUDE, ((f"**Trimmed {word} times (Sessions {', '.join(trims)}):**",
+                   f"**Trimmed {word} times (Sessions {', '.join(wrong)}):**"),
+                  (f"is trimmed (Sessions {', '.join(trims)})",
+                   f"is trimmed (Sessions {', '.join(wrong)})"))),
+        (BACKLOG, ((f"**Sessions {_join_and(trims[1:])} widened this:**",
+                    f"**Sessions {_join_and(wrong[1:])} widened this:**"),
                    ("Session 242 a seventh", "Session " + fallback + " a seventh"))),
         (CONVENTIONS, (("`SESSION_NOTES-S238-through-S236.md` (Session 242,",
                         "`SESSION_NOTES-S238-through-S236.md` (Session " + fallback + ","),)),

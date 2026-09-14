@@ -25,9 +25,9 @@ an announced PARTIAL view, or -- past a byte ceiling -- nothing at all.
 Every page check has two arms. The BYTES arm is the operator's conservative page
 (``PAGE_BYTES``, the page at the lowest measured ratio); the LINES arm is the measured page
 rule in both regimes. Their remedies differ: a red BYTES arm means the newest records are too
-long; a red LINES arm means a dense tail (trim, or reflow it) or a dense head (reflow long
-lines near the top). The guard errs conservative: a default ``Read`` that disagrees with it
-is the authority.
+long; a red LINES arm means a dense tail (reflow it -- or, past the trim trigger, trim it) or a
+dense head (reflow long lines near the top). The guard errs conservative: a default ``Read``
+that disagrees with it is the authority.
 
 The retention rule (fire / stop / floor, in bytes) is enforced at trim time by that trim's
 proof; this module holds what must be true BETWEEN trims, plus ``check_satisfiable``: that
@@ -244,14 +244,19 @@ def page_estimate(data: bytes, regime: bool = True) -> tuple[int, bool] | None:
     return worst
 
 
-def _lines_remedy(reduced: bool, ledger: bool) -> str:
+def _lines_remedy(reduced: bool, ledger: bool, size: int = 0) -> str:
     if reduced:
         return ("the head of the page is dense enough that the harness delivers a reduced "
                 "page: reflow long lines near the top (tables, one-paragraph-per-line prose)"
                 + (", or shorten the newest records" if ledger else ""))
+    if not ledger:
+        return ("the file's tail is dense enough to shrink the page: reflowing its long lines "
+                "widens the page again")
     return ("the file's tail is dense enough to shrink the page: "
             + ("the trim that archives it, or reflowing its long lines, widens the page again"
-               if ledger else "reflowing its long lines widens the page again"))
+               if size > FIRE_BYTES else
+               "reflowing its long lines, or shortening the newest records, widens the page again "
+               f"(no trim fires below {FIRE_BYTES:,} B)"))
 
 
 class Tree:
@@ -347,7 +352,7 @@ def check_k_lines(tree: Tree) -> list[str]:
     if estimate is not None and record.end_line > estimate[0]:
         return [f"the {K} newest non-stub records of {SESSION_NOTES} end at line "
                 f"{record.end_line}, but one Read is predicted to deliver {estimate[0]} lines: "
-                + _lines_remedy(estimate[1], ledger=True) + "."]
+                + _lines_remedy(estimate[1], ledger=True, size=len(data)) + "."]
     return []
 
 
@@ -585,8 +590,13 @@ def _reflow(body: bytes, width: int) -> bytes:
 
 
 def _m01_the_ledger_crosses_the_ceiling(root: pathlib.Path) -> None:
+    """Padded at the ledger's own line width, so the page keeps its shape and only the ceiling may
+    object: at a fixed 75 B/line a wide close-out's page shrank into the K prefix and check_k_lines
+    co-fired, leaving check_ceiling the sole catcher of nothing (Session 256's review, reproduced
+    by after-a-wide-close-out-then-claim)."""
     data = _read(root, SESSION_NOTES)
-    _write(root, SESSION_NOTES, data + _oldest(READ_REFUSE_BYTES - len(data) + 1_000))
+    _write(root, SESSION_NOTES,
+           data + _oldest(READ_REFUSE_BYTES - len(data) + 1_000, width=_mean_width(data)))
 
 
 def _m02_a_refused_file_is_remediated(root: pathlib.Path) -> None:
@@ -603,13 +613,15 @@ def _m03_front_matter_bloat_behind_a_short_record(root: pathlib.Path) -> None:
 
 
 def _m04_the_newest_records_outgrow_the_page(root: pathlib.Path) -> None:
-    """The newest records outgrow the page in BYTES, and in bytes only: each of the K newest
-    non-stub records is rewritten one paragraph to a line -- the same bytes in far fewer lines --
-    and the K-th is then grown past PAGE_BYTES by one long line. Growing alone is not enough: the
-    long line raises the file's mean line width, the page shrinks with it, and in a ledger a trim
-    has just cut the page ends before the K prefix does, so check_k_lines fires too and
-    check_k_bytes is the sole catcher of nothing (Session 256, found by the state
-    after-a-trim-then-its-close-out)."""
+    """The newest records outgrow the page in BYTES, and in bytes only. Each of the K newest
+    non-stub records has its body joined onto as few lines as its heading and fence lines allow --
+    the same bytes -- and the K-th is then grown past PAGE_BYTES by one long line. Two hazards are
+    handled rather than hoped away. Growing alone raised the mean line width until, in a ledger a
+    trim had just cut, the page ended before the K prefix and check_k_lines co-fired (Session 256,
+    found by after-a-trim-then-its-close-out). And the growth shifts every later record, so the
+    overshoot past the stop is given back from the (K+1)-th record's tail -- else
+    check_satisfiable co-fires once the records between the K-th and the FLOOR-th are large
+    (Session 256's review)."""
     data, _front, records = _ledger(root)
     kth = _must(nth_non_stub(records, K))
     for record in records[:records.index(kth) + 1]:
@@ -617,8 +629,21 @@ def _m04_the_newest_records_outgrow_the_page(root: pathlib.Path) -> None:
             data = (data[:record.start_byte]
                     + _join_after(data[record.start_byte:record.end_byte], 0)
                     + data[record.end_byte:])
+    assert _must(nth_non_stub(parse_ledger(data)[1], K)).session == kth.session, \
+        "M04's join reclassified a record, so the mutant would grow the wrong prefix"
     line = b"x" * (PAGE_BYTES - kth.end_byte + 500) + b"\n"
-    _write(root, SESSION_NOTES, _cap(data[:kth.end_byte] + line + data[kth.end_byte:]))
+    data = data[:kth.end_byte] + line + data[kth.end_byte:]
+    front, records = parse_ledger(data)
+    floor = nth_non_stub(records, FLOOR)
+    excess = floor.end_byte + _row_allowance(data, front) - STOP_BYTES if floor else 0
+    if excess > 0:
+        nxt = _must(nth_non_stub(records, K + 1))
+        body = data.index(b"\n", nxt.start_byte) + 1
+        cut = nxt.end_byte
+        while nxt.end_byte - cut < excess and cut > body:
+            cut = data.rfind(b"\n", body - 1, cut - 1) + 1
+        data = data[:cut] + data[nxt.end_byte:]
+    _write(root, SESSION_NOTES, _cap(data))
 
 
 def _m05_a_dense_ledger_tail_shrinks_the_page(root: pathlib.Path) -> None:
@@ -648,10 +673,12 @@ def _m08_the_retention_rule_has_no_compliant_cut(root: pathlib.Path) -> None:
     data, _front, records = _ledger(root)
     beyond_k = _must(nth_non_stub(records, K + 1)).end_byte
     floor_end = _must(nth_non_stub(records, FLOOR)).end_byte
-    # Padded at the ledger's own line width, so the page neither shrinks nor grows into the
-    # head -- only this check may fire.
+    # Padded at the ledger's own line width, and the tail KEPT, so the page neither shrinks nor
+    # grows into the head -- only this check may fire. Cutting the tail at the FLOOR-th record moved
+    # the mean width, and with the K prefix near the page check_k_lines co-fired (Session 256's
+    # review).
     pad = _filler(STOP_BYTES - floor_end + 1_000, width=_mean_width(data))
-    _write(root, SESSION_NOTES, data[:beyond_k] + pad + data[beyond_k:floor_end])
+    _write(root, SESSION_NOTES, _cap(data[:beyond_k] + pad + data[beyond_k:]))
 
 
 def _m09_the_claim_template_is_reworded(root: pathlib.Path) -> None:
@@ -898,19 +925,48 @@ def _successor_trim(root: pathlib.Path) -> None:
     _write(root, SESSION_NOTES, data[:at] + row + data[at:keep.end_byte])
 
 
+def _successor_wide_closeout_then_claim(root: pathlib.Path) -> None:
+    """At a claim commit: the WIDEST close-out every live check accepts -- in its own state AND
+    after the next claim -- written at 140 B/line, then that claim. The claim's stub pushes the K
+    prefix to within a few lines of the page, where mutants padded at a fixed width shrank the
+    page into it (Session 256's review, which found it at a 32 KB close-out). The median-size
+    models never come this close. At a close-out commit there is no stub to close: no change."""
+    data, _front, records = _ledger(root)
+    if not records or not records[0].stub:
+        return
+    first = _must(nth_non_stub(records, 1))
+    stub = records[0].end_byte - records[0].start_byte
+    heading = data[records[0].start_byte:data.index(b"\n", records[0].start_byte) + 1]
+    head = heading + b"**Deliverable:** COMPLETE.\n\n"
+    tree = Tree(root)
+    for size in range(PAGE_BYTES - (first.end_byte - stub), 1_024, -512):
+        record = head + _filler(max(1, size - len(head)), width=140)
+        closed = data[:records[0].start_byte] + record + data[records[0].end_byte:]
+        _write(root, SESSION_NOTES, closed)
+        _successor_claim(root)
+        claimed = _read(root, SESSION_NOTES)
+        if not any(check(tree) for tree.data[SESSION_NOTES] in (closed, claimed)
+                   for check in CHECKS.values()):
+            return
+    raise AssertionError("no wide close-out passes every live check; the model cannot be built")
+
+
 def _successor_trim_then_closeout(root: pathlib.Path) -> None:
     """A trim, then the close-out of the session that made it: the smallest ledger a trim
     session leaves, with its newest record at full size. No other model reaches that state, and
-    it is where a mutant built for a large ledger first went vacuous (Session 256)."""
+    it is where a mutant built for a large ledger first went vacuous (Session 256). At a close-out
+    commit there is no stub to close, so this equals after-a-floor-keeping-trim."""
     _successor_trim(root)
     _successor_closeout(root)
 
 
 @pytest.mark.parametrize(
     "successor", [_successor_closeout, _successor_claim, _successor_closeout_then_claim,
-                  _successor_trim, _successor_trim_then_closeout],
+                  _successor_trim, _successor_trim_then_closeout,
+                  _successor_wide_closeout_then_claim],
     ids=["after-the-close-out", "after-the-next-claim", "after-close-out-then-claim",
-         "after-a-floor-keeping-trim", "after-a-trim-then-its-close-out"])
+         "after-a-floor-keeping-trim", "after-a-trim-then-its-close-out",
+         "after-a-wide-close-out-then-claim"])
 def test_next_state(tmp_path: pathlib.Path, successor: Mutation) -> None:
     _skip_if_live_fails()
     problems = _battery(tmp_path, successor)
