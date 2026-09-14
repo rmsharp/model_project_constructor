@@ -102,9 +102,9 @@ records, 1,681 lines, a pure byte slice) are in
 front-matter table gained row 9. The proof adds **no** assertion — `L15` was deferred on the
 operator's ruling F — rewrites `L11` to the byte rule, and ships 108 mutants.
 
-**Started / completed:** 2026-09-11 → 2026-09-14 (UTC). **Commits: five** — `bf776a9` (claim,
+**Started / completed:** 2026-09-11 → 2026-09-14 (UTC). **Commits: six** — `bf776a9` (claim,
 alone), `3a141ec` and `8e6bdca` (guard fixes the trim's next states needed, each green before and
-after the trim), `9342637` (the trim, no record edit), and this close-out. **`CHANGELOG.md`
+after the trim), `9342637` (the trim, no record edit), this close-out, and a one-figure correction. **`CHANGELOG.md`
 entry: YES** — `tests/` logic changed in two files (§2 is a directory test).
 
 #### The cut, and why this one
@@ -228,7 +228,7 @@ workflows, plus two sweeps.
    hash as a declared substitution and verify it; copy `L0`–`L14` from the ninth proof; both carried
    bequests apply. `L15` has now named two different unbuilt checks — resurrect neither by name.
 4. **Carried:** the dashboard sync (outside this repo); `README.md`'s hand-typed test counts; pushing
-   (six commits ahead of `origin`) is the operator's call.
+   (ten commits ahead of `origin`, Session 255's four included; measured) is the operator's call.
 
 **Key files.** The new proof (its header first); `tests/test_read_budget.py` (`M01`, `M04`, `M08`
 and the two new next-state models); `tests/test_session_notes_census.py` (derived anchors); the
