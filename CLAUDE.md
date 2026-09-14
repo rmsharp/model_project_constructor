@@ -99,7 +99,7 @@ The live ledger holds only the newest sessions; retired records live in frozen s
 
 ### Project-specific Learnings
 
-Project institutional memory (255 learnings, Sessions 9–256) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (299.7 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings remain in `SESSION_RUNNER.md`.
+Project institutional memory (257 learnings, Sessions 9–257) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (301.2 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings remain in `SESSION_RUNNER.md`.
 
 ### Project-specific Failure Modes
 

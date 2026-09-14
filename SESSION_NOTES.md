@@ -95,10 +95,110 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 257 Did
-**Deliverable:** Take `CHANGELOG.md` off the read budget — the operator's ruling of 2026-09-14 on
-`BACKLOG.md`'s remedy (c): a file sessions only write to and search sits outside it (IN PROGRESS)
-**Started:** 2026-09-14 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **`CHANGELOG.md` taken off the read budget — COMPLETE.** The operator's ruling of
+2026-09-14, verbatim: *"Rule (c) for CHANGELOG.md — take it off the read budget."* The ruling names
+that file alone; the guard and the prose now agree on three files in scope.
+**Started / completed:** 2026-09-14 (UTC). **Commits: three** — `d6200bc` (claim), `8b6b19a` (the
+change) and this close-out.
+
+#### Why the ruling, and why it was the operator's question
+
+Asked why `CHANGELOG.md` needed a controlled length, the answer was that it did not: it is never
+read whole, only searched, and what a search finds is not kept (the operator's reason). No runner
+step reads it from the top — `SESSION_RUNNER.md` names it only as "for history see". It entered the
+scope in the budgets review's §12.3, which listed it among files "the protocol mandates" and called
+the fleet dashboard's watch set, which holds it, "pointed at the right files"; §13.8 carried the
+list forward as "the four mandated-read files". Remedy (c) was filed as one of three equal sessions
+and was the only one that asked whether the file belonged.
+
+#### What changed
+
+- **`tests/test_read_budget.py`.** `CHANGELOG.md` leaves `MANDATED` and `KNOWN_REFUSED`;
+  `PROJECT_LEARNINGS.md` is the one declared exemption, and `M02`/`M14` now both target it.
+  `_names()` composes the ceiling's except-clause and a new declared sentence, "read budget covers
+  `SESSION_NOTES.md`, `BACKLOG.md` and `PROJECT_LEARNINGS.md`." — full stop included — which
+  `check_declared` requires once in each of `CLAUDE.md` and `PROJECT_CONVENTIONS.md`. `M20` appends
+  `CHANGELOG.md` to that list and is caught (`M19` stays retired). 47 tests.
+- **Why a sentence, under ruling F.** The scope was the one thing this ruling changed, and the only
+  copy naming it — §5's header — was read by nothing. Controls: with the sentence undeclared, `M20`
+  fires no check; declared without its full stop, `M20` still survives. It is a new operand of an
+  existing check, not a new check. A separate sentence elsewhere is still not read, and the
+  docstrings now say so.
+- **The 2.49 B/token floor stays**, though it was `CHANGELOG.md`'s ratio. The token meter, this
+  session: `SESSION_NOTES.md` 2.620, `BACKLOG.md` 2.640, `PROJECT_LEARNINGS.md` 2.861. Raising it
+  would re-tune the page budget — a separate ruling.
+- **`BACKLOG.md`.** The item keeps only what the ruling left: four July entries sit above the
+  September ones under `## [0.3.0]`. Operator call — reorder (a provable pure move of an append-only
+  log) or accept; new entries go below those four.
+- **Prose.** `CLAUDE.md`'s retention bullet; `PROJECT_CONVENTIONS.md` §5 (the ruling verbatim, that it
+  names one file, budget 1, the floor's provenance, and that the synced dashboard's
+  `READ_CAP_CLASS_A` flag on this file is now expected); the read-cap item's ruling paragraph; the
+  budgets review's status header and new §16; `README.md` — the guard's row, and the headline count,
+  which Session 256 had left two tests behind.
+
+#### The review gated the commit
+
+Four lenses — guard, stale prose, facts, ruling fidelity — then a skeptic per finding: 9 agents, five
+findings confirmed, none refuted, all fixed before the commit. The major one: my first draft recorded
+the ruling as a rule for *any* file sessions only write to and search, which fits
+`PROJECT_LEARNINGS.md` too — a file §13.8 ruled in. The rest: the scope sentence had no end anchor
+(appending `CHANGELOG.md` after the list stayed green), two docstrings claimed more than
+`check_declared` enforces, "widened from this ledger" had no antecedent, and the review's header did
+not route readers to §16.
+
+#### Verification
+
+- Both guards 72/72; full suite 1,385 passed + 9 live-skipped at 97.98% coverage; `ruff` clean;
+  `uv run mypy` clean. (`mypy tests/test_read_budget.py` alone reports an unannotated `sole` — at
+  HEAD too, so it predates this session.) All eleven proofs green in both modes.
+
+### Session 256 Handoff Evaluation (by Session 257)
+
+**Score: 7/10.** **+** It left both refused files to the operator rather than scheduling a remedy,
+and its gotchas held: run the guard before close-out, `command grep`, never `Read` the two files
+whole, keep a close-out near the median. **−** It carried "three remedies in the item, each a
+session" without asking whether this file belonged in the budget; the operator asked, in one
+question. **−** "`README.md`'s hand-typed test counts" as a carry hid that its own session had left
+the headline two behind. **ROI: medium** — nothing it said was wrong; the cost was what it did not ask.
+
+### Session 257 Self-Assessment
+
+**Score: 6/10.**
+**+ Measured before claiming:** the gap the new sentence closes (two controls), the densities behind
+keeping 2.49, the mypy error's age, and the provenance of the "four files" list — which reversed a
+sentence I had drafted and confirmed what I had told the operator.
+**+ Kept the residue** — the ordering defect stays filed rather than closing with the item.
+**− I generalized a one-file ruling.** "A file sessions only write to and search" fits
+`PROJECT_LEARNINGS.md` as well, and the operator ruled on `CHANGELOG.md`. I had checked that I was not
+extending the ruling, then extended it in the wording; the fidelity lens caught it.
+**− My first scope sentence was unanchored** — the defect learning #254 names, which I wrote one
+session ago. **− More guard for a smaller budget:** a sentence and a mutant in a session that removed
+scope; the controls justify it, but it is apparatus. **− Repeated learning #160** (zsh does not
+word-split `$pair`) in a throwaway command.
+
+**What's next.**
+1. **The row-9 guard** — BACKLOG "The ledger's front matter is guarded only at its table rows".
+   Operator call; ruling F names the CI guard as its home.
+2. **`PROJECT_LEARNINGS.md` is still refused** — operator call among its four remedies. Today's
+   ruling does not reach it: §13.8 ruled it in, and sessions use what they find there.
+3. **`CHANGELOG.md`'s order** — operator call: reorder the four July entries, or accept.
+4. **The tenth trim** when the file next exceeds 196,608 B; Session 256's gotchas #2 and #4 apply.
+5. **Carried:** the dashboard sync (outside this repo); `README.md`'s hand-typed counts; pushing
+   (13 commits ahead of `origin`, this close-out included; measured) is the operator's call.
+
+**Key files.** `tests/test_read_budget.py` (`MANDATED`, `_names`, `_BOTH`, `M20`);
+`PROJECT_CONVENTIONS.md` §5; `BACKLOG.md`'s `CHANGELOG.md` item.
+
+**Gotchas.**
+1. Changing the budget's scope is one commit touching three places: `MANDATED`, and the "read budget
+   covers" sentence in `CLAUDE.md` and in `PROJECT_CONVENTIONS.md`. The guard prints the sentence it
+   wants.
+2. The 2026-09-14 ruling names `CHANGELOG.md` alone — do not cite it for `PROJECT_LEARNINGS.md`.
+3. A new `CHANGELOG.md` entry goes below the four July entries and above the newest dated one.
+4. The dashboard still flags `CHANGELOG.md` against the read cap; under this ruling that is
+   expected, not a Phase 0 risk.
+5. `uv run pytest tests/test_read_budget.py --no-cov` before every close-out; `uv run mypy` with no
+   path; never `Read` the two large files whole.
 
 ### What Session 256 Did
 **Deliverable:** **The ninth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 248 → 242 (seven

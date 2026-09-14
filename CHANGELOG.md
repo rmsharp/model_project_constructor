@@ -60,6 +60,28 @@ Previously, every project the pipeline generates had public-host values baked in
 - **Adversarial review (pre-commit, no code change from it needed beyond the coverage fixes below):** two independent lenses reviewed the diff. Correctness/regression: no issues — confirmed byte-identical default output via a `git stash`/diff comparison and validated the new GitHub Actions `env:` block with `yaml.safe_load`. Test-coverage: found 3 real gaps, all closed before commit — the live-mode branch of `build_website_runner` had no test asserting `ci_host_config` threading at all, no test isolated a single-field override from its untouched siblings, and no CLI test covered a partial (not all-four, not zero) flag combination.
 - **Verified:** a fake-mode run with all four `MPC_CI_*` env vars set produced zero `docker.io|python:3.11|github.com/` matches across all 39 generated files; the same run with the env vars unset still showed the public values in exactly `.github/workflows/ci.yml` and `.pre-commit-config.yaml`. Full gate: **989 passed + 8 live-skipped @ 97.78% coverage** (was 970 passed, Session 203 baseline); `ruff check .` and `mypy` both clean.
 
+### 2026-09-14 — `CHANGELOG.md` leaves the read budget, by the operator's ruling on that file alone (Session 257)
+
+The operator ruled remedy (c) of this file's `BACKLOG.md` item: *"Rule (c) for CHANGELOG.md — take
+it off the read budget."* The file is never read whole, only searched, and what a search finds is
+not kept, so what a default `Read` of it delivers decides nothing and its size (2.5× the refusal
+ceiling) is no longer a defect. The ruling names this file alone; `PROJECT_LEARNINGS.md` stays in
+scope. Recorded in `docs/methodology/PROJECT_CONVENTIONS.md` §5 and
+`docs/planning/ledger-budgets-review.md` §16.
+
+- **`tests/test_read_budget.py` (`8b6b19a`).** `CHANGELOG.md` leaves `MANDATED` and
+  `KNOWN_REFUSED`; `PROJECT_LEARNINGS.md` is now the one declared exemption, and `M02`/`M14` follow
+  it. The guard composes the budget's scope into a sentence, full stop included, that `CLAUDE.md`
+  and `PROJECT_CONVENTIONS.md` must each state once — the scope was prose nothing read, and the one
+  thing this ruling changed. New mutant `M20` appends `CHANGELOG.md` to that sentence's list and is
+  caught; without the sentence, or without its full stop, it fires no check. The 2.49 B/token page
+  floor was measured on this file and stays: the three files in scope measure 2.620–2.861, and a
+  re-tune needs its own ruling.
+- **Not code:** the `BACKLOG.md` item now records only this file's order — four July entries above
+  the September ones — as an operator call. An adversarial review (9 agents) confirmed five findings
+  and refuted none; all five were fixed before the commit. Verified: 1,385 passed + 9 live-skipped;
+  `ruff` and `uv run mypy` clean; all eleven proofs green in both modes; both guards 72/72.
+
 ### 2026-09-14 — The ninth ledger trim lands under the byte rule, and the guards stay isolating in every state it reaches (Session 256)
 
 The ninth trim of `SESSION_NOTES.md` and the first under Session 255's byte rule: Sessions 248 → 242
