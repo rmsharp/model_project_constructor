@@ -603,10 +603,22 @@ def _m03_front_matter_bloat_behind_a_short_record(root: pathlib.Path) -> None:
 
 
 def _m04_the_newest_records_outgrow_the_page(root: pathlib.Path) -> None:
+    """The newest records outgrow the page in BYTES, and in bytes only: each of the K newest
+    non-stub records is rewritten one paragraph to a line -- the same bytes in far fewer lines --
+    and the K-th is then grown past PAGE_BYTES by one long line. Growing alone is not enough: the
+    long line raises the file's mean line width, the page shrinks with it, and in a ledger a trim
+    has just cut the page ends before the K prefix does, so check_k_lines fires too and
+    check_k_bytes is the sole catcher of nothing (Session 256, found by the state
+    after-a-trim-then-its-close-out)."""
     data, _front, records = _ledger(root)
-    at = _must(nth_non_stub(records, K)).end_byte
-    line = b"x" * (PAGE_BYTES - at + 500) + b"\n"
-    _write(root, SESSION_NOTES, _cap(data[:at] + line + data[at:]))
+    kth = _must(nth_non_stub(records, K))
+    for record in records[:records.index(kth) + 1]:
+        if not record.stub:    # _join_after keeps the byte count, so every offset still holds
+            data = (data[:record.start_byte]
+                    + _join_after(data[record.start_byte:record.end_byte], 0)
+                    + data[record.end_byte:])
+    line = b"x" * (PAGE_BYTES - kth.end_byte + 500) + b"\n"
+    _write(root, SESSION_NOTES, _cap(data[:kth.end_byte] + line + data[kth.end_byte:]))
 
 
 def _m05_a_dense_ledger_tail_shrinks_the_page(root: pathlib.Path) -> None:
@@ -886,11 +898,19 @@ def _successor_trim(root: pathlib.Path) -> None:
     _write(root, SESSION_NOTES, data[:at] + row + data[at:keep.end_byte])
 
 
+def _successor_trim_then_closeout(root: pathlib.Path) -> None:
+    """A trim, then the close-out of the session that made it: the smallest ledger a trim
+    session leaves, with its newest record at full size. No other model reaches that state, and
+    it is where a mutant built for a large ledger first went vacuous (Session 256)."""
+    _successor_trim(root)
+    _successor_closeout(root)
+
+
 @pytest.mark.parametrize(
     "successor", [_successor_closeout, _successor_claim, _successor_closeout_then_claim,
-                  _successor_trim],
+                  _successor_trim, _successor_trim_then_closeout],
     ids=["after-the-close-out", "after-the-next-claim", "after-close-out-then-claim",
-         "after-a-floor-keeping-trim"])
+         "after-a-floor-keeping-trim", "after-a-trim-then-its-close-out"])
 def test_next_state(tmp_path: pathlib.Path, successor: Mutation) -> None:
     _skip_if_live_fails()
     problems = _battery(tmp_path, successor)

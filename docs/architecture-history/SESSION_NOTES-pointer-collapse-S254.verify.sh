@@ -1160,6 +1160,15 @@ def self_test(before, after, live_wt, pre_live, world):
             out = out[:i] + "### What Session %s" % retitle_oldest + out[j:]
         return out
 
+    # M50's GAP sits just past the NEWEST row on disk, so it stays a gap whatever trim has landed
+    # since. At this proof's own commit that is (250, 244) with the oldest record retitled 251 --
+    # the span M50 was first written with. A fixed span stopped being a gap at the ninth trim,
+    # whose row reaches 248: it overlapped instead, and R7/LIVE-GAP was reached by no mutant
+    # (measured, Session 256).
+    top = (241 if live_wt is MISSING
+           else max(hi for _lo, hi in live_spans(zones(live_wt)[0])))
+    M50_SPAN, M50_OLDEST = (str(top + 9), str(top + 3)), str(top + 10)
+
     a_rec = ar[0]
 
     mutants = [
@@ -1319,7 +1328,7 @@ def self_test(before, after, live_wt, pre_live, world):
          before, after, live_plus_row(("241", "236")), ROWS, OLD_PROSE, NEW_BLOCK, pre_live, world),
         ("M50 a row added ON DISK leaving a GAP, with the frontier moved to match so R7/LIVE-GAP "
          "is the sole objector",
-         before, after, live_plus_row(("250", "244"), retitle_oldest="251"),
+         before, after, live_plus_row(M50_SPAN, retitle_oldest=M50_OLDEST),
          ROWS, OLD_PROSE, NEW_BLOCK, pre_live, world),
         ("M44 a PROSE POINTER BLOCK planted in the live front matter (R8 -- the rule broken by a "
          "future trim)",
