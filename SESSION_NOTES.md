@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 257 Did
+**Deliverable:** Take `CHANGELOG.md` off the read budget — the operator's ruling of 2026-09-14 on
+`BACKLOG.md`'s remedy (c): a file sessions only write to and search sits outside it (IN PROGRESS)
+**Started:** 2026-09-14 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 256 Did
 **Deliverable:** **The ninth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 248 → 242 (seven
 records, 1,681 lines, a pure byte slice) are in
