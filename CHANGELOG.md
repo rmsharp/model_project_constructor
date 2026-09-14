@@ -60,6 +60,30 @@ Previously, every project the pipeline generates had public-host values baked in
 - **Adversarial review (pre-commit, no code change from it needed beyond the coverage fixes below):** two independent lenses reviewed the diff. Correctness/regression: no issues — confirmed byte-identical default output via a `git stash`/diff comparison and validated the new GitHub Actions `env:` block with `yaml.safe_load`. Test-coverage: found 3 real gaps, all closed before commit — the live-mode branch of `build_website_runner` had no test asserting `ci_host_config` threading at all, no test isolated a single-field override from its untouched siblings, and no CLI test covered a partial (not all-four, not zero) flag combination.
 - **Verified:** a fake-mode run with all four `MPC_CI_*` env vars set produced zero `docker.io|python:3.11|github.com/` matches across all 39 generated files; the same run with the env vars unset still showed the public values in exactly `.github/workflows/ci.yml` and `.pre-commit-config.yaml`. Full gate: **989 passed + 8 live-skipped @ 97.78% coverage** (was 970 passed, Session 203 baseline); `ruff check .` and `mypy` both clean.
 
+### 2026-09-14 — The ninth ledger trim lands under the byte rule, and the guards stay isolating in every state it reaches (Session 256)
+
+The ninth trim of `SESSION_NOTES.md` and the first under Session 255's byte rule: Sessions 248 → 242
+moved into `docs/architecture-history/SESSION_NOTES-S248-through-S242.md` beside its proof. What
+earns this entry is the test logic the trim had to change first — each change found by modelling a
+state the trim creates, reproduced red, then fixed.
+
+- **`tests/test_read_budget.py` (`3a141ec`, `8e6bdca`).** Two new `test_next_state` cases:
+  `after-a-trim-then-its-close-out` and `after-a-wide-close-out-then-claim` (the widest close-out every
+  live check accepts, then the next claim). Each was red before its fix. `M04` now joins the K records'
+  bodies before growing them and gives its overshoot back from the next record, so neither
+  `check_k_lines` nor `check_satisfiable` can co-fire; `M01` pads at the ledger's own line width; `M08`
+  keeps the ledger's tail. The lines-arm remedy offers a trim only above the fire threshold.
+- **`docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh` (`3a141ec`).** `M50`
+  derives its gap span from the newest live row; a hard-coded span became an overlap once the ninth
+  row existed, leaving `R7 LIVE-GAP` reached by no mutant. Self-test output unchanged at the time.
+- **`tests/test_session_notes_census.py` (`8e6bdca`).** Six mutants derive their anchors from the shard
+  set instead of carrying hand-typed copies of composed sentences, so a trim no longer re-edits them.
+- **Not code, recorded for completeness:** the new proof adds no assertion — the operator's ruling F
+  covers the bequeathed `L15` — rewrites `L11` to the byte rule, re-targets every operand that read
+  retired prose, and strengthens four inherited arms after an adversarial review (12 agents, 38
+  findings). Verified: 1,384 passed + 9 live-skipped; `ruff` and `uv run mypy` clean; all eleven
+  proofs green in both modes at `9342637`; census guard 25/25, read-budget guard 46/46.
+
 ### 2026-09-10 — The mandated-read files have byte budgets, held against the working tree on every CI run (Session 255, Option D widened of `docs/planning/ledger-budgets-review.md`)
 
 Executes the operator's ruling of 2026-09-07 (§13.1: Option D, second, *widened* to `SESSION_NOTES.md`, `BACKLOG.md`, `CHANGELOG.md` and `PROJECT_LEARNINGS.md`), with three parameters ruled on 2026-09-10 after they were measured: **K=2** with a byte trim trigger; the two files already refused outright **declared, guarded and filed**; `BACKLOG.md`'s plain-language index **guarded whole**. The line rule (1,500 / 1,050 / 4) is retired, not re-tuned.

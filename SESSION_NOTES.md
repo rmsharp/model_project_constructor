@@ -95,12 +95,155 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 256 Did
-**Deliverable:** The ninth trim of `SESSION_NOTES.md` — retire the oldest records into a ninth
-write-once shard under `docs/architecture-history/` with its own proof, add its row to the table
-above (`R7`, `R8`), rewrite `L11` to the byte rule (`CLAUDE.md` retention bullet, Session 255),
-build `L15` (the bequeathed file census), and land ≤98,304 B keeping ≥4 non-stub records (IN PROGRESS)
-**Started:** 2026-09-11 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **The ninth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 248 → 242 (seven
+records, 1,681 lines, a pure byte slice) are in
+[`docs/architecture-history/SESSION_NOTES-S248-through-S242.md`](docs/architecture-history/SESSION_NOTES-S248-through-S242.md)
+(1,732 lines) beside its proof. The live file landed at 97,109 B and keeps six non-stub records; the
+front-matter table gained row 9. The proof adds **no** assertion — `L15` was deferred on the
+operator's ruling F — rewrites `L11` to the byte rule, and ships 108 mutants.
+
+**Started / completed:** 2026-09-11 → 2026-09-14 (UTC). **Commits: five** — `bf776a9` (claim,
+alone), `3a141ec` and `8e6bdca` (guard fixes the trim's next states needed, each green before and
+after the trim), `9342637` (the trim, no record edit), and this close-out. **`CHANGELOG.md`
+entry: YES** — `tests/` logic changed in two files (§2 is a directory test).
+
+#### The cut, and why this one
+
+The byte rule fired at 222,937 B. The canonical trimmer's `choose_cut` keeps the LARGEST newest
+prefix under the stop, so the cut is the fewest records that land at or under 98,304 B: 248 → 242.
+Keeping 248 as well would have landed at 117,506 B. A floor-only reading (archive down to four
+non-stub records) would also have complied; the canonical semantics decided it.
+
+#### `L15` was not built — the operator ruled
+
+Session 254 bequeathed `L15` (a file census of a trim's own sweep) as an instruction, and Session
+255 repeated it. Ruling F (budgets review §13.1) had already ended the assertion-per-trim convention,
+and §8 row F says of `L15` "F is the decision not to build it". A mapping agent found the conflict
+and I put it to the operator: **follow ruling F; do not build `L15`; record its deferral as a
+decision.** Recorded in `CLAUDE.md`'s trim bullets with F's other half — no assertion is owed per
+trim, and the CI `--self-test` step is the substitute the ruling named — and in review §15.
+
+**The sweep, as a dated fact** (what the bequest wanted, published rather than asserted): at the
+trim commit `9342637`, `git grep -l 'SESSION_NOTES-[A-Za-z0-9-]*\.md'` returns **29** files — the
+nine shards and their nine proofs, both collapse proofs, the four prose files, this ledger,
+`PROJECT_LEARNINGS.md`, two planning documents and the census guard — and the broad
+`SESSION_NOTES-` form **32**; the broad form's extra three are `.github/workflows/ci.yml`,
+`CHANGELOG.md` and `docs/architecture-history/evolution-page-plan.md`. Every live shard-set
+statement in `CLAUDE.md`, `README.md`, `BACKLOG.md` and `PROJECT_CONVENTIONS.md` was updated.
+Left, with reason: `ci.yml`'s "any of the eight shards" (Session 253's dated measurement), the
+budgets review's dated figures, and the frozen banners.
+
+#### Five defects fixed before the trim could land — the #241 class, every one
+
+Each was found by modelling a state the trim creates, reproduced red first, and fixed alone:
+
+1. **`M04` (read-budget guard, `3a141ec`)** — one ~22 KB line shrank a trimmed ledger's page into
+   the K prefix; red at this trim's own close-out for every compliant cut. New state:
+   `after-a-trim-then-its-close-out`. Session 255's sweep had called this cycle green.
+2. **`M50` (R-series, `3a141ec`)** — a hard-coded gap span that row 9 turned into an overlap, leaving
+   `R7 LIVE-GAP` reached by no mutant. It now derives its span from the newest live row.
+3. **`M01` and `M08` (`8e6bdca`)** — fixed-width padding and a truncated tail moved the page near a
+   wide close-out. New state: `after-a-wide-close-out-then-claim`, red before, green after.
+4. **`M04` again (`8e6bdca`)** — clear of `check_satisfiable` by 226 B that nothing asserted; its
+   overshoot is now given back from the next record.
+5. **Six census mutants (`8e6bdca`)** — re-anchored by hand for this trim, so the tenth would redo it;
+   they now derive their anchors from the shard set.
+
+#### The proof: re-targets, strengthenings, two new arms — and still no new assertion
+
+Every inherited operand that read retired prose was found by running the S241 proof's declarations
+against the working tree (23 of 101 flagged) and re-targeted: `L2` holds a row insertion; `L5`'s
+third copy is the table; `L12/row` composes row 9 cell by cell; the census sentences moved into the
+banner `L6` pins; `L12/cap` holds the 262,144 B refusal ceiling; `L14` took the eighth shard's
+figures. `L11`'s floor counts non-stub records with a frozen copy of the guard's classifier (`M58`,
+floor 7, proves it load-bearing). On the review's evidence four inherited arms now match only on
+digit or word boundaries and both census arms parse by position; `L2/position` and an `L12/row`
+unreadable-proof arm are new. Row 9's trim cell says `this commit` — no commit can contain its own
+hash — and the legend says the next trim resolves it.
+
+#### The review gated the commit
+
+Twelve agents: six lenses (the cut, re-target fidelity, attack, next states, prose, the guards),
+each followed by a verifier trying to refute it. **38 findings; 35 confirmed, 1 refuted, 2 partly.**
+Fixed before the trim commit: both false "every row / one owner" claims; the position hole; the
+substring matches; the unfilled coverage token; `M01`/`M08`/`M04` (above); every underived figure I
+had introduced (a shard named for Sessions 242/245, "for Sessions 242 and up", "the eight ancestor
+shards", a stale token count); F's substitute misnamed; two stale BACKLOG counts. **Filed, not
+fixed:** row 9 is guarded by nothing between trims — only its span is read. A reviewer rewrote most
+of its cells on disk and every proof and guard stayed green. The BACKLOG item "front matter is
+guarded only at its table rows" now carries that evidence and the tested design; it is a guard
+change, not a trim. **Declined:** a claim-first successor model (its verifier showed it regresses at
+a 25 KB close-out) and `ci.yml`'s dated comment.
+
+#### Verification
+
+- All eleven proofs green in both modes at `9342637`, the new one reading its artifacts from that
+  commit with its write-once arm live; both guards 71/71; full suite 1,384 passed + 9 live-skipped;
+  `ruff` and `uv run mypy` clean.
+- The sweep, against frozen artifacts: every assertion but the overlapped L0, L1, L3 and L4 has sole
+  catchers; 48 of 68 arms uniquely catch a mutant, and the 20 that do not are grouped by cause in
+  the proof's header. A first sweep found three L2 arms reachable only in company; M98–M100 isolate
+  them.
+- Next states, in a clone: the trim commit, then Session 256 close-outs of 8 and 16 KB each followed
+  by Session 257's claim and close-out — all green. At 24 and 30 KB the guard's reds are genuine:
+  the modelled next close-out breaches the page (56,995 B against 52,912). This record is sized for it.
+- Probe: the shard is 48,717 tokens by an explicit `offset`/`limit` `Read`, so a default `Read`
+  returns an announced partial view, as its banner says. After this record landed (#214; measured
+  before this sentence was added), a default `Read` of this file showed `lines 1-744 of 1435 total
+  (40939 tokens, cap 25000)`: the front matter and Sessions 256, 255 and 254 whole, 253 cut. K=2
+  holds with a record to spare.
+
+### Session 255 Handoff Evaluation (by Session 256)
+
+**Score: 6/10.** **+** What's-next #1 was exact and every clause was load-bearing: a row not a block,
+row and archive together, rewrite `L11`, re-target the retired operands, ≥4 non-stub, ≤98,304 B,
+both guards, both modes. Its gotchas all applied, and the byte rule it built made the cut a
+computation rather than a debate. **−** "Build `L15`" contradicted an operator ruling the handoff did
+not mention; only a history agent caught it. **−** Its own guard had no green state after this
+trim's close-out: the "30-state sweep … the ninth trim and its cycle" was red for every compliant
+cut — the #241 class again, in the session whose learnings name it. **−** Its list of retired
+operands missed two and named one false positive. **ROI: high** — the defects were in its code, not
+its instructions.
+
+### Session 256 Self-Assessment
+
+**Score: 7/10.**
+**+ Mapped before editing.** Eight analysts, two of them in throwaway clones, found the `M04`, `M50`
+and `L15` problems before a line was written; each guard fix reproduced its failure red first.
+**+ Asked the one question that was the operator's** (`L15` against ruling F) and nothing else.
+**+ The review gated the commit**, and every major finding was fixed or filed with its evidence.
+**− My first proof draft carried defects a review had to find** — the position hole, substring
+matches, an unfilled token, a false "one owner" sentence left standing, and underived figures I
+wrote myself. **− The #241 class recurred in code I had just edited** (`M01`/`M08`, one commit after
+`3a141ec`) and I did not find it — the review did. **− Five commits and a ~2,000-line proof for a
+trim**; the row-9 guard is left for a later session. **− Cost:** ~4M subagent tokens over two
+workflows, plus two sweeps.
+
+**What's next.**
+1. **The row-9 guard** — BACKLOG "The ledger's front matter is guarded only at its table rows":
+   compose every row's cells except the hash from the disk and require them in the table. Operator
+   call per that item; ruling F already names the CI guard as its home.
+2. **The two refused files** (`PROJECT_LEARNINGS.md`, `CHANGELOG.md`) — operator calls.
+3. **The tenth trim**, when the file next exceeds 196,608 B: resolve row 9's `this commit` to its
+   hash as a declared substitution and verify it; copy `L0`–`L14` from the ninth proof; both carried
+   bequests apply. `L15` has now named two different unbuilt checks — resurrect neither by name.
+4. **Carried:** the dashboard sync (outside this repo); `README.md`'s hand-typed test counts; pushing
+   (six commits ahead of `origin`) is the operator's call.
+
+**Key files.** The new proof (its header first); `tests/test_read_budget.py` (`M01`, `M04`, `M08`
+and the two new next-state models); `tests/test_session_notes_census.py` (derived anchors); the
+BACKLOG item named in #1.
+
+**Gotchas.**
+1. The new proof is write-once — its figures are assembled from the artifacts; never hand-edit it.
+2. Row 9's `this commit` is by design; the tenth trim resolves it and should verify the hash.
+3. Between trims only `R7` reads row 9, and only its span (what's-next #1).
+4. A figure near "shard" in the four prose files trips the census scan; a figure that happens to
+   equal an ancestor's trips `L14/complete` at a trim (a 721 B size did). Reword; never allowlist.
+5. A Session 256-sized close-out of 24 KB or more already makes the guard predict that the NEXT
+   close-out cannot fit — measured. Keep close-outs near the median (~15 KB).
+6. `uv run pytest tests/test_read_budget.py --no-cov` before every close-out; `command grep`; the two
+   refused files; `uv run mypy` with no path.
 
 ### What Session 255 Did
 **Deliverable:** **Option D, widened — COMPLETE.** The four mandated-read files have byte budgets,
