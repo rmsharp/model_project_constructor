@@ -94,6 +94,14 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 258 Did
+**Deliverable:** The ledger front matter's guard gap — BACKLOG "The ledger's front matter is
+guarded only at its table rows" (IN PROGRESS). The item is an operator call between accepting the
+gap and extending `tests/test_session_notes_census.py`; the ruling is pending as this stub is
+written.
+**Started:** 2026-09-18 (UTC)
+**Status:** Session claimed. Work beginning.
+
 ### What Session 257 Did
 **Deliverable:** **`CHANGELOG.md` taken off the read budget — COMPLETE.** The operator's ruling of
 2026-09-14, verbatim: *"Rule (c) for CHANGELOG.md — take it off the read budget."* The ruling names
