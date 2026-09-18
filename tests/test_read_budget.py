@@ -682,15 +682,28 @@ def _m07_a_dense_backlog_tail_shrinks_the_page(root: pathlib.Path) -> None:
 
 
 def _m08_the_retention_rule_has_no_compliant_cut(root: pathlib.Path) -> None:
+    """The FLOOR-th record pushed past the stop AT CONSTANT FILE SIZE: filler goes in beyond the
+    K prefix and the same byte count comes back off the tail.
+
+    Only check_satisfiable may fire, so the mutation must not move the page. page_estimate is a
+    function of the file's length, its line count and the bytes in its head; a swap holds the
+    first fixed exactly, the second to the width the filler is cut at, and the third untouched
+    because every inserted byte lands past the K prefix. Padding ALONE grew the ledger by 30 KB
+    and tipped page_estimate into the reduced regime -- 638 lines to 446 against a K prefix
+    ending at 462 -- so check_k_lines co-fired and check_satisfiable stopped being the sole
+    catcher of anything (Session 258, in the after-a-wide-close-out-then-claim state). Session
+    256's review had already repaired this mutant twice, for the pad's width and for a tail cut
+    at the FLOOR-th record; both of those fixes are what the swap preserves.
+    """
     data, _front, records = _ledger(root)
     beyond_k = _must(nth_non_stub(records, K + 1)).end_byte
     floor_end = _must(nth_non_stub(records, FLOOR)).end_byte
-    # Padded at the ledger's own line width, and the tail KEPT, so the page neither shrinks nor
-    # grows into the head -- only this check may fire. Cutting the tail at the FLOOR-th record moved
-    # the mean width, and with the K prefix near the page check_k_lines co-fired (Session 256's
-    # review).
     pad = _filler(STOP_BYTES - floor_end + 1_000, width=_mean_width(data))
-    _write(root, SESSION_NOTES, _cap(data[:beyond_k] + pad + data[beyond_k:]))
+    out = (data[:beyond_k] + pad + data[beyond_k:])[:max(len(data), floor_end + len(pad))]
+    assert nth_non_stub(parse_ledger(out)[1], FLOOR) is not None, (
+        "giving the pad back from the tail left fewer than FLOOR non-stub records, so "
+        "check_satisfiable returns early and the mutant cannot fire it")
+    _write(root, SESSION_NOTES, _cap(out))
 
 
 def _m09_the_claim_template_is_reworded(root: pathlib.Path) -> None:
