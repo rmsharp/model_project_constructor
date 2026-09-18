@@ -1,4 +1,4 @@
-"""Hold the four prose files against the shard files on disk, on every CI run.
+"""Hold the prose surfaces against the shard files on disk, on every CI run.
 
 WHY THIS EXISTS (Session 247, closing Session 246's what's-next #1).
 
@@ -60,25 +60,52 @@ Every entry in ``FROZEN`` is a per-OCCURRENCE string, never a whole-file
 exemption: learning #135 records that exempting a file lets every live line
 inside it ride in free.
 
-NEUTER LOOP, published rather than merely run (learnings #125, #141, #198). Remove one
-check; do any mutants then survive?  Re-derived after the last edit to this file.
+THE FIFTH SURFACE (Session 258, on the operator's ruling of 2026-09-18)
+
+The four files above are not the only unread copies. The live ledger's own FRONT
+MATTER -- the trim table and the standing rules above it -- is the routing
+authority a session consults first, and Session 254's review measured that
+deleting its routing sentence, its write-once rule, its banner-snapshot rule or
+its column legend left every proof green. Session 256 then rewrote row 9's cells
+to point at a file that does not exist and every proof and both guards stayed
+green. Both are closed here: ``check_rows`` and ``check_standing``, plus the
+front matter joining ``SURFACES`` so ``check_composed``, ``check_scan`` and
+``check_filename_sets`` reach it. Only the front matter, never the records --
+session records discuss shards constantly, and scanning them would bury the
+fail-closed net in prose nobody maintains as a census.
+
+Every cell of every row is COMPOSED from the artifacts, including ``added``,
+which is the set difference between a proof's ``def L<n>(`` definitions and its
+parent's. The commit hash is the one exception: no artifact carries it, and the
+newest row says ``this commit`` because a trim cannot name the commit it is
+written in. ``check_rows`` is what stops that spreading to an older row.
+
+NEUTER LOOP -- ``test_every_check_is_the_sole_catcher_of_some_mutant`` runs it on
+every CI run, so this table is a summary of a test rather than a claim. Session
+258 is why: adding the fifth surface left check_tiling, check_proofs and
+check_banners the sole catcher of nothing, the suite stayed green, and only a
+hand re-derivation noticed (learnings #125, #141, #198).
 
     check_tiling         LOAD-BEARING, sole catcher of M16
     check_proofs         LOAD-BEARING, sole catcher of M14
     check_banners        LOAD-BEARING, sole catcher of M17
-    check_composed       LOAD-BEARING, sole catcher of M03, M05, M06, M08, M11, M12, M15
-    check_filename_sets  LOAD-BEARING, sole catcher of M02
-    check_scan           LOAD-BEARING, sole catcher of M09
+    check_composed       LOAD-BEARING, sole catcher of M03, M05, M06, M08, M11, M12, M15, M18
+    check_filename_sets  LOAD-BEARING, sole catcher of M02, M23
+    check_scan           LOAD-BEARING, sole catcher of M09, M22
     check_frozen         LOAD-BEARING, sole catcher of M10
+    check_standing       LOAD-BEARING, sole catcher of M21
+    check_rows           LOAD-BEARING, sole catcher of M19, M20
 
-    mutants: 17      checks: 7      survivors with all checks present: none
+    mutants: 23      checks: 9      survivors with all checks present: none
 
-M16 and M17 exist only to isolate check_tiling and check_banners. Every other way of
-breaking a span or a banner also makes the prose disagree with the filenames, so
-check_composed catches it first and those two could be deleted with the suite still
-green. Both mutants therefore make the MISTAKE CONSISTENT -- they rewrite all four
-prose files to agree with the broken tree -- which is the realistic failure: a trim
-that mis-cuts and then documents its own mistake faithfully.
+M14, M16 and M17 exist only to isolate check_proofs, check_tiling and
+check_banners. Every other way of deleting a proof or breaking a span or a banner
+also makes the prose disagree with the artifacts, so check_composed catches it
+first and those three could be deleted with the suite still green. All three
+therefore make the MISTAKE CONSISTENT -- they rewrite every prose surface to
+agree with the broken tree, the front-matter table included since Session 258 --
+which is the realistic failure: a trim that errs and then documents its own
+mistake faithfully.
 
 A CONTROL, run both ways so a green result means something (Session 247). With CLAUDE.md's
 shard count corrupted 8 to 5 and one routing clause widened, all nine
@@ -102,6 +129,15 @@ README = "README.md"
 BACKLOG = "BACKLOG.md"
 CONVENTIONS = "docs/methodology/PROJECT_CONVENTIONS.md"
 PROSE_FILES = (CLAUDE, README, BACKLOG, CONVENTIONS)
+
+# The fifth surface (Session 258): the live ledger's FRONT MATTER -- its trim table and the
+# standing rules above it. Not the whole file. Session records discuss shards constantly and
+# scanning them would bury the fail-closed net in prose nobody is maintaining as a census; the
+# front matter is the part that claims to be the routing authority. Sliced at the first record
+# heading, by the same declared grammar every check here already uses.
+LEDGER = "SESSION_NOTES.md"
+LEDGER_FRONT = "SESSION_NOTES.md (front matter)"
+SURFACES = PROSE_FILES + (LEDGER_FRONT,)
 
 # The first shard's banner predates the "(Session N, date)" convention that every
 # later banner carries, so its trim session is the one fact here that cannot be
@@ -187,6 +223,57 @@ def _join_and(parts: list[str]) -> str:
         return parts[0]
     return ", ".join(parts[:-1]) + " and " + parts[-1]
 
+
+
+_L_ASSERTION = re.compile(r"^def (L\d+)\(", re.M)
+_TABLE_ROW = re.compile(r"^\| *(\d+) *\|.*\|\s*$", re.M)
+
+
+def front_matter(root: pathlib.Path = REPO_ROOT) -> str:
+    """The live ledger down to its first record heading: table plus standing rules."""
+    text = (root / LEDGER).read_text(encoding="utf-8")
+    for index, line in enumerate(text.splitlines(keepends=True)):
+        if _RECORD_HEADING.match(line.rstrip("\n")):
+            return "".join(text.splitlines(keepends=True)[:index])
+    raise AssertionError(f"{LEDGER} has no record heading, so its front matter has no end")
+
+
+def _added(shard: Shard, earlier: Shard | None) -> str:
+    """The ``added`` cell: the L-assertions this trim's proof has and its parent's lacks.
+
+    Measured from the proof scripts, never declared. The first cut's parent is nothing, so it
+    adds its whole set; a trim that adds none says so in words, which is what row 9 carries
+    after the operator's ruling F ended the assertion-per-trim convention.
+    """
+    def names(of: Shard | None) -> set[str]:
+        if of is None or not of.proof.exists():
+            return set()
+        return set(_L_ASSERTION.findall(of.proof.read_text(encoding="utf-8")))
+
+    gained = sorted(names(shard) - names(earlier), key=lambda name: int(name[1:]))
+    return ", ".join(gained) if gained else "none"
+
+
+_HASH = "\x00"          # the one cell no artifact carries; see _row_body
+
+
+def _row_body(shard: Shard, earlier: Shard | None, hash_cell: str) -> str:
+    """One front-matter table row WITHOUT its leading ``#`` cell, every other cell measured.
+
+    The ordinal is left out deliberately: check_rows owns the ``#`` column, and a renumbering
+    that this string also covered would be caught by check_composed instead, leaving check_rows
+    isolating nothing.
+    """
+    return (f"| S{shard.trim_session} `{hash_cell}` | {shard.newest} → {shard.oldest} "
+            f"| {_record_count(shard)} | {_n(_records_lines(shard))} | `{shard.name}` "
+            f"| {_n(shard.lines)} | {shard.trim_session} → {shard.newest + 1} "
+            f"| {_added(shard, earlier)} |")
+
+
+def _record_count(shard: Shard) -> int:
+    """Record HEADINGS in the shard -- the table's ``rec`` cell, not its ``lines`` cell."""
+    return sum(1 for line in shard.path.read_text(encoding="utf-8").splitlines()
+               if _RECORD_HEADING.match(line))
 
 
 def _records_lines(shard: Shard) -> int:
@@ -322,7 +409,61 @@ def expectations(found: list[Shard]) -> list[Expectation]:
         add(CLAUDE, clause, f"routing clause for {shard.name}")
     add(CLAUDE, f"**N ≥ {live_from}** → `SESSION_NOTES.md`",
         "routing clause sending the newest sessions to the live ledger")
+
+    # ---- the live ledger's front matter: one row per shard --------------------
+    # Every cell but the commit hash, which no artifact carries. The newest row says
+    # ``this commit`` because a trim cannot name the commit it is written in; check_rows is
+    # what stops that spreading to an older row, and is why the hash slot accepts both forms
+    # here rather than pinning the newest row to one of them.
+    for index, shard in enumerate(found):
+        earlier = found[index - 1] if index else None
+        pattern = re.escape(_row_body(shard, earlier, _HASH))
+        add(LEDGER_FRONT,
+            pattern.replace(re.escape(_HASH), r"(?:[0-9a-f]{7,40}|this commit)", 1),
+            f"the front-matter table's row for {shard.name}, every cell but the hash",
+            literal=False)
+
+    # ---- the two standing rules that name the trim after this one ------------
+    nxt = ORDINAL[total + 1]
+    add(LEDGER_FRONT,
+        f"{_article(nxt).capitalize()} {nxt} trim writes {_article(nxt)} {nxt} file",
+        "the write-once rule's forward statement, which names the NEXT trim's ordinal. BOTH "
+        "articles are composed: hard-coding the leading 'A' would have required the eleventh "
+        "trim to write 'A eleventh trim' to stay green")
+    add(LEDGER_FRONT, f"bequeathed to the {nxt} trim",
+        "the bequest block's addressee, the same next-trim ordinal")
+
+    # ---- the front matter's own count of the trims that have run ------------
+    # Inside the guarded region, a live census figure, and reached by neither arm of the scan:
+    # "trims" is not a shard-set head noun and "shard" is not within WINDOW of it.
+    add(LEDGER_FRONT, f"What these {word} trims found",
+        "the front matter's own trim count, which goes stale at the next trim")
     return out
+
+
+# The standing rules carry no number, so nothing can compose them: they are DECLARED here and
+# required verbatim, the way tests/test_read_budget.py's check_declared holds its budget
+# sentences. That is a second copy on purpose. The alternative measured by Session 254's review
+# is what this closes -- delete any one of these and every proof stayed green, because each
+# shard proof reads the ledger at its own trim commit and there has not been one since.
+STANDING: tuple[tuple[str, str], ...] = (
+    ("**To place Session N, read the `archived` column.**",
+     "the routing rule -- the table is the routing table, and this sentence is how a "
+     "session learns to read it. Its deletion is what the six-way control deleted first"),
+    ("**`grep` the shards; `Read` none**",
+     "the rule that keeps a session from spending its page budget on an archive"),
+    ("**Shards stay write-once.**",
+     "the rule a trim breaks by appending to an existing shard instead of writing a new one"),
+    ("**A shard banner is a snapshot of its own cut; this table is the authority.**",
+     "the rule that stops a session trusting a falsified banner over this table"),
+    ("**One trim, one row",
+     "the rule that a trim adds a table row and never a prose block (operator, 2026-09-07)"),
+    ("**Cutting is by byte position, never by authorship.**",
+     "the rule that explains why a handoff evaluation is split from its subject at every cut"),
+    ("*`trim` is the session and the commit that added its shard",
+     "the column legend -- without it the table's cells are unreadable, and it is the copy "
+     "that tells a reader what `added` and `left live` mean"),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -403,9 +544,12 @@ FROZEN: tuple[tuple[str, str, str], ...] = (
      "composed above as this shard's live size"),
     (CONVENTIONS, "**Ledger shards are the one exception (Session 222).**",
      "'one exception' counts exceptions to a convention, not shards"),
+    (LEDGER_FRONT, "into a frozen shard, and each one used to write a",
+     "'one' is a pronoun for a trim, not a count of shards -- the same class as the "
+     "CLAUDE.md pronoun entry at the top of this list"),
     (README, "test_session_notes_census.py          # shard-census guard: the four "
-     "prose files vs the shards on disk (25 tests)",
-     "this guard's own README row: 'four' counts prose files and '25' counts "
+     "prose files and the ledger's front matter vs the shards on disk (35 tests)",
+     "this guard's own README row: 'four' counts prose files and '35' counts "
      "tests, neither is a shard census. Adding a mutant makes this literal stale "
      "and the companion test then requires both numbers to be brought back "
      "into step -- which is the README count policing itself"),
@@ -429,6 +573,7 @@ class Census:
         self.shards = shards(root)
         self.expectations = expectations(self.shards)
         self.texts = {path: _read(path, root) for path in PROSE_FILES}
+        self.texts[LEDGER_FRONT] = front_matter(root)
 
 
 def _covered_spans(census: Census, path: str, text: str) -> list[tuple[int, int]]:
@@ -436,9 +581,12 @@ def _covered_spans(census: Census, path: str, text: str) -> list[tuple[int, int]
     for expectation in census.expectations:
         if expectation.path == path:
             spans.extend(expectation.spans(text))
-    for frozen_path, literal, _why in FROZEN:
-        if frozen_path != path:
-            continue
+    # STANDING is deliberately NOT consulted here. It is check_standing's declaration, and
+    # letting it also exempt spans from the fail-closed scan would make it a second FROZEN that
+    # nobody classifies -- learning #135's failure, one list over. Measured: no STANDING literal
+    # carries a number the scan objects to, so the branch that used to sit here covered nothing.
+    declared = [literal for frozen_path, literal, _why in FROZEN if frozen_path == path]
+    for literal in declared:
         start = 0
         while True:
             found = text.find(literal, start)
@@ -521,7 +669,7 @@ def check_filename_sets(census: Census) -> list[str]:
     """
     on_disk = {s.name for s in census.shards}
     problems = []
-    for path in PROSE_FILES:
+    for path in SURFACES:
         named = set(SHARD_NAME.findall(census.texts[path]))
         if named != on_disk:
             problems.append(
@@ -540,7 +688,7 @@ def check_scan(census: Census) -> list[str]:
     has been a number nobody noticed rather than a number typed wrong.
     """
     problems = []
-    for path in PROSE_FILES:
+    for path in SURFACES:
         text = census.texts[path]
         covered = _covered_spans(census, path, text)
         head_starts = frozenset(m.start() for m in HEAD_NOUN.finditer(text))
@@ -571,6 +719,51 @@ def check_frozen(census: Census) -> list[str]:
     return stale
 
 
+def check_standing(census: Census) -> list[str]:
+    """The front matter's standing rules, each required exactly once.
+
+    Declared, not composed -- a rule that carries no number cannot be derived from an
+    artifact, so this holds a second copy the way check_declared does in the read-budget
+    guard. What it buys is measured: Session 254's review deleted the routing sentence, the
+    write-once rule, the banner-snapshot rule and the column legend one at a time and every
+    proof stayed green, because a shard proof reads the ledger at its own trim commit and
+    between trims nothing reads it at all.
+    """
+    text = census.texts[LEDGER_FRONT]
+    return [f"{LEDGER}'s front matter states this standing rule {text.count(literal)} times; "
+            f"it must state it exactly once:\n      {literal!r}\n      ({why})"
+            for literal, why in STANDING if text.count(literal) != 1]
+
+
+def check_rows(census: Census) -> list[str]:
+    """The table's SHAPE, which composing its cells cannot see.
+
+    check_composed requires each shard's row to be present; it cannot see a tenth row, a
+    renumbered one, or ``this commit`` left behind in an older row after the next trim
+    resolved it. Each of those leaves every composed row intact, so this is the only check
+    that fires on them -- and the last of the three is the one a trim actually produces,
+    because ``this commit`` is written by the trim that cannot yet name its own hash.
+    """
+    text = census.texts[LEDGER_FRONT]
+    rows = [line for line in text.splitlines() if _TABLE_ROW.match(line)]
+    numbers = [int(_TABLE_ROW.match(line).group(1)) for line in rows]  # type: ignore[union-attr]
+    problems = []
+    if len(rows) != len(census.shards):
+        problems.append(
+            f"the front-matter table has {len(rows)} numbered row(s) but there are "
+            f"{len(census.shards)} shards on disk: every trim writes exactly one row")
+    if numbers != list(range(1, len(rows) + 1)):
+        problems.append(f"the table's # column reads {numbers}, not 1..{len(rows)} in order")
+    # Only ROWS, never the prose: the column legend explains the `this commit` convention in a
+    # sentence that quotes it, and a scan of every line flagged the legend itself.
+    for line in rows[:-1]:
+        if "`this commit`" in line:
+            problems.append(
+                "`this commit` stands in a row other than the newest, so it names the wrong "
+                f"commit and no hash was ever resolved:\n      {line.strip()!r}")
+    return problems
+
+
 CHECKS = {
     "tiling": check_tiling,
     "proofs": check_proofs,
@@ -579,6 +772,8 @@ CHECKS = {
     "filename_sets": check_filename_sets,
     "scan": check_scan,
     "frozen": check_frozen,
+    "standing": check_standing,
+    "rows": check_rows,
 }
 
 
@@ -641,6 +836,43 @@ def test_every_number_near_shard_vocabulary_is_classified(census) -> None:
         "\n\n  - " + "\n\n  - ".join(problems))
 
 
+def test_the_front_matters_standing_rules_are_present(census) -> None:
+    problems = check_standing(census)
+    assert not problems, (
+        f"{len(problems)} standing rule(s) are missing from {LEDGER}'s front matter, or are "
+        "stated more than once. These are the rules a session follows to place a record and "
+        "to trim; nothing else reads them between trims:\n\n  - " + "\n\n  - ".join(problems))
+
+
+def test_the_front_matter_table_has_one_row_per_shard(census) -> None:
+    problems = check_rows(census)
+    assert not problems, (
+        "The front-matter trim table's shape disagrees with the shards on disk:\n\n  - "
+        + "\n\n  - ".join(problems))
+
+
+def test_the_next_trims_ordinal_reads_grammatically_at_every_count() -> None:
+    """The write-once sentence is composed, so a future trim must be able to WRITE it.
+
+    Only the eleventh trim takes "an", and it is the one count no session has exercised. A
+    hard-coded leading article passes today and silently demands "A eleventh trim" then --
+    green prose no author would type, on the one commit where arguing with the guard is most
+    expensive. Checked for every ordinal the table carries rather than for today's.
+    """
+    wrong = []
+    for total in ORDINAL:
+        nxt = ORDINAL.get(total + 1)
+        if nxt is None:
+            continue
+        article = "An" if nxt[0] in "aeiou" else "A"
+        want = f"{article} {nxt} trim writes {article.lower()} {nxt} file"
+        if f"{_article(nxt).capitalize()} {nxt} trim writes {_article(nxt)} {nxt} file" != want:
+            wrong.append(f"at {total} shards the composer does not produce {want!r}")
+    assert not wrong, (
+        "the composed write-once sentence is ungrammatical at some shard count, so the trim "
+        "that reaches it must write bad prose to stay green:\n  - " + "\n  - ".join(wrong))
+
+
 def test_frozen_entries_are_still_present(census) -> None:
     problems = check_frozen(census)
     assert not problems, (
@@ -663,7 +895,7 @@ def test_frozen_entries_are_still_present(census) -> None:
 # failure mode recorded as learning #172.
 # ---------------------------------------------------------------------------
 
-MIRRORED = PROSE_FILES + (str(ARCHIVE_SUBDIR),)
+MIRRORED = PROSE_FILES + (LEDGER, str(ARCHIVE_SUBDIR))
 
 
 def _mirror(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -671,7 +903,7 @@ def _mirror(tmp_path: pathlib.Path) -> pathlib.Path:
     import shutil
 
     root = tmp_path / "mirror"
-    for relative in PROSE_FILES:
+    for relative in PROSE_FILES + (LEDGER,):
         destination = root / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / relative, destination)
@@ -770,7 +1002,14 @@ def _m13_a_banner_loses_its_trim_session(root: pathlib.Path) -> None:
 
 
 def _m14_a_proof_is_deleted(root: pathlib.Path) -> None:
+    """A proof vanishes and the table is rewritten to agree that its trim added nothing.
+
+    The ``added`` cell is measured FROM the proof, so deleting one moves two rows: that shard's
+    set empties and the next shard's apparent gain widens. Both are synced here, leaving
+    check_proofs the only check that can still see the missing file.
+    """
     _shard_path(root, "SESSION_NOTES-S231-through-S228.md.verify.sh").unlink()
+    _sync_front_matter_rows(root)
 
 
 def _m15_the_aggregate_size_list_is_wrong(root: pathlib.Path) -> None:
@@ -811,6 +1050,7 @@ def _m16_a_consistent_mis_cut(root: pathlib.Path) -> None:
                 "prose was reworded and this mutant would be vacuous")
             text = text.replace(old, new)
         target.write_text(text, encoding="utf-8")
+    _sync_front_matter_rows(root)
 
 
 def _m17_a_bannerless_shard_with_prose_that_agrees(root: pathlib.Path) -> None:
@@ -848,6 +1088,94 @@ def _m17_a_bannerless_shard_with_prose_that_agrees(root: pathlib.Path) -> None:
     ):
         for old, new in pairs:
             _sub(root, relative, old, new)
+    _sync_front_matter_rows(root)
+
+
+def _sync_front_matter_rows(root: pathlib.Path) -> None:
+    """Rewrite every table row to agree with the MUTATED tree, keeping each row's hash.
+
+    The fifth surface made three inherited mutants inconsistent: M14, M16 and M17 rewrite the
+    four prose files to agree with the break they introduce, and the front matter was left
+    stating the truth, so check_composed and check_filename_sets began co-firing and the three
+    checks those mutants exist to isolate stopped being the sole catcher of anything. The
+    mutants' doctrine is that the MISTAKE IS CONSISTENT -- a trim that errs and then documents
+    its own error faithfully -- so each of them now updates five surfaces, not four.
+    """
+    found = shards(root)
+    text = (root / LEDGER).read_text(encoding="utf-8")
+    front = front_matter(root)
+    old_rows = [line for line in front.splitlines() if _TABLE_ROW.match(line)]
+    assert len(old_rows) == len(found), (
+        f"{len(old_rows)} rows for {len(found)} shards: this mutant changed the shard set "
+        "without changing the table, so the rewrite has no row to carry each hash")
+    for index, (old, shard) in enumerate(zip(old_rows, found, strict=True)):
+        hash_cell = re.search(r"`([0-9a-f]{7,40}|this commit)`", old)
+        assert hash_cell, f"no hash cell in {old!r} -- the row shape changed"
+        new = f"| {index + 1} " + _row_body(
+            shard, found[index - 1] if index else None, hash_cell.group(1))
+        text = text.replace(old, new, 1)
+    (root / LEDGER).write_text(text, encoding="utf-8")
+
+
+def _newest_row(root: pathlib.Path) -> str:
+    """The front matter's last numbered row, as a line. The mutants below rewrite it."""
+    rows = [line for line in front_matter(root).splitlines() if _TABLE_ROW.match(line)]
+    assert rows, "the front-matter table has no numbered rows -- these mutants are vacuous"
+    return rows[-1]
+
+
+def _m18_a_row_cell_disagrees_with_its_shard(root: pathlib.Path) -> None:
+    """The realistic one: a trim types its own record count and gets it wrong."""
+    newest = shards(root)[-1]
+    row = _newest_row(root)
+    cells = row.split(" | ")
+    index = next(i for i, cell in enumerate(cells) if cell == str(_record_count(newest)))
+    cells[index] = str(_record_count(newest) + 1)
+    _sub(root, LEDGER, row, " | ".join(cells))
+
+
+def _m19_this_commit_stands_in_an_older_row(root: pathlib.Path) -> None:
+    """A trim resolves its predecessor's hash and leaves its own -- in the wrong row.
+
+    Every composed row still matches, because the hash slot accepts either form wherever it
+    stands. Only check_rows knows which row is allowed to say it.
+    """
+    found = shards(root)
+    front = front_matter(root)
+    older = next(line for line in front.splitlines()
+                 if _TABLE_ROW.match(line) and f"| S{found[-2].trim_session} `" in line)
+    broken = re.sub(r"`[0-9a-f]{7,40}`", "`this commit`", older, count=1)
+    assert broken != older, f"no hash to replace in {older!r} -- this mutant would be vacuous"
+    _sub(root, LEDGER, older, broken)
+
+
+def _m20_the_rows_are_renumbered(root: pathlib.Path) -> None:
+    """The # column stops counting the trims. Every cell check_composed reads is untouched."""
+    row = _newest_row(root)
+    number = _TABLE_ROW.match(row).group(1)          # type: ignore[union-attr]
+    _sub(root, LEDGER, row, row.replace(f"| {number} |", f"| {int(number) + 1} |", 1))
+
+
+def _m21_a_standing_rule_is_deleted(root: pathlib.Path) -> None:
+    """Session 254's six-way control, as a test: delete the routing rule."""
+    _sub(root, LEDGER, STANDING[0][0] + " ", "")
+
+
+def _m22_a_new_unclassified_census_sentence_in_the_front_matter(root: pathlib.Path) -> None:
+    """The fail-closed net, on the fifth surface."""
+    _sub(root, LEDGER, STANDING[2][0],
+         STANDING[2][0] + " Three shards were rebuilt by hand.")
+
+
+def _m23_the_front_matter_names_a_shard_that_does_not_exist(root: pathlib.Path) -> None:
+    """Session 256's measured hole: a row pointed at a file nobody wrote.
+
+    Written into the prose rather than into a row, so the composed rows all still match and
+    check_filename_sets is the only check that can see it -- which is the question this mutant
+    asks: is the front matter read at all?
+    """
+    _sub(root, LEDGER, STANDING[3][0],
+         STANDING[3][0] + " See `SESSION_NOTES-S999-through-S998.md`.")
 
 
 MUTANTS: tuple[tuple[str, str, object, str], ...] = (
@@ -880,6 +1208,16 @@ MUTANTS: tuple[tuple[str, str, object, str], ...] = (
      _m16_a_consistent_mis_cut, "tiling"),
     ("M17", "a bannerless shard whose prose agrees with the fallback",
      _m17_a_bannerless_shard_with_prose_that_agrees, "banners"),
+    ("M18", "a front-matter row's cell disagrees with its shard",
+     _m18_a_row_cell_disagrees_with_its_shard, "composed"),
+    ("M19", "`this commit` stands in an older row",
+     _m19_this_commit_stands_in_an_older_row, "rows"),
+    ("M20", "the front-matter table is renumbered", _m20_the_rows_are_renumbered, "rows"),
+    ("M21", "a standing rule is deleted", _m21_a_standing_rule_is_deleted, "standing"),
+    ("M22", "a new, unclassified census sentence in the front matter",
+     _m22_a_new_unclassified_census_sentence_in_the_front_matter, "scan"),
+    ("M23", "the front matter names a shard that does not exist",
+     _m23_the_front_matter_names_a_shard_that_does_not_exist, "filename_sets"),
 )
 
 
@@ -937,3 +1275,28 @@ def test_every_check_is_reached_by_some_mutant(tmp_path) -> None:
         f"check(s) {unreached} are reached by no mutant in MUTANTS. Either add "
         "a mutant that breaks what they guard, or delete them -- an assertion "
         "no mutant can reach proves nothing.")
+
+
+def test_every_check_is_the_sole_catcher_of_some_mutant(tmp_path) -> None:
+    """The neuter loop, mechanised -- delete any one check and some mutant must survive.
+
+    The docstring above PUBLISHES this table, and Session 258 measured what that is worth:
+    adding the fifth surface left check_tiling, check_proofs and check_banners catching
+    nothing alone, because three inherited mutants rewrote four surfaces and not five. The
+    suite stayed green -- reachability was intact, isolation was not -- and the published
+    table said otherwise until it was re-derived by hand. A hand-maintained claim about
+    coverage is the same unread copy this module exists to abolish, so it is a test now.
+    """
+    sole: dict[str, str] = {}
+    for mutant_id, _description, mutate, _expected in MUTANTS:
+        root = _mirror(tmp_path / mutant_id)
+        mutate(root)
+        fired = _fired(root)
+        if len(fired) == 1:
+            sole.setdefault(next(iter(fired)), mutant_id)
+    orphans = sorted(set(CHECKS) - set(sole))
+    assert not orphans, (
+        f"check(s) {orphans} are the sole catcher of no mutant, so each could be deleted "
+        "with every mutant still caught. Either give each one a mutant that ONLY it sees -- "
+        "usually by making an existing mutant's mistake consistent across every surface -- "
+        "or delete the check.")

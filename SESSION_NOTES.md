@@ -30,9 +30,12 @@ written, none may be repaired, and no proof can notice: every shard proof reads 
 trim commit, so from the moment a trim lands its prose is checked by nothing until the next one.
 That is this apparatus's largest hole, it is measured rather than suspected, and only three
 mechanisms close any of it: the working-tree arms `R6`, `R7`, `R8` and `C6` below;
-`tests/test_session_notes_census.py`, which holds the prose files outside this one against the
-shards on every CI run; and `tests/test_read_budget.py`, which holds the read-budget sentences and
-this file's front matter to their budgets.
+`tests/test_session_notes_census.py`, which since Session 258 holds this front matter as well as
+the four prose files; and `tests/test_read_budget.py`, which holds the read-budget sentences and
+this file's size. **What the census guard reads here is exactly:** every table cell but the hash,
+the table's shape, each standing rule's headline, every shard filename, every number near shard
+vocabulary. **The prose around those is still unread — a paragraph of it deletes green.** Edit
+anything above `## ACTIVE TASK` and run `uv run pytest tests/test_session_notes_census.py --no-cov`.
 
 **Two things are bequeathed to the tenth trim. They are instructions, not notes.**
 
@@ -71,14 +74,14 @@ Neither is a shard proof and neither is an `L`. Both hold the records byte-ident
 own commit — a collapse commit carries no record edit, the same rule `CLAUDE.md` sets for a trim —
 and both COMPOSE the rows that stood at their own commit from figures measured at each shard's
 add-commit instead of comparing against a typed one. A row a later trim adds is composed once, by
-that trim's own `L12/row` at its trim commit; between trims only `R7` reads it, and only its span —
-the rest of it is guarded by nothing, which `BACKLOG.md` files. `R7` proves the `archived` spans
+that trim's own `L12/row` at its trim commit; between trims the proofs read only its span, via
+`R7`, and since Session 258 the census guard composes every other cell on each CI run. `R7` proves the `archived` spans
 tile the history with no gap and no overlap, which is what allows the routing clauses to be deleted
 rather than kept in
 parallel. `R6`, `R7`, `R8` and `C6`
 are the only proof assertions that read this file from the WORKING TREE; every other proof reads
-this file at a commit that has already passed. That is why the census guard exists for the prose
-files outside this one, and the read-budget guard for this file's size and the budget sentences. **Run both modes over every proof in `docs/architecture-history/`** — a plain
+this file at a commit that has already passed. That is why the census guard exists — now for this
+front matter too — and the read-budget guard for this file's size and the budget sentences. **Run both modes over every proof in `docs/architecture-history/`** — a plain
 run proves the world is intact and cannot see a proof that has stopped being able to fail;
 `--self-test` proves the proof can fail and is blind to real corruption. `CLAUDE.md` carries the
 loop and the reason neither half is sufficient.
@@ -95,12 +98,137 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 258 Did
-**Deliverable:** The ledger front matter's guard gap — BACKLOG "The ledger's front matter is
-guarded only at its table rows" (IN PROGRESS). The item is an operator call between accepting the
-gap and extending `tests/test_session_notes_census.py`; the ruling is pending as this stub is
-written.
-**Started:** 2026-09-18 (UTC)
-**Status:** Session claimed. Work beginning.
+**Deliverable:** **The ledger's front matter is the census guard's fifth surface — COMPLETE.** The
+operator ruled **Option 2, extend the guard** (2026-09-18), on the BACKLOG item "The ledger's front
+matter is guarded only at its table rows," and ruled the blocker below **fixed now, in its own
+commit**. `tests/test_session_notes_census.py` now composes every table cell but the commit hash,
+requires the table's shape, and requires each standing rule; the item is closed.
+**Started / completed:** 2026-09-18 (UTC). **Commits: three** — `a10caa9` (claim), `6128ef8` (the
+M08 repair, alone) and this close-out. **`CHANGELOG.md` entry: YES** — `tests/` logic changed in two
+files.
+
+#### The claim commit turned the read-budget guard red, and that came first
+
+Phase 1B's stub put the ledger in the `after-a-wide-close-out-then-claim` state, where **M08 stopped
+isolating `check_satisfiable`**. Not a budget overflow — every live check passed. M08 padded the
+ledger beyond the K prefix and KEPT the tail, growing the file ~30 KB; that tipped `page_estimate`
+into the reduced regime (638 lines → 446, against a K prefix ending at 462), so `check_k_lines`
+co-fired and `satisfiable` was the sole catcher of nothing. Green at `d6200bc` and `bf776a9`, the two
+claim commits before it — **Session 257's close-out record moved the state, not the guard.** The pad
+now comes back off the tail, holding the file's length constant where the ledger is already large
+enough and letting it grow only in the post-trim states, where it must. Measured isolating in all
+seven modelled states. **Third repair of this mutant**; Session 256 fixed it twice.
+
+**I also let the red commit land.** `uv run pytest ... | tail -3` made the `&&` chain read `tail`'s
+exit code, so `master` sat red between `a10caa9` and `6128ef8`. Learning #160's sibling: a pipeline's
+status is its LAST stage's.
+
+#### What the guard now reads
+
+The front matter — everything above the first `### What Session N Did`, sliced by the module's own
+declared grammar — joins `SURFACES`, so `check_composed`, `check_scan` and `check_filename_sets`
+reach it. **Records are excluded deliberately**: they discuss shards constantly and would bury the
+fail-closed net in prose nobody maintains as a census. Two checks are new: `check_rows` (one numbered
+row per shard, ordinals in sequence, `this commit` only in the newest row) and `check_standing`
+(seven rules required verbatim — **declared, not composed**, because a rule carrying no number cannot
+be derived from an artifact). `added` composes from the set difference between a proof's `def L<n>(`
+definitions and its parent's; all nine rows composed correctly on the first measurement.
+
+#### Adding the surface broke three inherited checks, silently
+
+`check_tiling`, `check_proofs` and `check_banners` became the sole catcher of **nothing**. M14, M16
+and M17 rewrite four surfaces to agree with the break they introduce; the front matter, left stating
+the truth, made `check_composed` co-fire. **The suite stayed green** — reachability was intact,
+isolation was not, and only a hand re-derivation of the published table noticed. All three now sync
+the table, and `test_every_check_is_the_sole_catcher_of_some_mutant` makes the neuter table a test.
+That is a new assertion in a session that is not a trim: justified under ruling F by evidence of a
+real gap, which this session produced itself.
+
+#### The review gated the commit — and its biggest finding was mine
+
+Five lenses, then a skeptic per finding: **38 agents, 33 findings, 11 confirmed, 22 refuted**, all 11
+fixed before committing. The major one: the front matter still said a row's non-span cells were
+"guarded by nothing, which `BACKLOG.md` files" — **both halves falsified by this very diff**, in the
+file it had just declared guarded, with the parallel sentence in `CLAUDE.md` updated and this one
+left. The rest: my own "Everything above `## ACTIVE TASK` is now guarded prose" was an overclaim (four
+front-matter sentences delete green — now scoped to what is enforced); "the census guard exists for
+the prose files outside this one" contradicted an edit 46 lines above it; the composed write-once
+sentence hard-coded its leading article, so the **eleventh** trim would have had to write "A eleventh
+trim" to stay green; the front matter's own "these nine trims" count sat inside the guarded region and
+was reached by neither scan arm; and `STANDING` was doubling as a second, unclassified scan-exemption
+list that covered nothing.
+
+Then the prose repairs pushed the front matter to 8,141 B, which a trim's own row would carry to
+8,329 against the 8,192 B budget — **caught by `test_read_budget.py`'s trim states, not by me.**
+Compressed to 7,839 B by merging a duplicated enumeration.
+
+#### Verification
+
+Census guard 35 tests, read-budget 47; full gate **1,395 passed + 9 live-skipped @ 97.98%**; `ruff`
+and `uv run mypy` clean; **all eleven proofs green in BOTH modes**. `README.md`'s rows sum to the
+1,404 collected.
+
+### Session 257 Handoff Evaluation (by Session 258)
+
+**Score: 9/10.** **+** Its gotcha #5 — run `tests/test_read_budget.py --no-cov` before every close-out
+— is the only reason the M08 defect was found at the claim rather than at the close-out, and its
+what's-next list was ordered, specific and honest about which items were operator calls. **+** Gotcha
+#4 (the dashboard flags `CHANGELOG.md` against the read cap; expected, not a Phase 0 risk) saved a
+false alarm in the orientation report. **+** Its self-assessment named a real defect (generalizing a
+one-file ruling) rather than performing modesty. **−** The one miss: it ran the guard before ITS
+close-out, which was green, and nothing told me the guard's next-state arms behave differently at a
+claim commit than at a close-out commit — a sentence I have now added as gotcha #2 below. **ROI: high.**
+
+### Session 258 Self-Assessment
+
+**Score: 6/10.**
+**+ Found the blocker rather than routing around it**, reproduced it red, measured the cause
+(`page_estimate` regime flip, with the numbers), proved it was not pre-existing by testing two earlier
+claim commits, and fixed it in its own commit before touching the deliverable.
+**+ Caught the isolation regression I caused**, by re-deriving the published table instead of trusting
+a green suite — and then made the property mechanical so the next session cannot repeat it.
+**+ Took the ruling to the operator** with the measurement already done, rather than guessing.
+**− I falsified a sentence in the file I was declaring guarded.** I updated `CLAUDE.md`'s copy of that
+exact claim and left the ledger's. That is the unread-duplicate defect this whole apparatus exists to
+prevent, committed by the session closing it — the review caught it, I did not.
+**− I overclaimed in prose**: "Everything above `## ACTIVE TASK` is now guarded" was false the moment I
+wrote it, and I wrote it while holding the measurement that contradicts it.
+**− I let a red commit land** through a pipeline-exit-code mistake.
+**− Three of the eleven findings were things I could have measured myself** before the review: the
+article, the trim count, the dead `STANDING` branch.
+
+**What's next.**
+1. **`PROJECT_LEARNINGS.md` is still refused** — operator call among its four remedies. Unchanged by
+   this session.
+2. **`CHANGELOG.md`'s order** — operator call: reorder the four July entries, or accept.
+3. **Neither collapse proof is guarded by anything** — the closed item's sibling, untouched here and
+   still open. **Small**, and now the odd one out: the front matter it protects is guarded and the
+   proofs that protect it are not.
+4. **The NO-OP guard cannot see a partially inert mutant** — small, still open.
+5. **The tenth trim** when the file next exceeds 196,608 B. Gotchas #3 and #4 below apply.
+6. **Carried:** the dashboard sync (outside this repo); pushing (16 commits ahead of `origin`, this
+   close-out included; measured) is the operator's call.
+
+**Key files.** `tests/test_session_notes_census.py` (`SURFACES`, `_row_body`, `_added`, `STANDING`,
+`check_rows`, `check_standing`, `_sync_front_matter_rows`, M18–M23);
+`tests/test_read_budget.py` (`_m08_the_retention_rule_has_no_compliant_cut`).
+
+**Gotchas.**
+1. **Editing this front matter is now a guarded edit.** The table, the standing rules, every shard
+   filename and every number near shard vocabulary are read on every CI run. Run
+   `uv run pytest tests/test_session_notes_census.py --no-cov` after touching anything above
+   `## ACTIVE TASK`. The prose AROUND those is still unread — do not assume more coverage than the
+   sentence there claims.
+2. **The read-budget guard's next-state arms differ at a claim commit and at a close-out commit.**
+   `after-a-wide-close-out-then-claim` only builds when the newest record IS a stub. A guard green at
+   your close-out can be red at the next session's claim. Run it at BOTH.
+3. **A trim must now update the front-matter table and re-run the census guard in the same commit** —
+   the row is composed from the shard, its banner and its proof, so a typo is red immediately. The
+   guard prints the row it wants.
+4. **The front matter has ~350 B of headroom** before a trim's own row breaches the 8,192 B budget.
+   Rationale belongs in a record, not here.
+5. A pipeline's exit status is its LAST stage's: `pytest ... | tail` always succeeds. Check
+   `PIPESTATUS`, or do not pipe.
 
 ### What Session 257 Did
 **Deliverable:** **`CHANGELOG.md` taken off the read budget — COMPLETE.** The operator's ruling of
