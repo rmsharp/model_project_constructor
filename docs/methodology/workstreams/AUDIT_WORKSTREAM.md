@@ -21,7 +21,7 @@ Use this workstream when:
 
 ## Recommended Skills
 
-The methodology owns *the audit framework* (criteria definition, scope inventory, finding structure, the 7-Dimension audit grid, recurring-issue tracking, multi-session campaign shape). Several review workflows are covered better by Claude Code built-in skills — for those, the methodology cites the skill rather than re-implementing it. See [`../starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md) for the canonical index.
+The methodology owns *the audit framework* (criteria definition, scope inventory, finding structure, the 7-Dimension audit grid, recurring-issue tracking, multi-session campaign shape). Several review workflows are covered better by Claude Code built-in skills — for those, the methodology cites the skill rather than re-implementing it. See [`RECOMMENDED_SKILLS.md`](../../../RECOMMENDED_SKILLS.md) for the canonical index.
 
 | Audit purpose | Recommended skill |
 |---|---|
@@ -30,6 +30,10 @@ The methodology owns *the audit framework* (criteria definition, scope inventory
 | Security review of pending changes on the current branch | `/security-review` |
 
 When a recommended skill is unavailable, the audit framework in this document is the operative discipline — the skill is a sharper instrument, not a hard dependency.
+
+Reasoning effort is the other sharper instrument. An audit mutates nothing (low irreversibility), but a missed finding has high downstream cost and findings compound — so scale reasoning depth to the cost of a missed finding (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes).
+
+These skills are diff-scoped by design — they review the change, not the corpus. The whole-corpus completeness sweep (Common Anti-Patterns #9) is methodology-owned for the same reason the audit framework itself is: no skill re-implements it.
 
 ---
 
@@ -159,6 +163,7 @@ Before presenting the audit report:
 - [ ] Structural observations identify patterns, not just individual issues
 - [ ] Comparison with prior audits is included (if prior audits exist)
 - [ ] Recommendations are actionable (not "improve code quality" but "add input validation to endpoints X, Y, Z")
+- [ ] If the change adds, renames, or removes a concept, artifact, file, step, or numbered-set member: swept the whole corpus (not just the diff) for enumerations, worked examples, indexes, and count-claims that now lag (Learning #10)
 
 ---
 
@@ -188,6 +193,8 @@ Before presenting the audit report:
 6. **Auditing the docs** — Reviewing documentation or comments instead of code. Documentation describes intent; code describes reality. Audit reality.
 7. **Coverage gaps** — Reporting findings for the items you examined while leaving high-risk items unexamined. Explicit coverage tracking prevents this.
 8. **Only auditing code** — Plans and design documents can also be audited. Sessions 51-52 audited an implementation plan and found the plan itself had errors (wrong nesting order, passive+preventDefault conflict). Catching errors in the plan is cheaper than catching them after implementation. Consider: "Is the plan correct?" as an audit criterion, not just "Is the code correct?"
+9. **Diff-scoped blind spot** — reviewing only the change's own surface and missing what it made stale elsewhere in the corpus: a renamed concept still enumerated in an old list, a new artifact missing from a repo tree, a worked example that never adopted the new step, a count claim ("N failure modes") that no longer matches. Adversarial review defaults to the diff; the corpus doesn't audit itself. When a change adds, renames, or removes a concept, artifact, file, step, or numbered-set member, grep the whole corpus — not just the diff — for enumerations, worked examples, indexes, and count-claims that now lag (`FRAMEWORK_LEARNINGS.md` Learning #10, promoting Learnings #7/#8 from an authoring self-check to a review lens).
+10. **Findings that stay prose** — reporting a mechanical invariant (a count that must not drop, a size that must not grow, a check that must pass) as a recommendation and leaving it there. A finding that is a mechanical invariant becomes a declared gate — a `.quality-gates.json` entry (or a test) the ratchet then holds — so the next audit checks the gate ran, not whether the prose was followed (`ITERATIVE_METHODOLOGY.md` §Mechanical Gates Bind Every Actor; `SESSION_RUNNER.md` Phase 3C's mechanical branch). Judgment findings stay findings; the two are not the same list.
 
 ---
 

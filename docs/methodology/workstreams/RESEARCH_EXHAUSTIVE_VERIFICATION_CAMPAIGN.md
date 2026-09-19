@@ -9,6 +9,8 @@ The campaign is explicitly **bidirectional**:
 
 Both modes share the same campaign shape (planning → per-unit work → consolidation) because both run into the same wall: a non-trivial paper or repository contains hundreds of claims, and verifying them in a single session degrades reasoning quality long before it exhausts raw context.
 
+That degradation is a *within-session* problem the campaign solves by decomposition; the work's *stakes* are a separate axis with a separate lever. Paper-wide claim verification is irreversible once published and compounds across every reader, so this campaign sits at the top of the reasoning tier inherited from its parent workstream (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes): set your agent's deepest-reasoning mode at the start of *each* session — decomposing the work does not lower its stakes.
+
 This is a **campaign**, not a workstream. It does not replace the Research Documentation workstream; it prescribes a campaign structure for a specific deliverable: a complete, primary-source-anchored claim record.
 
 ---
@@ -20,7 +22,7 @@ This is a **campaign**, not a workstream. It does not replace the Research Docum
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. |
 | [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) | Parent workstream. Defines the Claim-Source Map (Phase 3), Claim-Source Audit (Phase 6), and standard sampling-based Audit Mode. |
 | [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Sibling workstream. Audit-mode sessions in this campaign follow its review-session pattern (Phases 1-4 + 6, skip 5). |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 ---
 
@@ -145,7 +147,7 @@ Each execution session is bounded to one scoped unit. The session type differs b
 ### Common steps (both modes)
 
 1. **Pre-Flight.** Read `CAMPAIGN.md`. Read prior execution sessions' unit deliverables if any exist. Verify the corpus state for this unit's sources matches the planning-session inventory.
-2. **Phase 1.5 (Claim the Session).** Write the stub naming the unit in progress. A ghost session here is detectable because the stub names exactly which unit was being worked on.
+2. **Phase 1B (Claim the Session).** Write the stub naming the unit in progress. A ghost session here is detectable because the stub names exactly which unit was being worked on.
 3. **Research.** For this unit only, build the claim list. Every numeric, dated, and attributed claim in the unit's scope gets a row, with no exceptions. (A claim you skip cannot be verified later without re-reading the source.)
 4. **Mode-specific work** (see below).
 5. **Present.** Surface the unit deliverable to the stakeholder. Highlight: blocked or re-attribute rows (these need attention before consolidation), patterns visible at unit scope, and any sub-agent calibration adjustments made mid-session.
@@ -388,7 +390,7 @@ Each unit deliverable is a checkpoint. After every execution session, commit the
 verification/exhaustive/units/<unit>.md
 ```
 
-A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first row marked `pending` (audit) or `planned` (creation, undrafted). The Phase 1.5 stub records which unit is in progress, so a ghost session is detectable.
+A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first row marked `pending` (audit) or `planned` (creation, undrafted). The Phase 1B stub records which unit is in progress, so a ghost session is detectable.
 
 **Unit deliverables are append-only within a session.** Never delete a row; mark it `superseded` and add a new row. The history of changed verdicts or statuses is itself a signal — for audit calibration, for creation scope drift, and for the consolidation session's pattern detection.
 
@@ -433,6 +435,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] The drafted section renders cleanly to every target format
 - [ ] Phase 6 Claim-Source Audit (per `RESEARCH_DOCUMENTATION_WORKSTREAM.md`) ran on the rendered output — exhaustive planning does not exempt the final correctness check
 - [ ] Unit deliverable is committed to `verification/exhaustive/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy, calibration adjustments, and any rows that ended up unused
 
 ### Per execution session, before close-out (audit mode)
@@ -443,6 +447,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Every `re-attribute` row has a specific replacement source recommendation
 - [ ] No row is `pending`
 - [ ] Unit deliverable is committed to `verification/exhaustive/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy and any calibration adjustments
 
 ### Per campaign, before close-out (consolidation session)
@@ -454,6 +460,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Cross-unit patterns are surfaced explicitly, not buried in per-finding remediation
 - [ ] Remediation plan (audit) or open-items list (creation) is ordered by priority and dependency, not by paper order
 - [ ] Estimate-to-actual ratio is recorded for future-campaign calibration
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---
 

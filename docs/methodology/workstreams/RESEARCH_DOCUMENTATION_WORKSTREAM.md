@@ -30,7 +30,7 @@ This workstream adapts Phases 2 (Research), 3 (Create), 4 (Present), and 6 (Veri
 
 Sloppy research is worse than valueless — credible-looking citations that fail under scrutiny damage reader trust more than missing citations would. Documentation errors surface as plausible text that passes casual review and only breaks under hostile scrutiny; by then the reputational damage is done.
 
-This workstream benefits materially from your agent's deepest-reasoning mode (max-effort, deep-thinking, or extended-reasoning settings, depending on the toolchain). The marginal cost is latency and tokens; the cost of an undetected misattribution is reputational. Set the mode at session start — not after a problem appears.
+Research documentation is a high-stakes instance of the general rule — *match reasoning effort to the stakes* (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes). A misattribution is effectively irreversible once published and its cost compounds across every reader who trusts it, so this workstream sits at the top of the tier: set your agent's deepest-reasoning mode at session start — not after a problem appears.
 
 The same logic applies to a human author working without an agent: the chapters of this workstream that demand the most attention are claim-source mapping, framing-language distinctions, and dedup logic across parallel work streams. Slow down on those. Speed elsewhere is fine.
 

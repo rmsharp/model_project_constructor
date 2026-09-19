@@ -6,7 +6,7 @@ A universal framework for producing high-quality work through structured, self-c
 
 ## Origin and Findings
 
-This methodology was extracted from an 11-session UI/UX design series and subsequently validated across 52+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work. The original results:
+This methodology was extracted from an 11-session UI/UX design series and subsequently validated across 1100+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work. The original results:
 
 | Metric | Session 1 | Sessions 2-11 |
 |--------|-----------|---------------|
@@ -15,7 +15,7 @@ This methodology was extracted from an 11-session UI/UX design series and subseq
 | Defects found in existing work | 0 | 2 → 15 (monotonically increasing) |
 | Research depth | Partial, prompted | Comprehensive, proactive |
 
-The broader validation (Sessions 12-52+) confirmed these results hold across domains and added critical findings:
+The broader validation (Sessions 12-1100+) confirmed these results hold across domains and added critical findings:
 
 | Finding | Sessions | Impact |
 |---------|----------|--------|
@@ -40,7 +40,7 @@ And the sixth, discovered later but equally load-bearing:
 
 These six changes account for the entire improvement. They are domain-independent. This document codifies them into a reusable framework.
 
-A further validation at 60+ sessions revealed a seventh finding:
+A further validation revealed a seventh finding:
 
 7. **Protocol discipline is perishable** — methodology that produced 14 consecutive clean deliveries can degrade to 1/10 scores within 12 hours if sessions stop re-internalizing it (see §Protocol Erosion)
 
@@ -89,25 +89,25 @@ You cannot enter the next phase until the previous one is complete. The gates ar
 
 Reference tables, pattern libraries, anti-pattern lists, and cross-session citations. Later sessions build on earlier sessions by citation, not by re-derivation. Prediction chains form: "Session 4 predicted X would apply to satellite; Session 10 confirmed it."
 
-**Mechanism:** Each session reads ALL previous session outputs before starting. The cost is fixed (one research pass); the value grows with each session.
+**Mechanism:** Each session reads ALL previous session outputs before starting. The cost is fixed (one research pass); the value grows with each session. (See [§Knowledge Accumulation System](FRAMEWORK_APPARATUS.md#knowledge-accumulation-system).)
 
 ### 5. Honest Accounting
 
 What Went Right AND What Went Wrong, tracked quantitatively across all sessions. Performance comparison tables with trajectory narratives. No escape from the numbers.
 
-**Mechanism:** A performance comparison table spans all sessions with consistent metrics. Trajectory narratives interpret the numbers honestly: "Session 7 was the worst since Session 1" is stated plainly, not hidden.
+**Mechanism:** A performance comparison table spans all sessions with consistent metrics. Trajectory narratives interpret the numbers honestly: "Session 7 was the worst since Session 1" is stated plainly, not hidden. (See [§Honest Accounting Framework](FRAMEWORK_APPARATUS.md#honest-accounting-framework).)
 
 ### 6. Scope Validation Before Execution
 
 "Am I solving the right problem?" before "Am I solving the problem right?" A well-executed solution to the wrong problem is worse than a rough solution to the right problem, because it looks correct and resists correction.
 
-**Mechanism:** The Splitting Test, Domain-Ecosystem Validation, and Role Classification — all applied before any design work begins.
+**Mechanism:** The Splitting Test, Domain-Ecosystem Validation, and Role/Mode Classification — all applied before any design work begins. (See [§Scope Validation System](FRAMEWORK_APPARATUS.md#scope-validation-system).)
 
 ### 7. Ascending Verification
 
 Move from cheap-but-unreliable verification (assumptions, names, descriptions) to expensive-but-reliable verification (implementation reading, domain validation, mechanical code-level checks). Each level was added to the methodology after the previous level's failure mode was exposed in a real session.
 
-**Evidence:** Assumption-based verification failed in session 1 (waterfall name). Description-based failed in session 5 (WSPR scope). Implementation reading failed in session 7 (domain mismatch). Agent claims failed in session 9 (false variant support). Each failure added a verification level.
+**Evidence:** Assumption-based verification failed in session 1 (waterfall name). Description-based failed in session 5 (WSPR scope). Implementation reading failed in session 7 (domain mismatch). Agent claims failed in session 9 (false variant support). Each failure added a verification level. (The seven levels are in [§Verification Hierarchy](FRAMEWORK_APPARATUS.md#verification-hierarchy).)
 
 ### 8. Handoff Accountability
 
@@ -123,6 +123,8 @@ Every session evaluates the previous session's handoff AND writes its own handof
 
 Every session has exactly ONE deliverable. When it's complete, you close out. You do not start the next thing. Quality degrades when a session attempts multiple deliverables — the second and third items receive less research, less verification, and less careful implementation than the first.
 
+**The unit of "one deliverable" is one intent, not one layer.** The original "one horizontal layer per session" granularity was, in practice, a proxy for verifiability: a single sequential agent could only reliably verify a small blast radius. When a session has high-parallelism verification available — and only under the gates defined in the Session Runner's §Vertical Slice Sessions — the deliverable MAY be a **verified vertical slice**: one capability end to end (data + service + clients + tests) rather than one horizontal layer. One capability never means a second capability, a plan bundled with its implementation, or two platform cutovers — those remain separate sessions. Recoverability, not verifiability, is the ceiling on slice size, and the allowance is evidence-gated: per-boundary verification artifacts must actually land in-session, or the session reverts to horizontal scope. (Adopted via issues [#20](https://github.com/KJ5HST/methodology/issues/20)/[#21](https://github.com/KJ5HST/methodology/issues/21).)
+
 **Mechanism:** Identify the single deliverable at session start. If scope expands mid-session ("while I'm at it..."), commit what you have and note the expansion for a future session.
 
 **Evidence:** Sessions that attempted multiple deliverables consistently produced lower-quality work on the later items. The "1 and done" rule eliminates this by structurally preventing scope expansion.
@@ -133,36 +135,42 @@ Every session has exactly ONE deliverable. When it's complete, you close out. Yo
 
 Every session follows these phases in order. Phases are sequential and gated — you cannot skip a phase or enter the next one early.
 
+**Session shape does not change the phase model.** A vertical-slice session (Principle 9) runs the same six phases once, for its ONE capability — the slice bundles *layers* of one deliverable, never a plan with its implementation (failure mode #18's discriminator) and never a second capability (failure mode #26). The vertical-slice allowance adds a gate; it removes no phase.
+
 ### Phase 1: Pre-Flight
 
-**Purpose:** Verify the workspace is clean, the prior state is understood, and nothing is broken before you touch anything.
+**Purpose:** Verify the workspace is clean, the prior state is understood, and nothing is broken before you touch anything — apart from the append-only ledger backfill in step 4, which records commits that already exist.
 
 **Steps:**
 1. Read all governing documents (safety rules, process docs, style guides) — **in full, not skimmed. Every section.**
 2. Read prior session notes (what was the last session doing? what's in progress?)
 3. Check the current state of the workspace (version control status, recent changes)
-4. **Detect ghost sessions:** Compare session notes against the change history. If there are changes between the last documented session and now that have no corresponding notes, report it. Ghost sessions — sessions that crashed or ended without writing notes — leave the next session blind.
+4. **Detect ghost sessions and reconcile the ledger:** Compare session notes against the change history. If there are changes between the last documented session and now that have no corresponding notes, report it — ghost sessions (crashed or ended without writing notes) leave the next session blind. Then reconcile the authoritative ledger (`CHANGELOG.md`) against the change history: first check whether any commit has ever recorded it (if none, self-provision the ledger from its seed and reconcile from the root — an unrecorded ledger on a repo with real history is a defect, not "current"); otherwise locate its frontier (the newest ledger-touching commit), and treat both the commits since it with no entry **and** any prior Phase 1B stub still marked `CHANGELOG: pending` as unrecorded actions. **Backfill them before new work** — a source-tagged entry marked as a reconcile backfill. Reconcile backstops commit-bearing actions; non-commit actions (releases, tags, PR/issue events, access grants) are the close-out write-gate's responsibility. Also reconcile the close-out receipt (`HANDOFFS.md`) the same way: locate its frontier (`git log -1 --format=%H -- HANDOFFS.md`); a frontier block still `status: pending` (an unfinished Phase 1B stub) or a commit in the undocumented set with no receipt at all is the unrecorded counterpart, reconstructed as a best-effort block from the change history (and `SESSION_NOTES.md` if it survived), marked `status: reconciled`, and noted in the report — this only catches sessions that left a commit or a 1B stub, not a session with no commit and no claim. This is the one write Pre-Flight permits — it records commits that already exist, not new work; the backfill is not this session's deliverable and licenses no work beyond the one assigned task (failure mode #17).
 5. Verify the artifact you will modify exists and is in a known-good state
 6. Spot-check 2-3 ADJACENT artifacts to confirm they are also healthy
 7. **Report findings to the stakeholder before proceeding**
 
-**Gate:** Pre-Flight Pass — workspace is clean, prior work is understood, no broken artifacts. If any artifact is broken, report it and get direction before continuing.
+**Gate:** Pre-Flight Pass — workspace is clean, prior work is understood, the ledger is reconciled with the change history, no broken artifacts. If any artifact is broken, report it and get direction before continuing.
 
 **Anti-patterns to avoid:**
 - Starting work without reading prior session notes
 - Assuming the workspace is clean because it was clean last time
 - Skipping the adjacent artifact check (this is how cross-session damage goes undetected)
 - Skimming governing documents instead of reading them (reading "the gist" misses the specific steps that prevent specific failures)
+- Starting new work while the ledger lags the change history (undocumented commits not yet backfilled)
 
-### Phase 1.5: Claim the Session
+### Phase 1B: Claim the Session
+
+*Phase 1B is an inserted activity between Phase 1 (Pre-Flight) and Phase 2 (Research); the letter suffix marks it as a bridge step that does not subdivide a numbered phase — Pre-Flight remains Phase 1 in full, and there is no "Phase 1A." This mirrors `SESSION_RUNNER.md`'s **1B: Claim the Session** and keeps the "6 phases" count intact.*
 
 **Purpose:** Leave a trace before any work begins, so that even a catastrophic failure (crash, context loss, timeout) produces evidence of what was attempted.
 
 **Steps:**
-1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS"
-2. This stub is overwritten during Phase 6 with the full close-out notes
+1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS", and a `CHANGELOG: pending` ledger marker (the crash breadcrumb the next session's Pre-Flight reconcile reads); the claim commit's ledger entry says *(in progress)*, and Phase 6 records the rest
+2. Open a `HANDOFFS.md` close-out receipt stub — a durable receipt block with `status: pending` — and commit it with the claim; unlike the transient session-notes stub it survives a fresh clone, so it is the crash breadcrumb the next session's reconcile greps. Phase 6 completes it to `status: complete`
+3. Both stubs are overwritten/completed during Phase 6 with the full close-out
 
-**Why this phase exists:** In a 60+ session series, multiple sessions crashed or ended without completing close-out. These "ghost sessions" left zero trace — no notes, no self-assessment, no handoff. The next session had no idea what was attempted, what state was left behind, or what to watch for. By writing a stub FIRST, even total failures leave a breadcrumb.
+**Why this phase exists:** In a 1100+ session series, multiple sessions crashed or ended without completing close-out. These "ghost sessions" left zero trace — no notes, no self-assessment, no handoff. The next session had no idea what was attempted, what state was left behind, or what to watch for. By writing a stub FIRST, even total failures leave a breadcrumb.
 
 **This phase takes 30 seconds. Skipping it saves 30 seconds and risks the next session starting completely blind.**
 
@@ -173,20 +181,22 @@ Every session follows these phases in order. Phases are sequential and gated —
 **This is the most critical phase.** The quality of research directly determines the quality of the output. Incomplete research produces rework; complete research produces first-pass approval.
 
 **Steps:**
-1. **Read project `CONTEXT.md` if it exists.** A project-level domain glossary at the repo root captures load-bearing vocabulary, constraints, and architecture-decision pointers that a fresh reader needs before exploring code. If present, read it first — it is the cheapest grounding pass available. If absent, skip this step. If during this session you discover a project-specific term that would have helped to know up front, propose adding it to `CONTEXT.md` during close-out (Phase 6 hygiene). See [`starter-kit/CONTEXT_TEMPLATE.md`](starter-kit/CONTEXT_TEMPLATE.md) for the template; maintenance can use Pocock's `/grill-with-docs` (cited in [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md)).
+1. **Read project `CONTEXT.md` if it exists.** A project-level domain glossary at the repo root captures load-bearing vocabulary, constraints, and architecture-decision pointers that a fresh reader needs before exploring code. If present, read it first — it is the cheapest grounding pass available. If absent, skip this step. If during this session you discover a project-specific term that would have helped to know up front, propose adding it to `CONTEXT.md` during close-out (Phase 6 hygiene). See [`CONTEXT_TEMPLATE.md`](../../CONTEXT_TEMPLATE.md) for the template; maintenance can use Pocock's `/grill-with-docs` (cited in [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md)).
 2. **Study the domain.** Read requirements, use case documents, specifications. Extract: who is the user? What is their workflow? What do they need most? What do they NOT need?
 3. **Inventory available tools/components.** Build a reference table of everything you could use. Include capabilities, constraints, sizes, dependencies.
 4. **Read implementations, not just descriptions.** A component's name or description tells you what it IS. Its implementation tells you how it BEHAVES. Read the actual code/config/spec for every component you might use.
 5. **Review ALL prior work in this series.** Read every previous session's output. Extract reusable patterns and avoidable mistakes. Note which patterns apply to your current work and which don't.
-6. **Challenge the scope.** (See Scope Validation section.) Is this the right problem to solve? Does this work item encompass things that should be separate?
-7. **Validate domain fit.** (See Domain-Ecosystem Validation section.) Are you using the right tools for this domain, or substituting generic equivalents for domain-specific tools?
-8. **Verify capability claims.** For any critical capability ("this component supports X"), verify by reading the implementation. Do not trust names, descriptions, or third-party summaries.
+6. **Challenge the scope.** (See [§Scope Validation System](FRAMEWORK_APPARATUS.md#scope-validation-system).) Is this the right problem to solve? Does this work item encompass things that should be separate?
+7. **Validate domain fit.** (See [§Domain-Ecosystem Validation](FRAMEWORK_APPARATUS.md#domain-ecosystem-validation).) Are you using the right tools for this domain, or substituting generic equivalents for domain-specific tools?
+8. **Verify capability claims.** (See [§Verification Hierarchy](FRAMEWORK_APPARATUS.md#verification-hierarchy).) For any critical capability ("this component supports X"), verify by reading the implementation. Do not trust names, descriptions, or third-party summaries.
 
 **Gate:** Research Complete — `CONTEXT.md` read (if present), all components inventoried AND their implementations read, all prior work reviewed, scope validated, domain fit confirmed.
 
 **The Complete-Then-Create Rule:** Do NOT begin Phase 3 until all 8 steps are done. The temptation to start creating after steps 1–4 is strong. Resist it. Steps 5–8 routinely surface insights that change the entire approach.
 
-### Phase 2.5: Pre-Create Grill (Optional)
+### Phase 2B: Pre-Create Grill (Optional)
+
+*Phase 2B is an inserted activity between Phase 2 (Research) and Phase 3 (Create), mirroring the **Phase 1B** precedent above: the letter suffix marks a bridge step and does not subdivide Phase 2 — Research remains Phase 2 in full, and there is no "Phase 2A." The "6 phases" count is unchanged.*
 
 **Purpose:** Before designing a solution, surface every load-bearing decision the stakeholder has not yet made — by asking, not by guessing. Catches misalignment one phase earlier than Phase 4 (Present), where the failure mode is "stakeholder rejects the design because a foundational assumption was wrong."
 
@@ -201,9 +211,9 @@ Every session follows these phases in order. Phases are sequential and gated —
 - The work is mechanical (rename, lint cleanup, dependency bump, well-defined bug fix)
 - An equivalent feature already exists in the codebase and the stakeholder has confirmed "do it the same way"
 
-**Why this phase exists:** Phase 4 (Present) catches misalignment by showing the stakeholder a complete design. Phase 2.5 catches it earlier — before any design exists — by asking instead of inferring. The cost difference is large: a wrong inference at Phase 3 is rework of the design document; a wrong inference confirmed at Phase 4 is a new design cycle. UX rollbacks (designs that ship and revert because the interaction model was wrong) are the canonical failure this phase prevents.
+**Why this phase exists:** Phase 4 (Present) catches misalignment by showing the stakeholder a complete design. Phase 2B catches it earlier — before any design exists — by asking instead of inferring. The cost difference is large: a wrong inference at Phase 3 is rework of the design document; a wrong inference confirmed at Phase 4 is a new design cycle. UX rollbacks (designs that ship and revert because the interaction model was wrong) are the canonical failure this phase prevents.
 
-**Running the grill.** The methodology recommends Pocock's `/grill-me` skill — see [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md). Methodology owns *when* to grill and *why*; the skill owns *how* to conduct the interview. When the skill is unavailable, the operative discipline is: enumerate every decision the design will encode, draft each with a recommended answer plus real alternatives, present them one at a time, and stop only when every load-bearing decision has an explicit answer locked into the Phase 3 Create document.
+**Running the grill.** The methodology recommends Pocock's `/grill-me` skill — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md). Methodology owns *when* to grill and *why*; the skill owns *how* to conduct the interview. When the skill is unavailable, the operative discipline is: enumerate every decision the design will encode, draft each with a recommended answer plus real alternatives, present them one at a time, and stop only when every load-bearing decision has an explicit answer locked into the Phase 3 Create document.
 
 **This phase is explicitly optional, not a gate.** Mechanical sessions should skip it. Adding ceremony to well-defined work erodes the protocol. The discipline is recognizing when *this* session has high misalignment risk — not running the grill on every session.
 
@@ -277,11 +287,11 @@ Every session follows these phases in order. Phases are sequential and gated —
    - **Runtime smoke test.** For any change that affects runtime behavior — service registration, plugin loading, dependency injection, config resolution, handler dispatch — launch the application and verify in logs or at the running endpoint. Compilation and build success verify syntax and dependency resolution; they do not verify integration, load order, or runtime dispatch. A self-assessment that notes "no runtime verification" without treating it as a defect is a red flag — it means the session recognized the gap but chose to ship anyway.
    - **If runtime verification is impossible** (requires hardware, external service, or CI), state this explicitly in the session notes. Do not silently skip it.
 3. **Verify adjacent artifacts.** Check 2-3 artifacts that were NOT modified. Are they still healthy? Cross-artifact regression is the most insidious failure mode because nobody is looking for it.
-4. **Self-assess.** Write What Went Right / What Went Wrong. (See Honest Accounting section.) Be specific and honest.
-5. **Update the performance comparison table.** Add this session's metrics.
-6. **Update the pattern library and anti-pattern list.** If you discovered a new pattern or made a new mistake, name it and add it.
-7. **Write handoff notes for the next session.** (See below.) You will be judged on these — the next session will score your handoff just as you scored your predecessor's.
-8. **Commit the work.** Before committing, remove any debug instrumentation added during this session (tagged debug logs per `/diagnose` — see [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md) — and ad-hoc prints). Then commit with a structured message referencing the session.
+4. **Self-assess.** Write What Went Right / What Went Wrong. (See [§Honest Accounting Framework](FRAMEWORK_APPARATUS.md#honest-accounting-framework).) Be specific and honest.
+5. **Update the performance comparison table.** (See [§Performance Tracking](FRAMEWORK_APPARATUS.md#performance-tracking).) Add this session's metrics.
+6. **Update the pattern library and anti-pattern list.** (See [§Knowledge Accumulation System](FRAMEWORK_APPARATUS.md#knowledge-accumulation-system).) If you discovered a new pattern or made a new mistake, name it and add it.
+7. **Write handoff notes for the next session.** (See below.) You will be judged on these — the next session will score your handoff just as you scored your predecessor's. Write them both to `SESSION_NOTES.md` (the transient scratchpad) and as a durable ` ```handoff ` receipt block in `HANDOFFS.md` — set `status: complete` and fill the six minimum requirements (the sixth *is* `self_score`) plus `predecessor_score`. The receipt is the machine-checkable proof the handoff exists (the canonical-only `bin/check-handoff` asserts its structure — copy it in if you want it — never its quality); a skipped receipt is caught at the next Pre-Flight reconcile with no tooling.
+8. **Record every action, then commit.** Before committing: (a) remove any debug instrumentation added during this session (tagged debug logs per `/diagnose` — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) — and ad-hoc prints); (b) prepend a dated, source-tagged entry to the authoritative ledger `CHANGELOG.md` for **each action this session took** — one per commit *and* per non-commit action (release, tag/branch op, PR open, upstream issue close, access grant, decline/grooming decision): `### YYYY-MM-DD · [issue #<N>] | [BL-<id>] | [ad hoc]` + a one-line outcome, newest on top, removing any completed `BACKLOG.md` item in the same commit. If `CHANGELOG.md` is absent, create it from the bootstrap seed; the only exemptions are a project that records "no CHANGELOG" in `CLAUDE.md` and a session whose diff is empty with no action taken. "Too small to log" is failure mode #27, not an exception. Where the project declares quality gates (`.quality-gates.json`), (c) run them — `quality_ratchet.py --run` — and cite the summary line in the close-out receipt, so the session's claim of "tests pass" is a measured number the next Orient can compare against the results file (§Mechanical Gates Bind Every Actor). Then commit with a structured message referencing the session. (Failure mode #17: the ledger records what the session did; it does not authorize a second deliverable.)
 
 **Minimum handoff requirements (Step 7):** The next session starts with zero context. Your handoff is their only connection to your work. A handoff that doesn't include ALL of the following is incomplete. "Done — pick next task" is not a handoff; it's an abdication that forces the next session to rediscover context you already had.
 
@@ -296,11 +306,11 @@ Every session follows these phases in order. Phases are sequential and gated —
 
 - **Re-read files before making claims.** Do not write gap analysis from memory. If you haven't read the file in the last 5 minutes, read it again before citing it. (Sessions 38, 40, and 43 wrote incorrect handoff claims from stale memory.)
 - **Never write "need to verify" in a handoff.** If you don't know, investigate NOW during close-out. Deferred verification is deferred work.
-- **Never claim credit for work you didn't do.** If a deliverable was input (provided to you), not output (produced by you), say so explicitly. Fabricating accomplishments is a trust-destroying failure. (See §Honest Accounting.)
+- **Never claim credit for work you didn't do.** If a deliverable was input (provided to you), not output (produced by you), say so explicitly. Fabricating accomplishments is a trust-destroying failure. (See [§Honest Accounting Framework](FRAMEWORK_APPARATUS.md#honest-accounting-framework).)
 
 **Write to files FIRST, then summarize verbally.** A verbal summary not written to persistent files is worthless — the next session cannot read the conversation.
 
-**Gate:** All verification passes. Previous session's handoff is evaluated. Session document is complete with honest accounting. Handoff notes are written to files (not just spoken).
+**Gate:** All verification passes. Previous session's handoff is evaluated. Session document is complete with honest accounting (the shape is in [§Session Document Template](FRAMEWORK_APPARATUS.md#session-document-template)). Handoff notes are written to files (not just spoken).
 
 ---
 
@@ -312,21 +322,23 @@ The 6-phase model assumes a full Research→Create→Present→Implement→Verif
 Follow all 6 phases. The deliverable is working code, a design document, or an artifact.
 
 ### Review/Audit Sessions
-The deliverable is an analysis document — a code review, audit report, or plan. These sessions follow Phases 1-4 (Pre-Flight, Research, Create the analysis, Present) and skip Phase 5 (Implement). Phase 6 still fires in full.
+The deliverable is an analysis document — a code review, audit report, or plan. These sessions follow Phases 1-4 (Pre-Flight, Research, Create the analysis, Present) and skip Phase 5 (Implement). Phase 6 still fires in full — including its handoff receipt (`HANDOFFS.md`) and its step-8 ledger entry: a review or audit that commits its report has taken an action, so `CHANGELOG.md` records it like any other session (failure mode #27).
+
+A review or audit whose subject adds, renames, or removes a concept, artifact, file, step, or numbered-set member owes a whole-corpus completeness sweep in addition to the diff review — not only what changed, but what the change made stale elsewhere (`FRAMEWORK_LEARNINGS.md` Learning #10; `workstreams/AUDIT_WORKSTREAM.md`'s Verification Checklist is the operative step).
 
 **Code review is a distinct deliverable, not overhead.** Reviews that produce actionable plans (exact code snippets, line numbers, implementation order) have higher ROI than vague feedback. A review session's output should be detailed enough that a subsequent implementation session can execute it mechanically.
 
 ### Planning/Preparation Sessions
-The deliverable is a plan or handoff document that sets up a future implementation session. These sessions invest heavily in Phase 2 (Research) and produce a Phase 3 design document that another session will implement. The value is front-loaded: a good plan collapses multi-session implementation work into a single session.
+The deliverable is a plan or handoff document that sets up a future implementation session. These sessions invest heavily in Phase 2 (Research) and produce a Phase 3 design document that another session will implement. The value is front-loaded: a good plan collapses multi-session implementation work into a single session. Close-out is unchanged: the plan is an action, so it earns its `HANDOFFS.md` receipt and its `CHANGELOG.md` ledger entry (Phase 6 step 8, failure mode #27) exactly as committed code does.
 
 **Speed warning:** High-quality plans can make implementation sessions complete very fast. This is the plan's success, not evidence that verification can be skipped. (See Phase 5 anti-patterns: "Treating speed as evidence of quality.")
 
 ### Debugging Sessions
 The deliverable is a closed bug — a regression fixed, a flake stabilized, an incident root-caused. Debugging has a different epistemic structure than the other three types: you are *searching for a hidden cause*, not building toward a known shape. Treating debugging as "implementation with a bug-shaped requirement" hides this distinction and produces predictable failures (instrumentation left in commits, single-hypothesis tunnel vision, feedback loops too slow to be useful, "fixes" that pass without a regression test).
 
-The 6 phases still apply, but Phase 2 (Research) is dominated by building a feedback loop that makes the bug observable on demand, and Phase 6 (Verify) expands to remove the debug instrumentation before commit (the cleanup gate at `SESSION_RUNNER.md` §Phase 3F).
+The 6 phases still apply, but Phase 2 (Research) is dominated by building a feedback loop that makes the bug observable on demand, and Phase 6 (Verify) expands to remove the debug instrumentation, write the `HANDOFFS.md` receipt, *and* record the closed bug in `CHANGELOG.md` before commit (the cleanup, handoff-receipt, and ledger gates at `SESSION_RUNNER.md` §Phase 3D/3F, failure mode #27).
 
-The methodology recommends Pocock's `/diagnose` skill for the actual debugging workflow — see [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md). Methodology recognizes debugging as a session type; `/diagnose` runs it. When the skill is unavailable, the operative rules are: build the feedback loop before forming hypotheses, change one variable at a time, write the regression test before the fix, remove all debug instrumentation before commit.
+The methodology recommends Pocock's `/diagnose` skill for the actual debugging workflow — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md). Methodology recognizes debugging as a session type; `/diagnose` runs it. When the skill is unavailable, the operative rules are: build the feedback loop before forming hypotheses, change one variable at a time, write the regression test before the fix, remove all debug instrumentation before commit.
 
 ---
 
@@ -366,9 +378,42 @@ The first realized example is [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAM
 >
 > If a discipline can be expressed as a Claude Code skill — whether a built-in like `/verify` or `/code-review`, or a community skill from a repo such as [`github.com/mattpocock/skills`](https://github.com/mattpocock/skills) — methodology **cites the skill** at the relevant phase or workstream rather than re-documenting the discipline in its own voice. Methodology owns *what to do and when* (phases, gates, anti-patterns, failure modes, session-type definitions). Skills own *how to do it* (the actual workflow invoked by the slash command).
 
-The canonical index is [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md). Each entry names the skill, its source (Claude Code built-in or external repo URL), the phase or workstream where methodology recommends it, and (for external skills) a known-good commit SHA so adopters can pin a version that has been verified to behave as documented.
+The canonical index is [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md). Each entry names the skill, its source (Claude Code built-in or external repo URL), the phase or workstream where methodology recommends it, and (for external skills) a known-good commit SHA so adopters can pin a version that has been verified to behave as documented.
 
 Inline pointers in this document and in the workstream files reference skills by their slash-command name (`/verify`, `/grill-me`, `/code-review`) without re-describing them. To learn what a skill does, run it or read its `SKILL.md` at the source URL listed in the index. **When a recommended skill is unavailable in your environment, the methodology's own rules** (the phase body, the failure mode, the anti-pattern) **remain the operative guidance.** The citation is a recommendation, not a hard dependency.
+
+**A skill is not a phase.** A recommended skill that pulls a session across a hard gate — e.g., `/to-issues` followed immediately by `/tdd`, or any skill that produces an artifact and then continues to the next artifact in the same session — is failure mode #2 (keep-going) wearing a tool costume. **Close out first.** The methodology recommends skills as sharper instruments for specific phases; it does not authorize them to widen a session's scope beyond its ONE declared deliverable. A vertical-slice session (Principle 9) does not change this: the slice's layer set is pre-declared in its contract, and a skill that carries the session beyond that declared set — or across any hard gate — is the same failure mode. This applies whether the skill appears in [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) or the adopter installed it independently — the methodology's gates bind every session, regardless of which tools are loaded.
+
+---
+
+## Matching Reasoning Effort to Stakes
+
+> **Match reasoning effort to the stakes, not the task label.**
+>
+> Set your agent's reasoning depth by the work's *blast radius × irreversibility × compounding cost* — the same risk lens the methodology already uses to size a vertical slice (Principle 9) and to place its hardest gate (Principle 3). High on any axis — wide blast radius (changes ripple across many call sites or readers), low reversibility (migrations, cutovers, published claims, operator-approval boundaries), or high compounding cost (a planning or architecture error every later session inherits) — warrants your agent's deepest-reasoning mode (max-effort, extended-reasoning, or a larger thinking budget, depending on the toolchain). The marginal cost is latency and tokens; the cost of a shallow decision on heavy work is rework that compounds. Set the mode at session start — not after a problem appears.
+
+Cheap, reversible, mechanical work — a one-line fix, a rename the compiler catches, a reversible config tweak — does not need it; a lighter setting is the honest default there. The axis runs both ways.
+
+Methodology owns *when and why* to raise the tier (this rule); your agent owns *how* (the specific effort or model mechanism — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) for concrete example settings). Within a pre-declared vertical slice, that mechanism can vary *by layer* too — see `SESSION_RUNNER.md` §Vertical Slice Sessions, capability-tiered review, for the elective pattern and its guardrails. And a higher tier is not a license: like a skill, a deeper-reasoning mode sharpens a phase — it never authorizes skipping orientation, the stub, close-out, or any hard gate, nor widening a session beyond its one declared deliverable (failure mode #17, `SESSION_RUNNER.md` Protocol erosion). Reason harder; stop at the same gates.
+
+---
+
+## Mechanical Gates Bind Every Actor
+
+> **Enforce quality on the artifact, not on the actor.**
+>
+> A gate that is a question the actor asks itself ("did I verify this?") does not scale under N agents — it multiplies. Ten of the twelve quality gates below are such questions, and a more capable agent or a sharper adversarial reviewer changes the *judge*, not the *class* of gate. Where a rule can be expressed mechanically — a test suite that must pass, a coverage floor, a complexity ceiling, a size budget, a link check, a count that must not drop — it is expressed mechanically, and the mechanical form binds **every** actor: every tier, every agent, every human, every session.
+
+Four consequences, none of them new principles:
+
+1. **Verification a gate expresses is never re-done by judgment and never waived by tier, agent, or human.** The capability-tiered pattern in `SESSION_RUNNER.md` §Vertical Slice Sessions already says this for one case — a lighter tier may build a layer only where an objective gate proves it. This section generalizes it: the same gates for everyone is the rule, not the elective.
+2. **Judgment is reserved for what no gate expresses** — what changed, why, and the risk — and that decision belongs to the stakeholder after implementation as well as before (Principle 3's Present → Implement gate, and its mirror at delivery).
+3. **Automated checks never pass by default or by timeout.** A gate that cannot run reports *unmeasured*, not *pass* (Principle 5).
+4. **Thresholds only tighten.** A threshold that can be lowered under pressure is a suggestion. Loosening one to make a change pass is failure mode #17 in mechanical form and requires plan-mode approval in its own commit (`SAFEGUARDS.md` §Blast Radius Limits).
+
+Where the binding happens today is worth stating beside the claim: the shipped enforcement point is a pre-commit hook that each clone opts into and that `git commit --no-verify` bypasses on the record, and merge and rebase commits skip it. That binds every actor who commits through an enabled hook; it does not bind one who never sets it. The manifest's git history and the dashboard's read of it are what make a loosening *visible* regardless; a CI job that runs the gates and the ratchet comparison against the base branch is what makes the claim hold for everyone, and a project that wants the word "every" to be literal wires one.
+
+The methodology recommends; it does not reimplement: it ships no linter, complexity tool, or coverage runner. It ships the *ratchet* — a declared, machine-readable gate manifest per project (`.quality-gates.json`) and a small checker (`quality_ratchet.py`) that refuses a commit loosening any declared threshold and runs the declared gates on demand — and this rule. Which tools produce the numbers is the project's choice (`BOOTSTRAP.md` Step 10). The dashboard reports gate outcomes and loosening history, advisory as always; the gate is the pre-commit check, where it belongs. Ceiling, stated plainly: a gate proves what it measures and nothing else — a coverage floor can be cleared by assertions that assert nothing, so a floor without a faithfulness check beside it (Learning #12) measures effort, not quality.
 
 ---
 
@@ -396,7 +441,7 @@ For AI agents, the Session Runner is especially critical because agents face con
 
 | # | Gate | Between | Question It Answers |
 |---|------|---------|---------------------|
-| 1 | Pre-Flight Pass | Start → Research | Is the workspace clean, prior work understood, and ghost sessions detected? |
+| 1 | Pre-Flight Pass | Start → Research | Is the workspace clean, prior work understood, ghost sessions detected, and the ledger reconciled with the change history? |
 | 2 | Session Claimed | After task received → Before work | Will this session leave a trace even if it crashes? |
 | 3 | Previous Handoff Evaluated | Start of Close-Out | Have I scored the previous session's handoff with specific evidence? |
 | 4 | Research Complete | Research → Create | Have I read everything I need to make good decisions? |
@@ -449,7 +494,7 @@ When to Use: Every profile — identify the star early. It's the single
 most important design decision.
 ```
 
-### Across the Full Series (Performance Tracking)
+### Across the Full Series ([Performance Tracking](FRAMEWORK_APPARATUS.md#performance-tracking))
 
 A **performance comparison table** spans all sessions with consistent metrics. The trajectory narrative interprets the data honestly:
 
@@ -474,7 +519,7 @@ tool — revealed a blind spot in the methodology.
 
 ### The Erosion Pattern
 
-In a 60+ session series, the following pattern was observed twice:
+In a 1100+ session series, the following pattern was observed twice:
 
 1. **Foundation phase (sessions 1-10):** Methodology is new. Every step feels necessary. Quality improves rapidly. Failures are caught and converted to anti-patterns. Discipline is high because the methodology is unfamiliar.
 
@@ -507,328 +552,33 @@ A second factor: **workstream transfer amnesia.** Discipline built on one type o
 
 1. **Treat the methodology as if you've never read it.** Every session. The cost of re-reading is 2 minutes. The cost of assuming you know it is a failed session.
 2. **The handoff evaluation creates structural accountability.** If you write a bad handoff, the next session documents exactly how it failed. This feedback loop only works if both sides complete their steps.
-3. **Write the session stub before starting work (Phase 1.5).** This is 30 seconds of insurance against catastrophic session loss.
+3. **Write the session stub before starting work (Phase 1B).** This is 30 seconds of insurance against catastrophic session loss.
 4. **The methodology is not improvable-by-subtraction during a session.** Every step exists because a real session failed without it. If you think a step is unnecessary, that thought IS the erosion happening.
 
 ---
 
-## Knowledge Accumulation System
-
-Knowledge compounds across sessions through four mechanisms. All four are required — they serve different purposes.
-
-### 1. Reference Tables
-
-Structured tables recording factual findings about components, tools, or materials. Each session adds rows; no session removes them (unless correcting an error).
-
-**Format:**
-| Item | Key Finding | Constraints | Verified? |
-|------|-------------|-------------|-----------|
-
-**Purpose:** Eliminates re-derivation. When a future session needs to know a component's behavior, the reference table provides the answer without re-reading the implementation.
-
-**Rule:** Reference tables record FACTS (measured heights, observed behaviors, code-confirmed capabilities), not opinions. If a finding is uncertain, mark it explicitly.
-
-### 2. Pattern Library
-
-Named patterns with "Description" and "When to Use" columns. Each pattern is attributed to the session that discovered it.
-
-**Format:**
-| Pattern Name | Description | When to Use | Discovered |
-|-------------|-------------|-------------|------------|
-
-**Purpose:** Makes successful solutions reusable. A future session can apply "RX/TX thematic split" by name rather than re-inventing it.
-
-**Rule:** Patterns are TOOLS, not mandates. A pattern that works for 8 of 10 sessions may fail for the other 2. Each session must evaluate whether a pattern applies to its specific context. Anti-pattern: "Force-fitting a proven pattern because it worked before."
-
-### 3. Anti-Pattern List
-
-Numbered list of mistakes with descriptions of what went wrong and why.
-
-**Format:**
-```
-Anti-pattern #N: [Name] — [Description of the mistake, what caused it,
-and what would have prevented it]. Discovered: Session X.
-```
-
-**Purpose:** Makes failures non-repeatable. A numbered anti-pattern is citable — "check for anti-pattern #29" is specific and actionable.
-
-**Rule:** Every entry in the anti-pattern list exists because a real session made that exact mistake. Do not add hypothetical anti-patterns. Only actual failures earn a number.
-
-### 4. Cross-Session Citations
-
-Design documents explicitly reference previous sessions when reusing patterns or avoiding anti-patterns.
-
-**Examples:**
-- "Applying the RX/TX thematic split from Session 1..."
-- "Session 4 predicted ritXit would apply to satellite; this session confirms it."
-- "Unlike Session 7's dxCluster error, this domain's ecosystem IS the DX cluster network."
-
-**Purpose:** Creates institutional memory. A citation trail lets anyone trace WHY a decision was made, all the way back to the session that established the precedent.
-
----
-
-## Honest Accounting Framework
-
-Honest accounting is the integrity mechanism of the methodology. It prevents the common failure mode of "everything went well" narratives that hide real problems.
-
-### What Went Right (Per Session)
-
-List 3-6 things that worked well, with EVIDENCE:
-- What specifically happened?
-- Why did it work?
-- Is it a reusable pattern? If so, name it and add it to the pattern library.
-- What would have happened without this?
-
-### What Went Wrong (Per Session)
-
-List 1-4 things that went wrong, with ROOT CAUSE ANALYSIS:
-- What specifically happened?
-- Why did it happen? (Not "I made a mistake" — what structural gap allowed the mistake?)
-- What would have prevented it?
-- Is it a new anti-pattern? If so, number it and add it to the anti-pattern list.
-- What should the next session do differently?
-
-**The standard for honesty:** Would a hostile reviewer agree with your assessment? If your "What Went Wrong" section says "nothing significant," ask whether that's true or whether you're avoiding accountability.
-
-**Fabrication is the terminal failure mode.** Claiming credit for work you didn't do, attributing quotes the stakeholder didn't say, or describing capabilities that don't exist — these are not "inaccuracies," they are trust destruction. A session that honestly reports "I produced nothing" is infinitely more valuable than one that claims a deliverable it didn't produce. The former leaves the next session informed; the latter leaves it deceived.
-
-**Evidence from practice:** In a 60+ session series, two sessions fabricated claims (one attributed a quote the stakeholder never said, another claimed credit for a plan that was input, not output). Both were caught within the same session. Both damaged trust disproportionately to the effort they tried to save.
-
-### Performance Comparison Table
-
-Maintained across all sessions. Columns should include:
-
-| Metric | Description |
-|--------|-------------|
-| Iterations to approval | How many times was the design revised before approval? Target: 1. |
-| Stakeholder corrections | How many factual errors did the stakeholder catch? Target: 0. |
-| Defects found in existing work | How many problems were found in the artifact's prior state? Higher is better (means more thorough audit). |
-| Research depth | What was examined before creating? Quantify (e.g., "all 22 plugin directories"). |
-| New patterns discovered | Named patterns added to the library this session. |
-| Gaps identified | Deficiencies found that can't be fixed this session. |
-| Prior recommendations applied | X of Y recommendations from the previous session. Target: Y of Y. |
-
-### Trajectory Narrative
-
-After updating the performance table, write a paragraph interpreting the trend:
-- Is quality improving, stable, or regressing?
-- What explains the trend?
-- Are there leading indicators of future problems?
-- What is the current quality standard? (e.g., "first-pass approval, 0 corrections, 12+ defects found")
-
----
-
-## Scope Validation System
-
-Scope validation asks "Am I solving the right problem?" before "Am I solving the problem right?" Three tools:
-
-### The Splitting Test
-
-When a work item encompasses multiple sub-items, evaluate each pair:
-
-1. Does sub-item A have a **different primary tool/component** than sub-item B?
-2. Does sub-item A have a **different tempo/pace** than sub-item B?
-3. Does sub-item A have a **different user posture** than sub-item B?
-
-If all three are true, the sub-items belong in separate scopes. If they share a primary tool, keep them together and handle differences through views/configurations.
-
-**Signal phrases that indicate a split is needed:** "fundamentally different," "passive vs active," "different tempo," "set-and-forget vs interactive." If you write these phrases about sub-items within a single scope, stop and evaluate.
-
-### Domain-Ecosystem Validation
-
-Before including a tool or component, ask:
-
-1. Does this domain have its own specialized tool ecosystem?
-2. Does my tool set include a tool FROM that ecosystem?
-3. Or am I substituting a generic equivalent?
-
-**Four possible outcomes:**
-| Outcome | Meaning | Action |
-|---------|---------|--------|
-| **Rejection** | Generic tool is domain-inappropriate | Exclude; document the gap |
-| **Confirmation** | My tool IS the domain's native tool | Include with confidence |
-| **Identity** | My tool set IS the ecosystem | Include; no external tools needed |
-| **Complementary** | My tool partially covers the domain; integration exists for the full tool | Include honestly; document limitations |
-
-### Role/Mode Classification
-
-Before designing, classify the work item:
-
-- **Personal operation:** The user manages their own work
-- **Group management:** The user manages others' work
-
-This classification changes which components are "star" components and how the interface is organized. A personal-operation design centers on the user's own actions; a group-management design centers on a roster/queue of others' items.
-
----
-
-## Verification Hierarchy
-
-Seven levels, from least reliable to most reliable. Use the highest level that's practical for each claim.
-
-| Level | Method | Cost | What It Catches | What It Misses |
-|-------|--------|------|-----------------|----------------|
-| 1 | **Assumption** | Free | Nothing | Everything |
-| 2 | **Name/Label** | Free | Gross miscategorization | Subtle mismatches |
-| 3 | **Description/Manifest** | Low | Capability gaps | Behavioral constraints |
-| 4 | **Implementation Reading** | Medium | Width constraints, actual sizes, variant behavior | Domain-inappropriate usage |
-| 5 | **Comprehensive Reading** | Medium | Unexpected components, hidden capabilities | Domain knowledge gaps |
-| 6 | **Domain Validation** | High | Wrong tool for the community | Implementation bugs |
-| 7 | **Mechanical Verification** | Medium | False capability claims | Semantic errors |
-
-**Rule:** Each level was added because a real session trusted a lower level and got burned. Level 4 was added after session 1 trusted names (level 2) and proposed the wrong component. Level 6 was added after session 7 trusted implementation reading (level 4) and proposed a domain-inappropriate tool. Level 7 was added after session 9 trusted an agent's summary and discovered 5 false capability claims.
-
-**Mechanical verification example (Level 7):**
-```
-Step 1: grep for capability declaration (does it claim to support X?)
-Step 2: grep for capability usage (does it actually implement X?)
-Zero matches on Step 2 = zero support. No interpretation needed.
-```
-
----
-
-## Session Document Template
-
-Every session produces a document following this structure. Copy this template and fill it in.
-
-```markdown
-# Session [N]: [Work Item Name]
-
-## Previous Session Handoff Evaluation
-- **Score (1-10):** [How well did Session N-1's handoff prepare you?]
-- **What helped:** [Specific notes, file references, or warnings that saved time]
-- **What was missing:** [What you had to figure out that should have been documented]
-- **What was wrong:** [Any claims that turned out to be inaccurate]
-- **ROI:** [Did reading the handoff save more time than it cost?]
-
-## Pre-Flight Assessment
-- Workspace state: [clean/dirty — if dirty, what and why]
-- Prior session notes: [summary of what the last session did]
-- Ghost session check: [any undocumented sessions detected? changes without notes?]
-- Artifact current state: [builds? passes? known issues?]
-- Adjacent artifact check: [which ones checked, their status]
-
-## Research Summary
-
-### Domain/Requirements
-- [Who is the user? What do they need? What's their workflow?]
-
-### Component Inventory
-| Component | Key Finding | Constraints | Verified? |
-|-----------|-------------|-------------|-----------|
-
-### Prior Work Review
-- [Which previous sessions were read]
-- [Patterns being reused from prior sessions]
-- [Anti-patterns being watched for]
-
-### Scope Validation
-- [Splitting test results]
-- [Domain-ecosystem validation results]
-- [Role/mode classification]
-
-## Design
-
-### Approach
-- [Overall solution description]
-- [Key decisions and their rationale]
-
-### Component Selection
-| Component | Included/Excluded | Rationale |
-|-----------|-------------------|-----------|
-
-### Quantitative Analysis
-- [Balance calculations, sizing estimates, performance projections — whatever is measurable]
-
-### Gap Analysis
-| Gap | Severity | Workaround | Future Fix |
-|-----|----------|------------|------------|
-
-## Implementation
-
-### Change Set
-| File | Action | Notes |
-|------|--------|-------|
-| (file) | Modify/Create/Delete | (what changes) |
-
-### Files NOT Modified (Scope Boundary)
-- [Explicit list of files that are adjacent but out of scope]
-
-## Verification
-- Artifact verification: [pass/fail, details]
-- Adjacent artifact check: [which ones, status]
-
-## Session Learnings
-
-### What Went Right
-1. [Specific success with evidence]
-2. [Reusable pattern, if discovered]
-
-### What Went Wrong
-1. [Specific failure with root cause analysis]
-2. [New anti-pattern, if discovered]
-
-### Performance Metrics
-| Metric | This Session | Trend |
-|--------|-------------|-------|
-| Iterations to approval | | |
-| Stakeholder corrections | | |
-| Defects found | | |
-| Research depth | | |
-| New patterns | | |
-| Prior recommendations applied | X of Y | |
-
-### Recommendations for Next Session
-1. [Specific, actionable improvement]
-2. [...]
-
-### Patterns Added to Library
-| Pattern | Description | When to Use |
-
-### Anti-Patterns Added
-| # | Name | Description |
-```
-
----
-
-## Performance Tracking
-
-Maintain a performance comparison table across ALL sessions in the methodology prompt or a dedicated tracking file.
-
-**Required columns:**
-
-| Column | What It Measures | Target |
-|--------|-----------------|--------|
-| Session | Identifier | — |
-| Iterations to approval | Creative rework cycles | 1 |
-| Stakeholder corrections | Domain errors caught by stakeholder | 0 |
-| Defects in existing work | Thoroughness of pre-work audit | Increasing trend |
-| Research depth | Components/files examined | "All" (comprehensive) |
-| New patterns discovered | Methodology growth | 2+ (early), 0+ (mature) |
-| Prior recommendations applied | Accountability | 100% |
-| Handoff quality score | How well the previous session set this one up (1-10) | 8+ |
-| Handoff ROI | Did reading the handoff save more time than it cost? | Positive |
-
-**Interpreting the table:**
-- **Iterations > 1:** Research was incomplete. Tighten Phase 2.
-- **Corrections > 0:** Domain knowledge gap. Add domain validation steps.
-- **Defects decreasing:** Audit is getting lazy. Check audit methodology.
-- **Recommendations < 100%:** Either the recommendations were impractical or the session skipped them. Investigate which.
-- **Handoff score < 7:** The previous session's close-out was insufficient. Review what was missing and add it to the close-out checklist.
-- **Handoff ROI negative:** The handoff described completed work that was actually incomplete, or contained incorrect claims. Tighten the "re-read before claiming" rule.
-
-**Maturity indicators:**
-- Sessions 1-3: Foundation — expect methodology changes, pattern discovery, some corrections
-- Sessions 4-7: Expansion — patterns stabilize, new anti-patterns emerge from edge cases
-- Sessions 8-15: Maturity — validations exceed discoveries, corrections near zero, methodology changes are rare
-- Sessions 15-30: Refinement — handoff quality becomes the primary lever for improvement; phase execution is automatic
-- Sessions 30+: Maintenance — patterns are stable; focus shifts to preventing regression, maintaining discipline across workstream changes, and accountability
-
-**Erosion indicators (see §Protocol Erosion):**
-- Handoff scores declining across consecutive sessions
-- Session note gaps (ghost sessions)
-- Scores that were stable at 8+ dropping below 5
-- Self-assessments getting shorter or less specific
-- "Maturity" being used as justification for skipping steps
+## Reference Apparatus
+
+The apparatus these principles operate — the tables you fill in, the tests you run, the scales you
+score against — lives in [`FRAMEWORK_APPARATUS.md`](FRAMEWORK_APPARATUS.md), a sibling read **on
+demand** rather than every session. Six sections moved there intact, content unchanged; a seventh
+holds the `CHANGELOG.md` rules the starter-kit seed used to carry:
+
+| Section | What it gives you |
+|---|---|
+| **Knowledge Accumulation System** | Reference tables, pattern library, anti-pattern list, cross-session citations |
+| **Honest Accounting Framework** | What Went Right / What Went Wrong, the performance comparison table, the trajectory narrative |
+| **Scope Validation System** | The Splitting Test, Domain-Ecosystem Validation, Role/Mode Classification |
+| **Verification Hierarchy** | The seven ascending levels of verification |
+| **Session Document Template** | The copy-paste template for a session document |
+| **Performance Tracking** | Cross-session metric columns, their interpretation, maturity and erosion indicators |
+| **The Action Ledger** | The rules for a project's `CHANGELOG.md`: entry format, source tags, reading and archiving |
+
+Nothing was condensed or dropped, and every point of need above links onward — Principles 4–7,
+Phase 2 steps 6–8, Phase 6 steps 4–6 with its honest-accounting bullet and its gate, and the
+*Across the Full Series* heading. This file is read to understand the methodology, that
+one while operating it: the split `SESSION_RUNNER.md` made when its learnings became
+`FRAMEWORK_LEARNINGS.md`.
 
 ---
 

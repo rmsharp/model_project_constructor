@@ -14,7 +14,7 @@ This is a **campaign**, not a workstream. It does not replace [parent workstream
 |----------|------|
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
 | [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) | Parent workstream. Defines the per-session primitives this campaign scales. |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 [Add additional rows for sibling workstreams the campaign borrows session patterns from — e.g., `AUDIT_WORKSTREAM.md` for review-mode sessions.]
 
@@ -106,7 +106,7 @@ Stakeholder approval of `CAMPAIGN.md` is the second-highest-leverage gate in the
 ### Common steps
 
 1. **Pre-Flight.** Read `CAMPAIGN.md`. Read prior unit deliverables. Verify [domain-specific state] matches planning-session inventory.
-2. **Phase 1.5 (Claim the Session).** Stub names the unit in progress. A ghost session here is detectable because the stub names exactly which unit was being worked on.
+2. **Phase 1B (Claim the Session).** Stub names the unit in progress. A ghost session here is detectable because the stub names exactly which unit was being worked on.
 3. **Research.** [What to extract for this unit, with no exceptions.]
 4. **[Mode-specific work]** (see below).
 5. **Present.** Surface the unit deliverable to the stakeholder. Highlight: [campaign-specific items — e.g., blocked rows, calibration adjustments, patterns visible at unit scope].
@@ -208,7 +208,7 @@ Each unit deliverable is a checkpoint. After every execution session, commit the
 [campaign-directory]/units/<unit>.md
 ```
 
-A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first row marked [pending-status]. The Phase 1.5 stub records which unit is in progress, so a ghost session is detectable.
+A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first row marked [pending-status]. The Phase 1B stub records which unit is in progress, so a ghost session is detectable.
 
 **Unit deliverables are append-only within a session.** Never delete a row; mark it `superseded` and add a new row. The history of changed statuses is itself a signal — for calibration, scope drift, and the consolidation session's pattern detection.
 
@@ -236,6 +236,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Every row has the required evidence
 - [ ] No row is in a transient/pending state
 - [ ] Unit deliverable is committed
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy and calibration adjustments
 
 ### Per campaign, before close-out (consolidation session)
@@ -247,6 +249,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Cross-unit patterns are surfaced explicitly, not buried in per-finding remediation
 - [ ] Remediation plan is ordered by priority and dependency, not by unit order
 - [ ] Estimate-to-actual ratio is recorded for future-campaign calibration
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---
 

@@ -20,7 +20,7 @@ This is a **campaign**, not a workstream. It does not replace the Audit workstre
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
 | [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Parent workstream. Defines audit-criteria definition, scope inventory, evidence-bearing findings, and the review-session pattern (Phases 1-4 + 6, skip 5). |
 | [`DEVELOPMENT_WORKSTREAM.md`](DEVELOPMENT_WORKSTREAM.md) | Sibling workstream. The consolidation session's prioritized backlog feeds into Development sessions; the per-unit dependency analysis informs blast-radius estimates for those sessions. |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 ---
 
@@ -68,6 +68,8 @@ A single session that attempts to familiarize with a non-trivial inherited codeb
 3. **No resumability.** A session that crashes mid-run leaves the next session unable to determine which modules were studied, at what depth, against what criteria. Without checkpoint files and a locked deliverable schema, the entire run must restart — and the next session, lacking a record of the first session's interpretive judgments, often produces inconsistent depth across modules even if it does resume.
 
 This campaign decomposes the work into a planning session, N execution sessions (one per scoped unit), and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
+
+Decomposition answers the within-session degradation above; the work's *stakes* are a separate lever. A confidently wrong mental model of an inherited codebase propagates into every later session that trusts the familiarization record, so this campaign inherits the deepest-reasoning-tier default from its parent Audit workstream (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes): set your agent's deepest-reasoning mode at the start of *each* session.
 
 ---
 
@@ -153,7 +155,7 @@ Each execution session is bounded to one scoped unit. Familiarization sessions a
 ### Common steps (both modes)
 
 1. **Pre-Flight.** Read `CAMPAIGN.md`. Read prior unit deliverables. Verify the inventoried files for this unit still exist at the recorded paths (a rebase, merge, or upstream pull between sessions can move things; the planning inventory is the source of truth for what *was* in scope, the current state is the source of truth for what *is*).
-2. **Phase 1.5 (Claim the Session).** Write the stub naming the unit in progress. A ghost session here is detectable because the stub names exactly which module was being studied.
+2. **Phase 1B (Claim the Session).** Write the stub naming the unit in progress. A ghost session here is detectable because the stub names exactly which module was being studied.
 3. **Research — read the implementation.** For this unit only:
    - Enumerate the public API surface — every exported function, class, endpoint, message handler, scheduled job, or other externally-callable entry point. For each: file:line, signature, one-line purpose statement.
    - Trace data flow for each entry point — input source(s), transformation steps with file:line at each hop, persistent or shared state touched, outputs. Stop at module boundaries; cross-module flow is consolidation-session work.
@@ -395,7 +397,7 @@ Each unit deliverable is a checkpoint. After every execution session, commit the
 familiarization/units/<unit>.md
 ```
 
-A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first unanswered exit-criteria predicate. The Phase 1.5 stub records which unit is in progress, so a ghost session is detectable.
+A crashed mid-unit session is recovered by the next session reading the unit file from the last committed state and resuming from the first unanswered exit-criteria predicate. The Phase 1B stub records which unit is in progress, so a ghost session is detectable.
 
 **Unit deliverables are append-only within a session.** Never delete a row; mark it `superseded` and add a new row. The history of changed rows is itself a signal — for calibration, for owner-bias detection in interview mode, and for the consolidation session's pattern detection.
 
@@ -446,6 +448,8 @@ In interview mode, `interviews/round-N-*.md` is a separate checkpoint stream. A 
 - [ ] (Interview mode) Cold-read owner-bias check completed and recorded
 - [ ] (Archaeology mode) Doc spot-check completed; results recorded
 - [ ] Unit deliverable is committed to `familiarization/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy, calibration adjustments, residual-unknown count, and any cross-unit hypotheses to verify in subsequent sessions
 
 ### Per campaign, before close-out (consolidation session)
@@ -458,6 +462,8 @@ In interview mode, `interviews/round-N-*.md` is a separate checkpoint stream. A 
 - [ ] Prioritized backlog is ordered by priority and dependency, not by module order
 - [ ] Estimate-to-actual ratios are recorded for future-campaign calibration (unit count, session length, residual-unknown rate)
 - [ ] Operational-responsibility sign-off is captured — either the responsibility is assumable, or the gaps blocking that are listed with closing actions
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
+- [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---
 

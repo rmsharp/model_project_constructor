@@ -15,6 +15,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — sync the methodology framework files from fork `main` `v3.7-975-ga69ef73` (`bin/sync --force`, 26 files)
+- **Change:** `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `docs/methodology/ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md` and the nine workstream and campaign files are now byte-identical to the canonical starter kit. The sync created nine root files (`FRAMEWORK_LEARNINGS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`), `docs/methodology/FRAMEWORK_APPARATUS.md`, and three seeds (`HANDOFFS.md`, `.context-budget.json`, `.quality-gates.json`). `--force` was needed because the sync can match neither file to any canonical version: `SAFEGUARDS.md` is byte-identical to one reachable only from a pre-rebase backup tag, and the runner carried this project's edits, which moved into `CLAUDE.md` in the commit before this one. `SESSION_NOTES.md`, `CHANGELOG.md` and `ROADMAP.md` are left as they are.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** the commit holds exactly the 26 files the dry run listed, plus this entry; full suite, `ruff check src/ tests/ packages/ scripts/` and `mypy` pass (figures in the session record)
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — move the runner's customizations into `CLAUDE.md` before the sync overwrites them (operator decision (a))
 - **Change:** `CLAUDE.md` now carries what the synced `SESSION_RUNNER.md` held as local edits: the seven task-to-workstream rows (under *Additional task-to-workstream mappings*) and the *Wiki sync* paragraph, with the live path `docs/wiki/model_project_constructor/`, in place of the section that corrected its old path. Step 5's *"do not create a copy in this repo"* is recorded as retired under *Additional Phase 0 steps*, so no later session restores it. The runner's line in *Key Files* and the base-learnings pointer name the synced files. The runner itself is untouched until the sync commit.
 - **Commit/PR:** this commit
