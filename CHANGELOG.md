@@ -2,8 +2,9 @@
 
 > *Maintainer-facing commit-linked ledger. For the user-facing release summary, see `docs/wiki/model_project_constructor/Changelog.md`. For the design-decision arc, see `docs/wiki/model_project_constructor/Evolution.md`.*
 
-All notable changes to this project are documented here.
-Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
+**The rules** — how to add an entry, source tags, reading and archiving — are in
+[§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger), which `bin/sync`
+keeps current. ledger-format: 2 — keep this marker; `bin/status` reads it.
 
 When completing work, remove the item from `BACKLOG.md` and add an entry here.
 
@@ -14,6 +15,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 ---
 
 ## 2026-09
+
+### 2026-09-19 · [ad hoc] S259 — this ledger's header points at the rules and carries the format marker
+- **Change:** the header's two lines *"All notable changes…"* and *"Format loosely follows Keep a Changelog"* are replaced by the current seed's paragraph, which points at [§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger) — the rules `bin/sync` keeps current — and carries the `ledger-format: 2` marker `bin/status` reads. Those two lines are the only content this file loses in P11; every other line survives in order, and no entry moves. `bin/status` now reports this file `present` rather than `present (stale format)`.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** `git diff --numstat` on this commit is 3 insertions, 2 deletions; the plan's §9.8 removed-lines check prints *only the block changed* for bounds `5 6`, and names the hunk `(5, 2)` for the `5 5` control
+- **Model:** Claude Opus 5 (1M context)
 
 ### 2026-09-19 · [ad hoc] S259 — attribution names what the sync brought
 - **Change:** `NOTICE` §1 and `CLAUDE.md`'s attribution section now enumerate the whole body of third-party methodology material: the nine new root files, `docs/methodology/` at 13 files (all but the project-owned `PROJECT_CONVENTIONS.md`), and the three seeded files (`HANDOFFS.md`, `.context-budget.json`, `.quality-gates.json`), which the tool writes once and never rewrites. `NOTICE` also records that none of these files carries its own copyright header — the methodology repository declares them at repository level (`LICENSE`, `REUSE.toml`) — and its "synced verbatim, not edited locally" paragraph now covers the whole synced set, which became true only with the two commits before this one.
