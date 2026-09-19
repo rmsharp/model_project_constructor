@@ -13,6 +13,14 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ---
 
+## 2026-09
+
+### 2026-09-19 · [ad hoc] S259 claim: BL-57 P11 — bring this ledger to the methodology's rules, sync the framework files, move the runner's customizations into `CLAUDE.md` first *(in progress)*
+- **Change:** Session 259 is claimed in `SESSION_NOTES.md`. This is the ledger's first tagged entry. From here on every commit carries one, under a `## YYYY-MM` heading above `## [0.3.0]`, newest on top; the 156 entries below stay where they are, as written (the operator's decision (b), 2026-09-19). Tagged `[ad hoc]` because BL-57 is the methodology fork's backlog id and this project's `BACKLOG.md` holds no item for the work.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** n/a — docs-only; the census and read-budget guards pass at the claim state
+- **Model:** Claude Opus 5 (1M context)
+
 ## [0.3.0] - 2026-07-27
 
 > *Sessions 116–144 below were backfilled in Session 149 (2026-06-12), when the `CHANGELOG.md` cadence convention was clarified to gate on shipped-code changes rather than strictly per-session (see `docs/methodology/PROJECT_CONVENTIONS.md` §2). The six entries cover the O3/O1/O4 single-sourcing overhauls, the E4 provider factory, the wiki citation guard, and the `SR_11_7`→`SR_26_2` rename. Documentation-only sessions in the same span are intentionally recorded in `SESSION_NOTES.md` only.*

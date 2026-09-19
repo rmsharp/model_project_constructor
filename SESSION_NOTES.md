@@ -97,6 +97,16 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 259 Did
+**Deliverable:** BL-57 phase P11 (the methodology fork's plan) — bring `CHANGELOG.md` to the current
+methodology's ledger rules, run the framework sync, and first move this project's customizations
+out of the synced runner into `CLAUDE.md` (IN PROGRESS). Operator decisions (a) and (b) of
+2026-09-19 govern. Re-measured at claim: `bin/sync --dry-run` exits 2 on `SESSION_RUNNER.md` and
+`SAFEGUARDS.md`; with `--force` it lists 26 files; source `v3.7-975-ga69ef73`.
+**Started:** 2026-09-19 (UTC)
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress).
+
 ### What Session 258 Did
 **Deliverable:** **The ledger's front matter is the census guard's fifth surface — COMPLETE.** The
 operator ruled **Option 2, extend the guard** (2026-09-18), on the BACKLOG item "The ledger's front
