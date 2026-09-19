@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — the old cadence marked superseded; the new rules recorded as adaptations
+- **Change:** `docs/methodology/PROJECT_CONVENTIONS.md` §2 now opens with the supersession (operator decision (b), 2026-09-19) and keeps the behavior-change gate and both SETTLED rulings verbatim as history; its table row states the new cadence. `CLAUDE.md` gains the adaptations: where new entries go and under which rules, that everything below the newest `## YYYY-MM` heading is legacy and stays byte-identical, that the trimmer must never be run with `--write` on this file (with the measurement — 143 of 156 legacy entries would be archived back to 2026-04-16 under a 2026-09-19 label, the last 13 held back as the footer), that `Evolution.md:442` is knowingly stale because `docs/wiki/` is publish-on-commit, and that the two seeded JSON manifests are unconfigured on purpose. `BACKLOG.md`'s ledger-order item keeps only its order question.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** census and read-budget guards, 82 passed
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — this ledger's header points at the rules and carries the format marker
 - **Change:** the header's two lines *"All notable changes…"* and *"Format loosely follows Keep a Changelog"* are replaced by the current seed's paragraph, which points at [§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger) — the rules `bin/sync` keeps current — and carries the `ledger-format: 2` marker `bin/status` reads. Those two lines are the only content this file loses in P11; every other line survives in order, and no entry moves. `bin/status` now reports this file `present` rather than `present (stale format)`.
 - **Commit/PR:** this commit

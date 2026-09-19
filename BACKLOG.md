@@ -66,7 +66,7 @@ rows below it are the smaller residue that closing it exposed.
 | Neither collapse proof is guarded by anything | `L10` enforces write-once over the ancestor *shard* proofs by a hand-declared list; `R4/GONE` covers every shard the table declares, and its proof. Nothing covers `SESSION_NOTES-pointer-collapse.verify.sh` or `SESSION_NOTES-pointer-collapse-S254.verify.sh` — and the second is the declared second custodian of the 276 deleted lines, the reason "nothing was lost" does not rest on git alone. Delete either file and the remaining proofs pass; CI errors only when *zero* proofs are found. | **Small.** Add both to a write-once list, or have each assert the other exists. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB). Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
-| `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry is not at the top; new entries go below those four. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
+| `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
 | CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk.
 
@@ -574,14 +574,19 @@ filed — *"a write-only file is outside the read budget"* — for this file alo
 CHANGELOG.md — take it off the read budget"* (`PROJECT_CONVENTIONS.md` §5 records why). Its size —
 664,625 B when ruled, 2.54× the refusal ceiling — is no longer a defect. The other two remedies
 lapse with it, since nothing trims the file: a hand-built archive, and a grammar conversion so the
-canonical trimmer stops refusing it with `GRAMMAR_MISMATCH`.
+canonical trimmer stops refusing it with `GRAMMAR_MISMATCH`. **Session 259 (BL-57 P11) changed the
+mechanics, not the ruling:** the file now carries tagged entries, so the trimmer parses it and its
+trigger fires — and `CLAUDE.md` records, with the measurement, why it must still never be written to.
 
 What remains is order. Under the `## [0.3.0]` heading, four entries (Sessions 191, 193, 203 and
 205) sit above the September entries, so the newest entry by position is not the newest by date.
-A session adding an entry puts it below those four and above the newest dated one.
+**Where new entries go is no longer part of this item:** since Session 259 they are prepended under
+the topmost `## YYYY-MM` heading, which sits above `## [0.3.0]` and everything inside it (operator
+decision (b), 2026-09-19). The four are inside the legacy part of the file, which stays as written
+unless someone decides otherwise.
 
 **Operator call.** Move the four into date order — a pure reorder of an append-only log, provable
-as a permutation of its entries — or accept the order and keep the sentence above as the rule.
+as a permutation of its entries — or accept the order.
 
 ### The `SESSION_NOTES.md` shard is past the agent read cap and nothing watches it
 
