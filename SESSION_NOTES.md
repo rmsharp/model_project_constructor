@@ -98,14 +98,147 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 259 Did
-**Deliverable:** BL-57 phase P11 (the methodology fork's plan) — bring `CHANGELOG.md` to the current
-methodology's ledger rules, run the framework sync, and first move this project's customizations
-out of the synced runner into `CLAUDE.md` (IN PROGRESS). Operator decisions (a) and (b) of
-2026-09-19 govern. Re-measured at claim: `bin/sync --dry-run` exits 2 on `SESSION_RUNNER.md` and
-`SAFEGUARDS.md`; with `--force` it lists 26 files; source `v3.7-975-ga69ef73`.
-**Started:** 2026-09-19 (UTC)
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress).
+**Deliverable:** **BL-57 phase P11 — COMPLETE.** `CHANGELOG.md` now follows the methodology's ledger
+rules, the framework files are synced, and this project's customizations moved out of the synced
+runner first. The operator's decisions of 2026-09-19 governed: **(a)** the runner's seven
+task-to-workstream rows and its *Wiki sync* paragraph move into `CLAUDE.md` and step 5's *"do not
+create a copy in this repo"* is retired; **(b)** from this session on every action gets a tagged
+entry under a `## YYYY-MM` heading above `## [0.3.0]`, with the 156 legacy entries left byte-identical
+where they are. **Started / completed:** 2026-09-19 (UTC). **Commits: nine** — `bb91fda` (claim),
+`5935288` (ignores), `3d96eb6` (decision (a)), `8da685f` (the sync), `886945a` (attribution),
+`8b32939` (the ledger header), `3f35793` (conventions + adaptations), `7e575ba` (three corrections
+the review caught) and this close-out. **Ledger: nine entries, one per commit.**
+
+#### What landed
+
+`bin/sync --force` from fork `main` `a69ef73` wrote **26 files** — 13 updated (the runner,
+`SAFEGUARDS.md`, eleven `docs/methodology/` files) and 13 created (nine root files,
+`docs/methodology/FRAMEWORK_APPARATUS.md`, and the seeds `HANDOFFS.md`, `.context-budget.json`,
+`.quality-gates.json`). `--force` was required for a reason worth remembering: `SAFEGUARDS.md`
+carries **no local edit at all** — it is byte-identical to canonical blob `6ba2c156` — but that blob
+is reachable only from the `backup/pr9-pre-rebase` tag, and the sync's history lookup walks `HEAD`
+(learning #266). `bin/status` now reads every tracked file `current`, both ledgers `present`, and
+`bin/sync --dry-run` exits 0 with nothing to write.
+
+`CHANGELOG.md` lost exactly **two lines** in the whole phase — the *"All notable changes"* and
+*"Keep a Changelog"* pair — replaced by the seed's rules pointer and the `ledger-format: 2` marker
+`bin/status` reads. Proved rather than asserted: `git diff --numstat a18706f HEAD -- CHANGELOG.md`
+is `53 2`, the plan's §9.8 check prints *only the block changed* for bounds `5 6` and names the hunk
+`(5, 2)` for the `5 5` control, and a subsequence scan showed all 1,713 surviving old lines still in
+order. Counts: `### ` **156 → 164**, the anchored audit **0 → 8**, one entry per commit.
+
+#### The measurement came before the claim, and three of the brief's facts were wrong
+
+Eight parallel agents re-measured facts 1–11 read-only, with every write confined to scratch clones,
+before anything was committed. The material correction is **fact 6**: the trimmer would not swallow
+"all 156 legacy entries back to 2026-04-10". Measured at three tagged entries, it archives **143 of
+156, back to 2026-04-16**, leaving the last 13 live because a standalone `---` zones them as the
+file's footer — and it also emits `CUT_STRADDLES_DAY`. The conclusion (**never** `--write` this file)
+was unchanged, which is why the session continued rather than stopping; `CLAUDE.md` records the
+measured numbers, not the brief's. Also different: the fork had moved to `a69ef73` (backlog-only, so
+the synced bytes are identical), and `context_budget.py` has no `--status` flag — the argument is
+ignored and the default run's exit 2 is what fact 10 saw.
+
+#### The review caught three defects, and the biggest was mine
+
+Five lenses, then a skeptic per finding: **42 agents, 35 findings, 4 confirmed (3 distinct), 31
+refuted.** All three were this session's own work. (1) The header entry's *"`numstat` on this commit
+is 3 insertions, 2 deletions"* named the **header hunk**, not the commit, which is 9/2 — the entry's
+own six lines ride in it. The ledger forbids editing a committed entry, so `7e575ba` carries a
+correction entry instead (learning #262). (2) `CLAUDE.md`'s attribution claimed Session 259 *brought*
+everything after `SAFEGUARDS.md`; twelve of the thirteen `docs/methodology/` files predate it.
+(3) `PROJECT_LEARNINGS.md:3` still routed base learnings to `SESSION_RUNNER.md` — the very sentence
+`CLAUDE.md` was corrected for in `3d96eb6`, in the file `CLAUDE.md` points at (learning #263).
+
+**A refutation worth keeping.** The sync makes a bare `ruff check` report 294 errors in its four root
+tools (CI's scoped form is unaffected and green). The obvious fix, listing them in `pyproject.toml`'s
+`extend-exclude`, was measured and rejected: ruff's `force-exclude` defaults to false, so a named
+path still lints — the case a pre-commit hook would use — and the list is a second copy of the fork's
+manifest that rots on the next sync (learning #264). Recorded, not fixed.
+
+#### Verification
+
+Full suite **1,395 passed, 9 skipped, 97.98%**; `ruff check src/ tests/ packages/ scripts/` and
+`uv run mypy` (68 files) clean; **all 11 proofs green in BOTH modes**, 613 mutants caught; census and
+read-budget guards 82 passed at the claim state, at each step and at close-out; the synced dashboard
+96/100 with three HIGH signals the project's own rulings already cover.
+
+### Session 258 Handoff Evaluation (by Session 259)
+
+**Score: 9/10.** **+** Gotcha #2 — the read-budget guard's next-state arms differ at a claim commit
+and at a close-out commit, so run it at both — was the reason this session ran the guards at the
+claim before touching anything, and they were green each time. **+** Gotcha #1 (editing the front
+matter is a guarded edit) and #3–#4 kept me out of the ledger's front matter entirely; nothing this
+session did needed to touch it, and knowing that early saved a careful read. **+** The what's-next
+list was ordered and honest about which items were operator calls, so recognising that P11 was none
+of them took one read. **−** The one miss: its key-files list is scoped to the guards it changed, so
+it says nothing about the files a *framework* session touches — no pointer to `NOTICE`, the runner's
+local edits, or where the methodology fork lives. That is a fair scope for a guard session, but it
+left the P11 brief as my only map. **ROI: high.**
+
+### Session 259 Self-Assessment
+
+**Score: 8/10.**
+**+ Measured before claiming, and the measurement paid.** Eight agents re-derived every fact; three
+were wrong, and the one that mattered (#6) is now recorded in `CLAUDE.md` as measured rather than as
+briefed. No fact was taken on trust, and nothing was written outside scratch clones until the claim.
+**+ One commit per step, one ledger entry per commit, nine for nine** — including the sync commit,
+which holds exactly the 26 files its dry run listed plus its entry.
+**+ The review gated the close-out** and I applied every finding that survived a skeptic, including
+the one against my own ledger entry, by the rule the ledger just adopted rather than by editing it.
+**+ Refused a fix that would have created an unread duplicate**, with the measurement to justify it.
+**− I wrote a false figure into the authoritative ledger** — the 3/2 numstat — in the one bullet
+whose whole contract is reproducible evidence, and it took a review to find it.
+**− I corrected a sentence in `CLAUDE.md` and left its twin** in the file that sentence points at.
+Both defects are the project's most-reported class: a claim the diff itself falsifies.
+**− `CLAUDE.md` grew 6,248 B (+19%) to 38,982 B**, against the ~25 KB target its own line 102 still
+states. Decision (a) required moving content in, so growth was inevitable — but I did not shrink
+anything to pay for it, and the file now carries two long sections a future session may want split.
+
+**What's next.**
+1. **Report P11 back to the methodology fork** — the recording session there needs the commit list,
+   counts, gate results and every differing fact. This is the only step of the brief left, and it is
+   outside this repository.
+2. **Pushing is the operator's call** — 25 commits ahead of `origin/master`, this close-out included
+   (measured). CI runs both proof modes on push, and this repo pushes in bursts.
+3. **Operator calls, unchanged by this session:** `PROJECT_LEARNINGS.md` is still refused by a default
+   `Read` (307.5 KB); `CHANGELOG.md`'s four July entries are still out of order *inside the legacy
+   part* — where new entries go is no longer part of that item.
+4. **New, small, and recorded nowhere but here and the ledger:** a bare `ruff check` now reports 294
+   errors in the four synced root tools (`CONTRIBUTING.md:19` tells contributors to run exactly that),
+   and `uv build --sdist` now ships them (+219,852 B, 13 entries); the wheel does not, and no CI job
+   builds either. Both are consequences of decision (a), not defects to repair blindly — see
+   learning #264 before "fixing" the first.
+5. **Carried:** the tenth trim when `SESSION_NOTES.md` next exceeds its trigger; the two collapse
+   proofs are still guarded by nothing; the NO-OP guard still cannot see a partially inert mutant.
+
+**Key files** (line numbers measured at this close-out; `CHANGELOG.md`'s entry lines move on every
+prepend, so its entries are located by heading, not by number). `CLAUDE.md:59` (Key Files line),
+`:69`–`:71` (attribution, now enumerated), `:73`–`:77` (Wiki sync, moved from the runner),
+`:79`–`:85` (the new `CHANGELOG.md` adaptations — five bullets), `:102`–`:104` (Phase 0 step 5
+retired), `:106`–`:118` (the seven task rows); `NOTICE:8`–`:45`;
+`docs/methodology/PROJECT_CONVENTIONS.md:29`–`:39` (the supersession banner, §2 running to `:63`);
+`BACKLOG.md:69` and `:569`–`:589` (the order item, narrowed); `CHANGELOG.md:5`–`:7` (the seed's
+rules pointer and `ledger-format: 2` marker) and the entries under `## 2026-09`;
+`HANDOFFS.md` (this project's first receipt).
+
+**Gotchas.**
+1. **Never run `methodology_trim.py --write` on `CHANGELOG.md`.** It parses the file now, and its
+   trigger fires. `CLAUDE.md` carries the measurement of what it would do.
+2. **A `Verified:` bullet about its own commit is measured before the entry exists.** Name the scope
+   in words, or measure after staging. A committed entry can only be corrected by another entry.
+3. **The runner is 400 lines now, not 304, and Phase 3E/3F became 3F/3G.** Any note citing a runner
+   step by number — including `CLAUDE.md:90`'s "Step 14"/"Step 18", which still resolve — should be
+   re-checked against the file rather than trusted. Four planning documents cite
+   `SESSION_RUNNER.md:209` for the Wiki sync paragraph; that paragraph is now in `CLAUDE.md`, and
+   those citations are historical records, deliberately left alone.
+4. **Phase 0 now reconciles the ledger and `HANDOFFS.md`** (step 6) and permits one write to do it.
+   With nine entries for nine commits, the frontier is HEAD and there is nothing to backfill. The
+   `HANDOFFS.md` frontier is the sync commit only because the file was born mid-session.
+5. **`context_budget.py` reports `CLAUDE.md` and `SESSION_NOTES.md` over the seed's ceilings.**
+   Expected, not a finding: this project's budget is `tests/test_read_budget.py` plus
+   `PROJECT_CONVENTIONS.md` §5, and the seed is deliberately unconfigured. The tool has no `--status`
+   flag; unknown arguments are ignored and it runs anyway.
 
 ### What Session 258 Did
 **Deliverable:** **The ledger's front matter is the census guard's fifth surface — COMPLETE.** The

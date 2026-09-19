@@ -17,10 +17,6 @@ reconcile-on-read backstop — this makes a skipped handoff *detectable* rather 
 > never semantic quality. Faithfulness is still scored 1–10 by the next session (Phase 3A). A
 > well-formed but hollow receipt passes the check and is caught only by that human judgement.
 
-<!-- METHODOLOGY-SEED-SENTINEL: fresh receipt ledger, no receipts yet. While this line is present AND
-     there are no `session:` blocks below, this is a freshly-seeded file, not a stale or abandoned one.
-     Delete this line when you add your first real receipt. -->
-
 ## How to write a receipt
 
 **At Phase 1B (claim the session)** — write the stub block below with `status: pending`, filling what
@@ -176,3 +172,23 @@ manifest existed are not re-judged.
 ---
 
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
+
+```handoff
+session: S259
+date: 2026-09-19
+status: complete
+self_score: 8
+predecessor_score: 9
+active_task: BL-57 phase P11 — COMPLETE. CHANGELOG.md follows the methodology's ledger rules, the framework files are synced from fork main a69ef73, and this project's runner customizations live in CLAUDE.md. Nothing of P11 is left in this repository; the only remaining step, reporting the phase back to the methodology fork, happens there.
+what_was_done: Nine commits, one ledger entry each — bb91fda claim, 5935288 ignores for the three tool run logs, 3d96eb6 the runner's seven task rows and Wiki sync paragraph moved into CLAUDE.md with step 5 retired (operator decision (a)), 8da685f bin/sync --force writing exactly the 26 files its dry run listed, 886945a NOTICE and CLAUDE.md attribution enumerating what the sync brought, 8b32939 the ledger header to the seed's rules pointer and ledger-format 2 marker, 3f35793 PROJECT_CONVENTIONS.md §2 superseded plus the CLAUDE.md ledger adaptations, 7e575ba three corrections an adversarial review caught, and this close-out. CHANGELOG.md lost exactly two lines across the whole phase; its ### count went 156 to 164 and the anchored audit 0 to 8.
+next_steps: Report P11 back to the methodology fork's recording session — commit list, bin/status before and after, the sync's source version v3.7-975-ga69ef73, the ### and audit counts, the §9.8 outputs, each trimmer check, the gate results, and the facts that measured differently (the trimmer archives 143 of 156 back to 2026-04-16, not all 156 back to 2026-04-10; the fork had moved to a69ef73; context_budget.py has no --status flag). Then the operator's call on pushing: 25 commits ahead of origin/master, this close-out included.
+key_files: CLAUDE.md:79 (the new CHANGELOG.md adaptations, five bullets to :85), CLAUDE.md:106 (the seven task-to-workstream rows), NOTICE:8 (the enumerated attribution), docs/methodology/PROJECT_CONVENTIONS.md:29 (the supersession banner over §2), CHANGELOG.md:5 (the seed's rules pointer and format marker), BACKLOG.md:569 (the ledger-order item, narrowed to its order question)
+gotchas: Never run methodology_trim.py --write on CHANGELOG.md — it parses the file now and its trigger fires, and at three tagged entries its dry run would carry 143 of the 156 legacy entries into the oldest tagged record, back to 2026-04-16, leaving the last 13 live as the footer; CLAUDE.md:83 holds the measurement. A Verified bullet about its own commit is measured before that entry exists, so name the scope or measure after staging — 8b32939's entry said 3 insertions when the commit is 9, and the ledger forbids editing it, so the repair cost a whole entry. The synced runner is 400 lines, not 304, and its Phase 3E/3F are now 3F/3G. A bare ruff check reports 294 errors in the four synced root tools while CI's scoped form stays clean; do not "fix" it with a hand-copied exclude list, which was measured and rejected.
+runtime_smoke: n/a — docs and framework files only, no runtime behavior changed. .quality-gates.json declares no gates, so quality_ratchet.py has nothing to run here. Mechanical evidence instead: full suite 1,395 passed and 9 skipped at 97.98% coverage, ruff check src/ tests/ packages/ scripts/ clean, uv run mypy clean over 68 files, all 11 docs/architecture-history proofs green in both plain and --self-test modes, and the census and read-budget guards 82 passed.
+changelog_ref: CHANGELOG.md "### 2026-09-19 · [ad hoc] S259 — close out BL-57 P11"
+commit: pending
+```
+
+Model: Claude Opus 5 (1M context), single tier. Self-score 8 and predecessor score 9 are argued in
+this session's record in `SESSION_NOTES.md`; the review that gated this close-out ran five lenses and
+a skeptic per finding, confirming 3 distinct defects of 35 findings, all of them this session's own.

@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — close out BL-57 P11
+- **Change:** this project keeps its first `HANDOFFS.md` receipt (`status: complete`, the file having been born mid-session in the sync commit), a full Session 259 record with the Session 258 handoff evaluation (9/10) and this session's self-assessment (8/10), and five new learnings (#262–#266) in `PROJECT_LEARNINGS.md`. P11 is complete in this repository: nine commits, nine entries, `bin/status` clean, `bin/sync --dry-run` with nothing to write. What is left is outside it — reporting the phase back to the methodology fork, and the operator's call on pushing.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** full suite 1,395 passed and 9 skipped at 97.98%; `ruff check src/ tests/ packages/ scripts/` and `uv run mypy` (68 files) clean; all 11 proofs green in both modes; census and read-budget guards 82 passed; `check-handoff` OK in default and `--all` modes
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — correction: three statements this session got wrong, found by its own review
 - **Change:** (1) The entry for `8b32939` says *"`git diff --numstat` on this commit is 3 insertions, 2 deletions"*. 3/2 is the header hunk alone; the commit's numstat is **9 insertions, 2 deletions**, the other six lines being that entry itself. The entry stays as written — a committed entry is never edited — and this names what was wrong. The two deletions, the only ones in P11, are correct as stated. (2) `CLAUDE.md`'s attribution said Session 259 *"brought everything after `SAFEGUARDS.md` in that list"*: twelve of the thirteen `docs/methodology/` files predate it, and only `FRAMEWORK_APPARATUS.md` is new there — corrected in this commit. (3) `PROJECT_LEARNINGS.md:3` still routed base methodology learnings to `SESSION_RUNNER.md`, the sentence `CLAUDE.md` was corrected for in `3d96eb6` — now a past-tense provenance line pointing at the one live copy.
 - **Commit/PR:** this commit
