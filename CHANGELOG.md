@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — correction: three statements this session got wrong, found by its own review
+- **Change:** (1) The entry for `8b32939` says *"`git diff --numstat` on this commit is 3 insertions, 2 deletions"*. 3/2 is the header hunk alone; the commit's numstat is **9 insertions, 2 deletions**, the other six lines being that entry itself. The entry stays as written — a committed entry is never edited — and this names what was wrong. The two deletions, the only ones in P11, are correct as stated. (2) `CLAUDE.md`'s attribution said Session 259 *"brought everything after `SAFEGUARDS.md` in that list"*: twelve of the thirteen `docs/methodology/` files predate it, and only `FRAMEWORK_APPARATUS.md` is new there — corrected in this commit. (3) `PROJECT_LEARNINGS.md:3` still routed base methodology learnings to `SESSION_RUNNER.md`, the sentence `CLAUDE.md` was corrected for in `3d96eb6` — now a past-tense provenance line pointing at the one live copy.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** a five-lens review with a skeptic per finding (42 agents, 35 findings, 4 confirmed, 31 refuted); the three above are what survived, and the fourth was the same numstat defect found twice
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — the old cadence marked superseded; the new rules recorded as adaptations
 - **Change:** `docs/methodology/PROJECT_CONVENTIONS.md` §2 now opens with the supersession (operator decision (b), 2026-09-19) and keeps the behavior-change gate and both SETTLED rulings verbatim as history; its table row states the new cadence. `CLAUDE.md` gains the adaptations: where new entries go and under which rules, that everything below the newest `## YYYY-MM` heading is legacy and stays byte-identical, that the trimmer must never be run with `--write` on this file (with the measurement — 143 of 156 legacy entries would be archived back to 2026-04-16 under a 2026-09-19 label, the last 13 held back as the footer), that `Evolution.md:442` is knowingly stale because `docs/wiki/` is publish-on-commit, and that the two seeded JSON manifests are unconfigured on purpose. `BACKLOG.md`'s ledger-order item keeps only its order question.
 - **Commit/PR:** this commit

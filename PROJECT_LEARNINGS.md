@@ -1,6 +1,6 @@
 # model_project_constructor — Project-Specific Learnings
 
-> Migrated verbatim from `SESSION_RUNNER.md`'s "Learnings (added by sessions)" table on 2026-06-07 to keep `CLAUDE.md` lean and route project learnings to a project-owned file (methodology PR #25/#27). No content changed in the move. **Append new project learnings here, not in `CLAUDE.md` and not in `SESSION_RUNNER.md`.** Base, methodology-level learnings remain in `SESSION_RUNNER.md`.
+> Migrated verbatim from `SESSION_RUNNER.md`'s "Learnings (added by sessions)" table on 2026-06-07 to keep `CLAUDE.md` lean and route project learnings to a project-owned file (methodology PR #25/#27). No content changed in the move. **Append new project learnings here, not in `CLAUDE.md` and not in `SESSION_RUNNER.md`.** Base, methodology-level learnings stayed in `SESSION_RUNNER.md`'s own table until the Session 259 sync moved them; `CLAUDE.md`'s *Project-specific Learnings* section names their home.
 
 | # | Learning | Source | When to Apply |
 |---|----------|--------|---------------|
