@@ -15,6 +15,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — attribution names what the sync brought
+- **Change:** `NOTICE` §1 and `CLAUDE.md`'s attribution section now enumerate the whole body of third-party methodology material: the nine new root files, `docs/methodology/` at 13 files (all but the project-owned `PROJECT_CONVENTIONS.md`), and the three seeded files (`HANDOFFS.md`, `.context-budget.json`, `.quality-gates.json`), which the tool writes once and never rewrites. `NOTICE` also records that none of these files carries its own copyright header — the methodology repository declares them at repository level (`LICENSE`, `REUSE.toml`) — and its "synced verbatim, not edited locally" paragraph now covers the whole synced set, which became true only with the two commits before this one.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** census and read-budget guards, 82 passed
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — sync the methodology framework files from fork `main` `v3.7-975-ga69ef73` (`bin/sync --force`, 26 files)
 - **Change:** `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `docs/methodology/ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md` and the nine workstream and campaign files are now byte-identical to the canonical starter kit. The sync created nine root files (`FRAMEWORK_LEARNINGS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`), `docs/methodology/FRAMEWORK_APPARATUS.md`, and three seeds (`HANDOFFS.md`, `.context-budget.json`, `.quality-gates.json`). `--force` was needed because the sync can match neither file to any canonical version: `SAFEGUARDS.md` is byte-identical to one reachable only from a pre-rebase backup tag, and the runner carried this project's edits, which moved into `CLAUDE.md` in the commit before this one. `SESSION_NOTES.md`, `CHANGELOG.md` and `ROADMAP.md` are left as they are.
 - **Commit/PR:** this commit
