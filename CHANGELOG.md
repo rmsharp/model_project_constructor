@@ -15,6 +15,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — move the runner's customizations into `CLAUDE.md` before the sync overwrites them (operator decision (a))
+- **Change:** `CLAUDE.md` now carries what the synced `SESSION_RUNNER.md` held as local edits: the seven task-to-workstream rows (under *Additional task-to-workstream mappings*) and the *Wiki sync* paragraph, with the live path `docs/wiki/model_project_constructor/`, in place of the section that corrected its old path. Step 5's *"do not create a copy in this repo"* is recorded as retired under *Additional Phase 0 steps*, so no later session restores it. The runner's line in *Key Files* and the base-learnings pointer name the synced files. The runner itself is untouched until the sync commit.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** full suite 1,395 passed, 9 skipped, 97.98% coverage
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — ignore the run logs the synced methodology tools write, before the sync installs them
 - **Change:** `.gitignore` ignores `dashboard_history.jsonl`, `.context-budget-history.jsonl` and `.quality-gates-results.json`, which `methodology_dashboard.py`, `context_budget.py` and `quality_ratchet.py` write at the repo root. The methodology repo ignores the third and tracks the two histories; this project ignores all three. They are per-machine output, a tracked history would dirty the tree at every Phase 0, and each commit of one would owe an entry here.
 - **Commit/PR:** this commit

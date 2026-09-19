@@ -56,7 +56,7 @@ Each agent in the pipeline follows these principles (derived from `docs/architec
 - `BACKLOG.md` — Active and upcoming tasks, broken down by milestone
 - `ROADMAP.md` — Pipeline overview table, milestone sequence, feature inventory
 - `SESSION_NOTES.md` — Session continuity: active task, handoff notes, session history. **Trimmed nine times (Sessions 222, 224, 228, 231, 235, 239, 242, 245, 256):** holds the records the last trim kept plus every one since — never fewer than the byte rule's floor below. Retired records live in **nine** write-once shards under `docs/architecture-history/`. **`grep` them, never `Read` them**, and grep *all nine* — none is a prefix of another. The routing table that says which shard holds Session N is in the bullet below; it is deliberately stated once here rather than restated in this line. See "SESSION_NOTES.md is trimmed" below.
-- `SESSION_RUNNER.md` — Operating procedure for every session (customized Phase 1 mapping for this project)
+- `SESSION_RUNNER.md` — Operating procedure for every session (synced from canonical; this project's customizations are under Project-Specific Methodology Adaptations below)
 - `SAFEGUARDS.md` — Commit discipline, blast radius limits, mode-switching rules
 - `docs/methodology/` — Framework reference (ITERATIVE_METHODOLOGY.md, HOW_TO_USE.md, workstreams/)
 
@@ -70,9 +70,11 @@ Each agent in the pipeline follows these principles (derived from `docs/architec
 
 `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `docs/methodology/` (12 files), the `PROJECT_LEARNINGS.md` seed rows, and `docs/architecture-history/methodology-pr2527-remediation-mpc.md` are the "Iterative Session Methodology," copyright © 2025-2026 Terrell Deppe (KJ5HST). Per the operator (2026-07-27), Terrell Deppe granted permission for this material to be used and redistributed under MIT terms. See `NOTICE` at the repository root for the full attribution and provenance record — this is the customization-seam location for that grant precisely because the synced files themselves must not be edited (rule above).
 
-### `SESSION_RUNNER.md:209` names the OLD wiki directory. Do not fix it. (rename plan dragon 8)
+### Wiki sync — the runner's Commit step, for this project (moved here from `SESSION_RUNNER.md`, Session 259)
 
-Session 233 renamed `docs/wiki/claims-model-starter/` → **`docs/wiki/model_project_constructor/`** (repository-rename plan Phase 4, decision D-R2 = yes). `SESSION_RUNNER.md:209`'s "Wiki sync" paragraph still names the old path and is now **stale**. It is synced from canonical and the rule above forbids editing it — a local edit blocks future syncs — so **this bullet is the correction**, exactly as the Third-party attribution above is the correction for its own synced-file problem. The live path is `docs/wiki/model_project_constructor/`; everything else that paragraph says (hook, idempotence, `MPC_SKIP_WIKI_PUBLISH=1`, `core.hooksPath`) is still true. **Two things stay on the OLD name on purpose** and are not stale: the wiki *clone* at `~/Development/claims-model-starter.wiki` (D-R5 — GitHub's rename moves a URL, never a directory on your disk), which **permanently** pins the three lines of `scripts/publish_wiki.sh` that name it — the `WIKI_CLONE` default and the two clone instructions in its header; and the 28 frozen historical records of §3.1. **Locate those three lines by content, never by line number**: `git grep -n claims-model-starter scripts/publish_wiki.sh` → 3 hits. This bullet cited `:19`, `:24`, `:42` until Session 241 edited that file and moved two of them, which is the whole argument against pinning anything permanent to a digit. See `docs/planning/repository-rename.md` §3.3 and §7.2.
+**Wiki sync.** Wiki publishing is **automatic** via the tracked `.githooks/post-commit` hook (Session 84): when a commit touches `docs/wiki/model_project_constructor/`, the hook invokes `scripts/publish_wiki.sh` to sync the live GitHub Wiki. Enable it once per clone with `git config core.hooksPath .githooks`. The script is idempotent (no-op when source and clone are in parity), so re-runs are safe; manual invocation `scripts/publish_wiki.sh` still works as a backstop. To suppress auto-publish for a single commit (rare): `MPC_SKIP_WIKI_PUBLISH=1 git commit ...`. See the script's header for `WIKI_CLONE` setup and ambient-git-auth prerequisites.
+
+This paragraph was a local edit inside the synced runner, still naming the pre-rename path `docs/wiki/claims-model-starter/`, until the operator's decision (a) of 2026-09-19 (BL-57 P11) moved it here so the runner could be synced byte-identical. Session 233 renamed the directory (repository-rename plan Phase 4, decision D-R2). **Two things stay on the OLD name on purpose** and are not stale: the wiki *clone* at `~/Development/claims-model-starter.wiki` (D-R5 — GitHub's rename moves a URL, never a directory on your disk), which **permanently** pins the three lines of `scripts/publish_wiki.sh` that name it — the `WIKI_CLONE` default and the two clone instructions in its header; and the 28 frozen historical records of §3.1. **Locate those three lines by content, never by line number**: `git grep -n claims-model-starter scripts/publish_wiki.sh` → 3 hits. See `docs/planning/repository-rename.md` §3.3 and §7.2.
 
 ### `SESSION_NOTES.md` is trimmed (Sessions 222, 224, 228, 231, 235, 239, 242, 245, 256)
 
@@ -91,15 +93,25 @@ The live ledger holds only the newest sessions; retired records live in frozen s
 
 ### Additional Phase 0 steps
 
-(none)
+(none) — and one **retired; do not restore it.** Until Session 259 this project's runner changed step 5 to run the dashboard from `~/Development/` and *"do not create a copy in this repo"* (the copy was removed in `5bf0d8a`). The operator's decision (a) of 2026-09-19 retired that: `bin/sync` installs `methodology_dashboard.py` at the root and rewrites it on every sync, and that root copy is what the protocol rule at the top of this file runs.
 
 ### Additional task-to-workstream mappings
 
-(none)
+This project's own rows. Until Session 259 they stood in the synced runner's Phase 1 table in place of its four generic ones (Design, Implement, Audit, Plan); the operator's decision (a) of 2026-09-19 moved them here. Where a row here and a runner row both fit, the row here wins.
+
+| User Says | Deliverable | Workstream Document |
+|-----------|-------------|---------------------|
+| "Plan/design the pipeline architecture" | Architecture plan document | `docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` |
+| "Build the intake agent" / "Build the data agent" / "Build the website agent" | One agent implementation | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
+| "Design the interview flow" / "Design the handoff protocol" | One design document | `docs/methodology/workstreams/DESIGN_WORKSTREAM.md` |
+| "Write the system prompt for [agent]" | One prompt + test | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
+| "Define the output schema for [step]" | One schema document | `docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` |
+| "Wire agents together" / "Integrate [step]" | One integration pass | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
+| "Audit [agent/output/pipeline]" | One audit report | `docs/methodology/workstreams/AUDIT_WORKSTREAM.md` |
 
 ### Project-specific Learnings
 
-Project institutional memory (261 learnings, Sessions 9–258) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (301.2 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings remain in `SESSION_RUNNER.md`.
+Project institutional memory (261 learnings, Sessions 9–258) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (301.2 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings live in the synced `FRAMEWORK_LEARNINGS.md` (in `SESSION_RUNNER.md`'s own table until the Session 259 sync).
 
 ### Project-specific Failure Modes
 
