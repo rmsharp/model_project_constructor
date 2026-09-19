@@ -31,3 +31,11 @@ executive-summaries/*.pdf
 # negation — ignore the directory's contents, not the directory itself, so the negation works.
 .claude/*
 !.claude/settings.json
+
+# Run logs the synced methodology tools write at the repo root (BL-57 P11, Session 259):
+# methodology_dashboard.py, context_budget.py and quality_ratchet.py. Per-machine output, like
+# dashboard.html above. Ignored, not tracked: a tracked history would dirty the tree at every
+# Phase 0 dashboard run, and every commit of it would owe its own CHANGELOG.md entry.
+dashboard_history.jsonl
+.context-budget-history.jsonl
+.quality-gates-results.json

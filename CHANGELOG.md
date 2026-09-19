@@ -15,6 +15,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-19 · [ad hoc] S259 — ignore the run logs the synced methodology tools write, before the sync installs them
+- **Change:** `.gitignore` ignores `dashboard_history.jsonl`, `.context-budget-history.jsonl` and `.quality-gates-results.json`, which `methodology_dashboard.py`, `context_budget.py` and `quality_ratchet.py` write at the repo root. The methodology repo ignores the third and tracks the two histories; this project ignores all three. They are per-machine output, a tracked history would dirty the tree at every Phase 0, and each commit of one would owe an entry here.
+- **Commit/PR:** this commit
+- **Session:** S259 · **Verified:** `git check-ignore -v --no-index` matches each of the three, and `dashboard.html` still at `.gitignore:1`
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 claim: BL-57 P11 — bring this ledger to the methodology's rules, sync the framework files, move the runner's customizations into `CLAUDE.md` first *(in progress)*
 - **Change:** Session 259 is claimed in `SESSION_NOTES.md`. This is the ledger's first tagged entry. From here on every commit carries one, under a `## YYYY-MM` heading above `## [0.3.0]`, newest on top; the 156 entries below stay where they are, as written (the operator's decision (b), 2026-09-19). Tagged `[ad hoc]` because BL-57 is the methodology fork's backlog id and this project's `BACKLOG.md` holds no item for the work.
 - **Commit/PR:** this commit
