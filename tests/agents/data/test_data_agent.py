@@ -676,3 +676,159 @@ def test_baseline_collection_failed_on_llm_error(
         "simulated baseline LLM crash" in c
         for c in report.baseline_snapshot.caveats
     )
+
+
+# ---------------------------------------------------------------------------
+# Session 260 — the report tells the operator WHICH failure happened.
+#
+# Before this session the concern was a fixed string, so a typo'd port, an
+# unexported shell variable and a genuine warehouse outage produced reports
+# that were byte-identical modulo ``created_at``. These are the tests that make
+# option (a) mean something rather than merely run.
+# ---------------------------------------------------------------------------
+
+
+def _run_with_db(
+    db: ReadOnlyDB | None,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> object:
+    fake = FakeLLMClient(
+        primary_queries_sequence=[[primary_query_spec_valid]],
+        qc_response=[qc_specs_valid],
+        summary_response=summary_response,
+        datasheet_response=datasheet_response,
+    )
+    return DataAgent(llm=fake, db=db).run(sample_request)
+
+
+def test_two_different_db_failures_produce_different_concerns(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """The discriminator. This is the whole point of the item.
+
+    It is also the only guard on ``db_error`` being declared in
+    ``DataAgentState``: langgraph silently DROPS a node return key that the
+    schema does not declare, so removing that declaration makes both concerns
+    collapse back to the canned string and only this test notices.
+    """
+    args = (
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+    bad_port = _run_with_db(
+        ReadOnlyDB("postgresql://user:pw@warehouse.internal:$DB_PORT/claims"), *args
+    )
+    unreachable = _run_with_db(
+        ReadOnlyDB("sqlite:////nonexistent/path/does/not/exist.db"), *args
+    )
+
+    assert bad_port.data_quality_concerns != unreachable.data_quality_concerns
+    assert any(
+        "invalid literal for int()" in c for c in bad_port.data_quality_concerns
+    )
+    assert any(
+        "unable to open database file" in c
+        for c in unreachable.data_quality_concerns
+    )
+    # The canned prefix is kept, not replaced — every existing assertion on it
+    # stays meaningful, and so does docs/tutorial.md's description.
+    for report in (bad_port, unreachable):
+        assert any(
+            "database unreachable at QC execution time" in c
+            for c in report.data_quality_concerns
+        )
+
+
+def test_the_concern_stays_one_line(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """SQLAlchemy appends a help URL after a newline on every ``DBAPIError``.
+
+    A concern renders as a single markdown bullet in the generated project's
+    ``reports/data_report.md``, so an unflattened one produces a bare
+    continuation line there.
+    """
+    report = _run_with_db(
+        ReadOnlyDB("sqlite:////nonexistent/path/does/not/exist.db"),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert all("\n" not in c for c in report.data_quality_concerns)
+
+
+def test_the_report_never_carries_the_db_password(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Asserted over the WHOLE serialized report, not just the concerns list.
+
+    ``data_quality_concerns`` is rendered into ``reports/data_report.json`` and
+    ``.md`` in the generated project, written to the ``--output`` path and put
+    in the checkpoint envelope — so this string is published, not just logged.
+    """
+    import json
+
+    secret = "hunter2"
+    for url in (
+        f"postgresql://user:{secret}@warehouse.internal:$DB_PORT/claims",
+        f"postgresql://warehouse.internal:5432/claims?password={secret}",
+    ):
+        report = _run_with_db(
+            ReadOnlyDB(url),
+            sample_request,
+            primary_query_spec_valid,
+            qc_specs_valid,
+            summary_response,
+            datasheet_response,
+        )
+        assert secret not in json.dumps(report.model_dump(mode="json"))
+
+
+def test_no_db_url_keeps_the_canned_concern_alone(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """``db is None`` raises nothing, so there is no cause to append.
+
+    The mechanical detector for the design trap: if a later change makes
+    ``db_error`` unconditional, this path would start claiming a connection
+    failure that never happened.
+    """
+    report = _run_with_db(
+        None,
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert (
+        "database unreachable at QC execution time; quality checks not executed"
+        in report.data_quality_concerns
+    )

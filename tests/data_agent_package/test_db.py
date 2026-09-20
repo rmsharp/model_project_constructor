@@ -25,8 +25,18 @@ catch, and its upper bound.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
-from model_project_constructor_data_agent.db import ReadOnlyDB, sql_dialect_from_url
+from model_project_constructor_data_agent.db import (
+    DBConnectionError,
+    ReadOnlyDB,
+    redact_db_url,
+    redact_secrets,
+    sql_dialect_from_url,
+)
+
+DB_LOGGER_NAME = "model_project_constructor_data_agent.db"
 
 
 @pytest.mark.parametrize(
@@ -168,3 +178,148 @@ def test_readonly_db_exposes_dialect_before_connect() -> None:
 def test_readonly_db_dialect_matches_module_function() -> None:
     db = ReadOnlyDB("postgresql://user:pw@host/claims")
     assert db.dialect == sql_dialect_from_url(db.url)
+
+
+# ---------------------------------------------------------------------------
+# Session 260 — the connect error's cause is reported, and carries no secret.
+#
+# ``execute_qc`` now binds the ``DBConnectionError`` and the text reaches
+# ``DataReport.data_quality_concerns``, which is serialized to the ``--output``
+# report, the checkpoint envelope and the generated project's
+# ``reports/data_report.{json,md}``. That makes the message's contents a
+# publication decision, not just a diagnostic one: before this session
+# ``connect`` composed it from ``self.url`` raw, so a password went with it.
+#
+# The shapes below are the ones that defeated earlier drafts of the redaction,
+# kept as tests precisely because a hand-picked example list did not find them:
+# a password containing ``@`` (masking stops at the FIRST one, leaving a tail),
+# one containing ``/`` or a space (a character class excluding them masks
+# NOTHING), and ``?password=`` in the query string — a second, fully functional
+# credential channel SQLAlchemy passes to the DBAPI.
+# ---------------------------------------------------------------------------
+
+SECRET = "hunter2"
+
+
+@pytest.mark.parametrize(
+    ("url", "secret"),
+    [
+        ("postgresql://user:hunter2@host:5432/claims", SECRET),
+        # The case this project actually hits: a --db-url templated from a
+        # shell environment where the port variable was never exported. It does
+        # not parse, so the structural path cannot run and the fallback must.
+        ("postgresql://user:hunter2@host:$DB_PORT/claims", SECRET),
+        ("postgresql+psycopg://user:hunter2@host/claims", SECRET),
+        # Unencoded metacharacters in the password. RFC 3986 says percent-encode
+        # them; an operator pasting a generated password does not.
+        ("postgresql://user:p@ss@host:$DB_PORT/claims", "p@ss"),
+        ("postgresql://user:p/ss@host:$DB_PORT/claims", "p/ss"),
+        ("postgresql://user:my pass@host:$DB_PORT/claims", "my pass"),
+        # The query string is a credential channel of its own.
+        ("postgresql://host:5432/claims?password=hunter2", SECRET),
+        ("postgresql://user:hunter2@host/claims?sslpassword=hunter2", SECRET),
+    ],
+)
+def test_redact_db_url_masks_every_secret_shape(url: str, secret: str) -> None:
+    """Assert the SECRET is gone, never that a ``***`` marker is present.
+
+    A marker assertion passes on a partial leak: an earlier draft turned
+    ``user:p@ss@host`` into ``user:***@ss@host``, which shows the marker while
+    publishing the tail of the password.
+    """
+    assert secret not in redact_db_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://host:5432/claims",  # no credential at all
+        "postgresql://user@host/claims",  # user, no password
+        "sqlite:///:memory:",
+        "sqlite:////nonexistent/path/does/not/exist.db",
+        "not-a-url",
+    ],
+)
+def test_redact_db_url_leaves_a_secretless_url_alone(url: str) -> None:
+    """Over-masking is safe but destroys the diagnostic; don't do it."""
+    assert redact_db_url(url) == url
+
+
+def test_redact_db_url_is_idempotent() -> None:
+    once = redact_db_url("postgresql://user:hunter2@host:5432/claims")
+    assert redact_db_url(once) == once
+
+
+def test_redact_secrets_masks_a_driver_echoed_dsn() -> None:
+    """A driver may echo a libpq ``key=value`` DSN rather than a URL."""
+    assert SECRET not in redact_secrets(
+        "connection failed: password=hunter2 host=warehouse"
+    )
+
+
+def test_redact_secrets_preserves_a_message_with_no_secret() -> None:
+    msg = "invalid literal for int() with base 10: '$DB_PORT'"
+    assert redact_secrets(msg) == msg
+
+
+def test_connect_error_names_the_cause_without_the_password() -> None:
+    """Both halves matter: no secret, and still diagnostic.
+
+    A redaction that also ate the cause would trade this item's bug for a
+    quieter version of the same one.
+    """
+    db = ReadOnlyDB(f"postgresql://user:{SECRET}@warehouse.invalid:$DB_PORT/claims")
+    with pytest.raises(DBConnectionError) as excinfo:
+        db.connect()
+
+    message = str(excinfo.value)
+    assert SECRET not in message
+    assert "warehouse.invalid" in message
+    assert "$DB_PORT" in message
+
+
+def test_connect_error_masks_a_query_string_password() -> None:
+    db = ReadOnlyDB(f"postgresql://warehouse.invalid:5432/claims?password={SECRET}")
+    with pytest.raises(DBConnectionError) as excinfo:
+        db.connect()
+
+    assert SECRET not in str(excinfo.value)
+
+
+# --- option (b): a PARSE failure is distinguishable from a CONNECT failure ---
+
+
+def test_unparseable_url_warns_and_names_the_cause(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with caplog.at_level(logging.WARNING, logger=DB_LOGGER_NAME):
+        assert sql_dialect_from_url(f"postgresql://user:{SECRET}@host:$DB_PORT/db") is None
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    message = warnings[0].getMessage()
+    assert "invalid literal for int() with base 10" in message
+    assert "PARSE" in message
+    assert SECRET not in message
+
+
+def test_a_parseable_url_warns_about_nothing(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Load-bearing negative.
+
+    Without it, a later change making the warning unconditional would fire on
+    every healthy run and nothing would notice.
+    """
+    with caplog.at_level(logging.WARNING, logger=DB_LOGGER_NAME):
+        assert sql_dialect_from_url("sqlite:///:memory:") == "sqlite"
+
+    assert [r for r in caplog.records if r.levelno == logging.WARNING] == []
+
+
+def test_readonly_db_dialect_seam_warns(caplog: pytest.LogCaptureFixture) -> None:
+    """``cli.py`` evaluates ``ReadOnlyDB.dialect``, not the module function."""
+    with caplog.at_level(logging.WARNING, logger=DB_LOGGER_NAME):
+        assert ReadOnlyDB("postgresql://user:pw@host:$DB_PORT/claims").dialect is None
+
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
