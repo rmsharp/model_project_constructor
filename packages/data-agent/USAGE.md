@@ -309,7 +309,10 @@ client = AnthropicLLMClient(sql_dialect=sql_dialect_from_url(url))  # or the URL
 Both parse the URL string only — no connection and no installed driver is
 required, so the dialect is available before the first query is generated (the
 DB is not connected until the QC-execution stage). An unparseable URL yields
-`None`, and `None` reproduces the dialect-silent prompt exactly. The `model-data-agent`
+`None`, and `None` reproduces the dialect-silent prompt exactly. It also logs a
+WARNING on the `model_project_constructor_data_agent.db` logger naming the parse
+failure, so a URL that does not PARSE is distinguishable from one that parses
+and cannot be connected to — the second is reported in the `DataReport` instead. The `model-data-agent`
 CLI and `scripts/run_pipeline.py` derive it from `--db-url` automatically; only
 direct library callers need to pass it themselves.
 
@@ -401,7 +404,10 @@ curated-producer example.
 - `AnthropicLLMClient` raises `LLMParseError` on unparseable Claude output;
   this propagates through the outer boundary and becomes `EXECUTION_FAILED`.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
-  `DataAgent` catches it and routes the QC stage to `NOT_EXECUTED`.
+  `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
+  error text — with any URL password masked — to
+  `DataReport.data_quality_concerns`, so the operator can tell a malformed URL
+  from a database that is down. The report status stays `COMPLETE`.
 
 ## Decoupling guarantee
 

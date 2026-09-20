@@ -52,7 +52,7 @@ rows below it are the smaller residue that closing it exposed.
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
 | Enterprise migration | Handing the project to an enterprise. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. What remains is the fork into an enterprise host. | Blocked on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. |
 | `probe_information_schema` says it "never raises" | Filed Session 223. A docstring promises graceful degradation; a third of the function body sits outside the `try` that would deliver it. Same defect class as the one fixed in Session 223. | Small, one file. Half of it is provable by inspection; half is defence-in-depth. |
-| A bad `--db-url` fails silently | Filed Session 223. `connect()` builds a message naming the exact cause; the next line catches the error **without binding it** and throws the message away. The run then reports `COMPLETE` and exits 0 with **every quality check unexecuted**. A typo'd port, an unexported shell variable, and a genuine warehouse outage produce byte-identical reports. | Pre-existing and wider than the S223 fix — **not** a reason to revert it. The cheapest two-thirds is small; the third option changes when a pipeline run is allowed to "succeed" and needs an operator ruling. |
+| A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
 | The docs toolchain has no version ceiling | `pyproject.toml` bounds the tutorial site's theme from below only (`>=9.0`), so a major Material release could be resolved into the public site. Deliberately deferred when the renderer landed. Session 243 made such a bump fail as a red job instead of a silent unstyled publish; the ceiling would stop it being resolved at all. | Small — 2 lines + `uv lock`. Non-binding today: Material 10.x does not exist. |
@@ -323,57 +323,34 @@ wraps the identical pattern in `_build_draft`. So the fix is to mirror an existi
 wrap in `try/except KeyError` and re-raise as `LLMParseError` — not to invent one. Add a regression test
 per call site; the wheel's error-mapping tests live in `tests/data_agent_package/test_anthropic_client.py`.
 
-### A bad or unreachable `--db-url` fails silently: exit 0, `COMPLETE`, and the message naming the cause is discarded
+### A bad `--db-url` still exits 0 and reports `COMPLETE` — option (c), and it needs a ruling
 
-**Found Session 223** by the adversarial review of the `sql_dialect_from_url` fix — the reviewer asked
-whether degrading to `None` is *safe*, which requires the real error to be reported somewhere, and
-measured that it is not. **Filed, not fixed:** the remedy changes `DataReport` status semantics, which
-gates the orchestrator's `FAILED_AT_DATA` halt — a design change across two packages, not a bug fix.
+**Filed Session 223 as three options. Session 260 shipped (a) and (b); this is the residue.**
+What closed: `execute_qc` binds the `DBConnectionError` instead of discarding it, `agent.py` appends
+the cause (password-masked) to `data_quality_concerns`, and `sql_dialect_from_url` logs a WARNING
+naming a *parse* failure. A typo'd port, an unexported shell variable and a genuine warehouse outage
+no longer produce byte-identical reports — pinned by
+`tests/agents/data/test_data_agent.py::test_two_different_db_failures_produce_different_concerns`.
 
-**The message exists and is thrown away.** `ReadOnlyDB.connect` builds exactly the right text:
+**What is left is option (c): give the report a status that makes the pipeline halt.**
+`agent.py`'s `_assemble_complete_report` returns `status="COMPLETE"` unconditionally, and
+`src/model_project_constructor/orchestrator/pipeline.py`'s halt fires only
+`if executed and data_report.status != "COMPLETE"`. So the data-agent CLI still prints
+`wrote report.json (COMPLETE)` and exits 0, and the full pipeline still generates every project file
+and exits 0, with **every quality check unexecuted**. The cause is now *in* the report; nothing
+*gates* on it.
 
-```
-DBConnectionError: cannot connect to 'postgresql://user:pw@host:$DB_PORT/claims':
-  invalid literal for int() with base 10: '$DB_PORT'
-```
+**Why it was not done with (a) and (b).** It is an operator-visible behaviour change, not a bug fix:
+runs that succeed today would start failing, and that is the point of it. It also changes
+`DataReport` status semantics, which the orchestrator's `FAILED_AT_DATA` halt keys on — a design
+change across two packages. The filed recommendation was explicitly "(a) + (b), leaving (c) as a
+separate decision."
 
-Then `packages/data-agent/.../nodes.py:118-120` does `except DBConnectionError: return {"db_executed": False}`
-— **without binding the exception**, so the text is unrecoverable. `agent.py:138-142` appends the fixed
-string `"database unreachable at QC execution time; quality checks not executed"`, and `agent.py:147`
-returns `status="COMPLETE"` unconditionally (the only non-COMPLETE statuses are `INCOMPLETE_REQUEST`
-for a vacuous request and `EXECUTION_FAILED` when a node *raises* — and this path deliberately does
-not raise). `src/model_project_constructor/orchestrator/pipeline.py:460` halts with `FAILED_AT_DATA`
-only `if executed and data_report.status != "COMPLETE"`, so it never fires here.
-
-**Measured consequences.** The data-agent CLI prints `wrote report.json (COMPLETE)` and exits 0. The
-full pipeline prints `Status: COMPLETE`, generates all 38 project files, and exits 0. The report from
-`@host:$DB_PORT/claims` is **byte-identical** (modulo `created_at`) to the report from a well-formed
-but unreachable `@warehouse.invalid:5432/claims`. So three very different situations — a typo'd port,
-an unexported shell variable, and a genuine warehouse outage — are indistinguishable to the operator
-and to CI, and **every quality check silently goes unexecuted while the run reports success.**
-
-**⚠ This is pre-existing and wider than the Session 223 fix — established by control, not by
-assertion.** The reviewer who found it framed it as "the S223 fix is incomplete"; a second pass
-**refuted that framing** by running the arm the first pass omitted. With the catch reverted to the
-pre-fix `except sa.exc.ArgumentError:`, `--db-url 'not-a-url'` — an `ArgumentError` case that was
-*always* caught and that the S223 change does not touch — produces the same `wrote report.json
-(COMPLETE)`, exit 0, and the same canned concern. Post-fix, the reports from all three inputs
-(bad port / `not-a-url` / well-formed-but-unreachable) are byte-identical modulo `created_at`. So
-the indistinguishability is a property of the DB error path, not of that diff.
-
-What S223 changed is only that the non-numeric-port case stopped being *uniquely* fatal and joined
-the silent majority. Pre-fix it at least crashed with the cause in the traceback. **Do not read that
-as an argument for reverting S223** — a raw `ValueError` traceback out of prompt construction is not
-a diagnostic, and the inconsistency was the filed bug. It *is* the argument for closing this item.
-
-**Options, ascending cost.** (a) Bind the exception at `nodes.py:119` and carry `str(e)` into
-`data_quality_concerns` instead of the canned string — smallest, keeps `COMPLETE`, makes the cause
-visible in the report. (b) Additionally warn at the derivation site when a non-`None` `--db-url`
-yields a `None` dialect, so the *parse* failure is distinguishable from the *connect* failure.
-(c) Give the report a status that makes `pipeline.py:460` halt — most correct, and the one with real
-blast radius: runs that silently "succeed" today would start failing, which is the point but is an
-operator-visible behaviour change and needs their ruling first. **Recommended: (a) + (b), leaving (c)
-as a separate decision.**
+**Operator call.** Three shapes, ascending blast radius: leave it (the cause is reported and a human
+reads the concerns); add a non-halting signal the pipeline surfaces more loudly; or give `DataReport`
+a status that halts, which means deciding whether an unreachable DB is a *failed* run or a
+*degraded* one. Note the same question governs `nodes.py`'s baseline branch, whose
+`"database not reachable at baseline-collection time"` caveat is the parallel case.
 
 ### `probe_information_schema` says it "never raises" and can raise — same defect class as the S218/S223 one
 
