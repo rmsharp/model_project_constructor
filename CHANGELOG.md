@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-20 · [ad hoc] S260 — pushed this session's six commits to `origin/master`
+- **Change:** `git push origin master` moved `159e739..640d199` — the claim, the fix, the tests, the two corrected test warnings, the docs and the close-out. Done after close-out, on the operator's word, as the second half of their Phase 1 instruction to push the inherited backlog first so CI would verify the baseline separately from this session's work. That separation held: run `35479804135` was green on the inherited `159e739` before any of this session's code existed, and run `35485626427` is green on `640d199` after it. Two sentences that said *"these six commits are unpushed"* — in the `SESSION_NOTES.md` record and the `HANDOFFS.md` receipt — are made false by this action and are corrected in this same commit rather than left standing.
+- **Commit/PR:** no commit of its own — a branch op, recorded here per failure mode #27. This commit carries the entry and is itself pushed immediately after, which is the routine follow-up the entry anticipates rather than a further unrecorded action.
+- **Session:** S260 · **Verified:** CI run `35485626427` on `640d199` — **all five jobs green**: Lint (ruff), Type check (mypy), Tests (pytest), Data Agent decoupling test, and Ledger proofs (plain + `--self-test`). `git status -sb` reads `## master...origin/master` with no ahead/behind count.
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-20 · [ad hoc] S260 — close out: the silent `--db-url` failure reports its cause
 - **Change:** this project keeps a full Session 260 record with the Session 259 handoff evaluation (9/10) and this session's self-assessment (9/10), a `status: complete` receipt in `HANDOFFS.md`, and five new learnings (#267–#271) in `PROJECT_LEARNINGS.md` — the filed option being unsafe as written, the mask-marker assertion that certifies partial leaks, the redaction boundaries a hand-picked example list misses, langgraph silently dropping an undeclared state key, and narrowing a partially-closed backlog item instead of deleting it. `CLAUDE.md`'s learnings pointer is re-measured to **271 learnings, Sessions 9–260** and **311.5 KB**. Options (a) and (b) are complete; **(c) is open and is an operator ruling**, which is why the `BACKLOG.md` item was narrowed rather than removed.
 - **Commit/PR:** this commit

@@ -190,7 +190,10 @@ told me the exposure was real rather than theoretical much earlier than the meas
    for `_reflect_entity` were measured wrong at HEAD (flagged by this session's review, not fixed).
    **Re-locate by content, not by the line numbers in that item.**
 3. **Pushing:** this session pushed the inherited 25-commit backlog at Phase 1 on the operator's
-   instruction, and CI went green on `159e739` (run `35479804135`). These six commits are unpushed.
+   instruction, and CI went green on `159e739` (run `35479804135`). The session's own six commits
+   were then pushed at the operator's word after close-out (`159e739..640d199`), and CI went green on
+   `640d199` too (run `35485626427`) — all five jobs, the ledger proofs in both modes included.
+   **Nothing is unpushed.**
 4. **Unchanged operator calls:** `PROJECT_LEARNINGS.md` still refused by a default `Read` (311.5 KB —
    re-measured, it grew this session); `CHANGELOG.md`'s four July entries still out of order inside
    the legacy part; the `ruff`/sdist fallout from Session 259's sync (see learning #264 first).
