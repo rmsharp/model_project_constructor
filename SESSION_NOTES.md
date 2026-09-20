@@ -103,9 +103,15 @@ updates rather than contradicts.
 warehouse outage produced byte-identical reports; they no longer do. **(c)** — a `DataReport` status
 that makes the pipeline halt — was deliberately not done: the item calls it an operator ruling, and
 the BACKLOG item is **narrowed to it** rather than deleted. **Started / completed:** 2026-09-20
-(UTC). **Commits: six** — `2a648ef` (claim), `945b316` (the fix), `6350fda` (tests), `8054a13` (two
-test-file warnings the fix falsified), `e6a9edc` (docs + the narrowed item) and this close-out.
-**Ledger: seven entries** — one per commit plus one for the push, which leaves no commit of its own.
+(UTC). **Commits: eight** — `2a648ef` (claim), `945b316` (the fix), `6350fda` (tests), `8054a13` (two
+test-file warnings the fix falsified), `e6a9edc` (docs + the narrowed item), `640d199` (close-out),
+`3545d08` (recording the push, and correcting what it falsified) and this repair.
+**Ledger: nine entries** — six for the substantive commits, two for the pushes (a branch op leaves
+no commit, so failure mode #27 owes it an entry of its own), and one for this repair. `3545d08`
+carries the second push's entry rather than one of its own: recording that push is its whole content.
+**The last three commits land AFTER the close-out at `640d199`**, on the operator's instruction to
+push and then to revisit Phase 3. That is why the counts in this paragraph were wrong twice before
+they were right: see the self-assessment's last bullet and learning #272.
 
 #### The filed option was not safe as written, and only running it showed that
 
@@ -179,6 +185,14 @@ ships a partial leak and a test that calls it clean — the most serious near-mi
 the self-score is not 10.
 **− I did not check whether `--db-url` is documented with a password anywhere**, which would have
 told me the exposure was real rather than theoretical much earlier than the measurement did.
+**− I wrote a self-counting record and then kept working, twice.** The close-out at `640d199` said
+*"Commits: six"* and *"these six commits are unpushed"*; the push falsified the second within
+minutes and I repaired it in `3545d08` — but `3545d08` then falsified the first, along with the
+receipt's *"Six commits"* and the entry count, and I did not notice until the operator sent me back
+to Phase 3. A close-out that counts itself is a forward-looking claim about the session ending
+there, which `SESSION_RUNNER.md` §3D warns about for requirements 3 and 5 and which I read as
+applying only to predictions, not to a present-tense count. **The close-out was complete; it was
+not stable.** Learning #272.
 
 **What's next.**
 1. **Option (c) is an operator ruling, and it is the only thing left of this item.** `BACKLOG.md`'s
