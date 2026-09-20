@@ -97,6 +97,17 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 260 Did
+**Deliverable:** Close the BACKLOG item *"A bad or unreachable `--db-url` fails silently: exit 0,
+`COMPLETE`, and the message naming the cause is discarded"* — options **(a) + (b)** as that item
+recommends, leaving **(c)** (a `DataReport` status that makes `pipeline.py:460` halt) as the separate
+operator decision it calls for. (IN PROGRESS)
+**Started:** 2026-09-20 (UTC).
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says *(in progress)*;
+Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 259 Did
 **Deliverable:** **BL-57 phase P11 — COMPLETE.** `CHANGELOG.md` now follows the methodology's ledger
 rules, the framework files are synced, and this project's customizations moved out of the synced

@@ -174,6 +174,22 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S260
+date: 2026-09-20
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: Close the BACKLOG item "A bad or unreachable --db-url fails silently: exit 0, COMPLETE, and the message naming the cause is discarded" — options (a) bind the exception at nodes.py:119 and carry str(e) into data_quality_concerns instead of the canned string, and (b) warn at the derivation site when a non-None --db-url yields a None dialect, so a parse failure is distinguishable from a connect failure. Option (c), a DataReport status that makes pipeline.py:460 halt, is out of scope by the item's own recommendation and needs an operator ruling.
+what_was_done: pending
+next_steps: pending
+key_files: pending
+gotchas: pending
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+```handoff
 session: S259
 date: 2026-09-19
 status: complete

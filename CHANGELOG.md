@@ -16,6 +16,18 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-20 · [ad hoc] S260 claim: close the silent `--db-url` failure — options (a) + (b) *(in progress)*
+- **Change:** Session 260 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the `BACKLOG.md` item *"A bad or unreachable `--db-url` fails silently: exit 0, `COMPLETE`, and the message naming the cause is discarded"* (filed Session 223), scoped to the two options that item recommends: **(a)** bind the exception at `packages/data-agent/.../nodes.py:119` and carry `str(e)` into `data_quality_concerns` in place of the canned string, and **(b)** warn at the derivation site when a non-`None` `--db-url` yields a `None` dialect, so a parse failure is distinguishable from a connect failure. **(c)** — giving the report a status that makes `src/model_project_constructor/orchestrator/pipeline.py:460` halt with `FAILED_AT_DATA` — is deliberately out of scope: it is an operator-visible behaviour change the item says needs a ruling first.
+- **Commit/PR:** this commit
+- **Session:** S260 · **Verified:** n/a — ledger-only; the census and read-budget guards pass at the claim state
+- **Model:** Claude Opus 5 (1M context)
+
+### 2026-09-20 · [ad hoc] S260 — pushed the 25-commit backlog to `origin/master`
+- **Change:** `git push origin master` moved `5f173f8..159e739`, publishing Sessions 249–259's local burst (25 commits, Session 259's close-out included). On the operator's instruction at Phase 1, taken before this session's own work began so CI verifies the inherited baseline separately from anything Session 260 adds. This is the non-commit action `BACKLOG.md`'s item *"CI runs the proofs, but this repo pushes in bursts"* is filed against; the item stays open, since one push is not a policy.
+- **Commit/PR:** no commit of its own — a branch op, recorded here per failure mode #27
+- **Session:** S260 · **Verified:** `git status -sb` reads `## master...origin/master` with no ahead/behind count; CI run `35479804135` queued on `159e739` at 2026-09-20T00:50:08Z
+- **Model:** Claude Opus 5 (1M context)
+
 ### 2026-09-19 · [ad hoc] S259 — close out BL-57 P11
 - **Change:** this project keeps its first `HANDOFFS.md` receipt (`status: complete`, the file having been born mid-session in the sync commit), a full Session 259 record with the Session 258 handoff evaluation (9/10) and this session's self-assessment (8/10), and five new learnings (#262–#266) in `PROJECT_LEARNINGS.md`. P11 is complete in this repository: nine commits, nine entries, `bin/status` clean, `bin/sync --dry-run` with nothing to write. What is left is outside it — reporting the phase back to the methodology fork, and the operator's call on pushing.
 - **Commit/PR:** this commit
