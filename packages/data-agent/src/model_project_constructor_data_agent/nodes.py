@@ -16,7 +16,12 @@ Flow (from architecture-plan.md §10.2)::
 ``RETRY_ONCE`` re-enters ``GENERATE_QUERIES`` with ``previous_error`` set.
 ``SKIP_EXECUTION`` is handled inside ``execute_qc`` itself: on DB-down it
 returns ``db_executed=False`` and leaves every ``QualityCheck`` at
-``execution_status="NOT_EXECUTED"``.
+``execution_status="NOT_EXECUTED"``. When a ``--db-url`` was supplied and the
+connection failed, it also returns ``db_error`` carrying the
+(password-redacted) :class:`DBConnectionError` text, which ``agent.py``
+appends to the report's ``data_quality_concerns`` so the operator can tell a
+bad URL from a database that is genuinely down. ``db_error`` is absent when no
+``--db-url`` was given, because there is no error to report.
 """
 
 from __future__ import annotations
@@ -116,8 +121,8 @@ def make_execute_qc(
             return {"db_executed": False}
         try:
             db.connect()
-        except DBConnectionError:
-            return {"db_executed": False}
+        except DBConnectionError as e:
+            return {"db_executed": False, "db_error": str(e)}
 
         updated: list[list[QualityCheck]] = []
         for group in quality_checks:

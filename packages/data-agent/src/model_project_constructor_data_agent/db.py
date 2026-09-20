@@ -10,9 +10,64 @@ the graph can take the SKIP_EXECUTION off-ramp described in §10.
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 import sqlalchemy as sa
+
+_LOG = logging.getLogger(__name__)
+
+# A ``--db-url`` carries a secret in two places, and both reach the operator-
+# facing DataReport once EXECUTE_QC starts reporting the connect error
+# (``agent.py``'s ``data_quality_concerns``). Measured, not assumed:
+#
+#   postgresql://user:hunter2@host/claims          -> userinfo
+#   postgresql://host/claims?password=hunter2      -> query string, and
+#       SQLAlchemy passes it to the DBAPI as a real password
+#
+# ``_SECRET_KV`` covers the query form and, because it keys on the word rather
+# than on ``?``/``&``, also the libpq ``key=value`` DSN a driver may echo back
+# inside its own error text. It does not cover a secret under a key not listed
+# here.
+_SECRET_KV = re.compile(
+    r"(?i)(\b(?:password|passwd|pwd|sslpassword|token|secret|api_?key"
+    r"|credential)=)[^&\s'\"]+"
+)
+
+# Two userinfo patterns, deliberately: a lone URL may be matched greedily to its
+# LAST ``@`` (a password that was never percent-encoded can contain ``@``, ``/``
+# or a space — the exact case that must not leak), while free-form text must be
+# matched conservatively so the pass cannot span from one URL to an unrelated
+# ``@`` later in the message.
+_USERINFO_URL = re.compile(r"(://[^:/@\s]*:).*(@)")
+_USERINFO_TEXT = re.compile(r"(://[^:/@\s]*:)[^\s]*(@)")
+
+
+def redact_db_url(url: str) -> str:
+    """Return ``url`` with any password masked, for display in an error or log.
+
+    Structural where possible — :func:`sqlalchemy.make_url` plus
+    ``render_as_string(hide_password=True)`` — falling back to a regex pass for
+    a URL SQLAlchemy cannot parse, which is precisely the case this project
+    hits in practice (an unexpanded ``$DB_PORT``). Idempotent, so a message
+    composed from an already-redacted URL is unchanged.
+    """
+    try:
+        rendered = sa.make_url(url).render_as_string(hide_password=True)
+    except Exception:
+        rendered = _USERINFO_URL.sub(r"\1***\2", url)
+    return _SECRET_KV.sub(r"\1***", rendered)
+
+
+def redact_secrets(text: str) -> str:
+    """Return ``text`` with any embedded URL password or ``password=`` masked.
+
+    For arbitrary text — a driver's own exception message, which may echo the
+    connection string back. :func:`redact_db_url` is the right call when the
+    whole string IS a URL.
+    """
+    return _SECRET_KV.sub(r"\1***", _USERINFO_TEXT.sub(r"\1***\2", text))
 
 
 class DBConnectionError(Exception):
@@ -34,20 +89,21 @@ def sql_dialect_from_url(url: str) -> str | None:
     here — the URL's real failure surfaces at :meth:`ReadOnlyDB.connect`, which
     is the error path callers already handle.
 
-    ⚠ **That last clause overstates what callers currently do, and Session 223
-    verified it rather than repeating it.** :meth:`ReadOnlyDB.connect` does build
-    a message naming the exact cause (``DBConnectionError: cannot connect to
-    '…:$DB_PORT/claims': invalid literal for int() with base 10: '$DB_PORT'``),
-    but the only caller on the run path — ``nodes.py``'s ``execute_qc`` — catches
-    ``DBConnectionError`` without binding it and returns ``db_executed=False``,
-    and ``agent.py`` then substitutes the fixed string "database unreachable at
-    QC execution time" and reports ``status="COMPLETE"``. So a bad URL is
-    *degraded* but not *reported*: it is indistinguishable from a database that
-    is genuinely down. That is a pre-existing property of the DB error path, not
-    of this function, and it applies equally to every malformed URL — this fix
-    makes the non-numeric-port case consistent with the rest rather than
-    uniquely fatal. It is filed in ``BACKLOG.md``; do not read the sentence
-    above as a promise that the operator finds out.
+    That clause is true as written since Session 260, and was not before it:
+    ``nodes.py``'s ``execute_qc`` now BINDS the :class:`DBConnectionError` and
+    carries its text into the state as ``db_error``, which ``agent.py`` appends
+    to the canned "database unreachable at QC execution time" concern, so the
+    cause reaches ``DataReport.data_quality_concerns`` instead of being
+    discarded. Session 223 had verified the opposite and said so here; the
+    history is in ``CHANGELOG.md`` rather than in this docstring.
+
+    Two limits still hold, deliberately. The report's status stays
+    ``"COMPLETE"``, so ``pipeline.py``'s ``FAILED_AT_DATA`` halt still does not
+    fire on an unreachable database — that is filed as a separate change
+    needing an operator ruling, because it turns runs that succeed today into
+    failures. And a *parse* failure never reaches ``connect`` at all, which is
+    why this function logs a WARNING of its own rather than relying on the
+    connect path to describe it.
 
     **Both** exception types are required to honour that contract, and neither
     subsumes the other: ``ArgumentError`` derives from ``SQLAlchemyError``, not
@@ -75,7 +131,15 @@ def sql_dialect_from_url(url: str) -> str | None:
     """
     try:
         return str(sa.make_url(url).get_backend_name())
-    except (sa.exc.ArgumentError, ValueError):
+    except (sa.exc.ArgumentError, ValueError) as e:
+        _LOG.warning(
+            "cannot derive a SQL dialect from --db-url %s: %s. The URL did not "
+            "PARSE, so the prompt will not name a dialect. This is distinct "
+            "from a URL that parses but cannot be connected to, which is "
+            "reported in the DataReport's data_quality_concerns.",
+            redact_db_url(url),
+            redact_secrets(str(e)),
+        )
         return None
 
 
@@ -101,7 +165,10 @@ class ReadOnlyDB:
             with engine.connect() as conn:
                 conn.execute(sa.text("SELECT 1"))
         except Exception as e:
-            raise DBConnectionError(f"cannot connect to {self.url!r}: {e}") from e
+            raise DBConnectionError(
+                f"cannot connect to {redact_db_url(self.url)!r}: "
+                f"{redact_secrets(str(e))}"
+            ) from e
         self._engine = engine
 
     def execute(self, sql: str) -> list[dict[str, Any]]:

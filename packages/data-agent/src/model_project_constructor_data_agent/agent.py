@@ -136,10 +136,16 @@ def _assemble_complete_report(
 
     data_quality_concerns = list(summary.data_quality_concerns)
     if not final_state.get("db_executed", False):
-        data_quality_concerns.append(
+        concern = (
             "database unreachable at QC execution time; "
             "quality checks not executed"
         )
+        db_error = final_state.get("db_error")
+        if db_error:
+            # SQLAlchemy appends a help URL after a newline on every DBAPIError,
+            # and a concern is rendered as one markdown bullet, so flatten it.
+            concern = f"{concern}: {' '.join(str(db_error).split())}"
+        data_quality_concerns.append(concern)
 
     baseline_snapshot: BaselineSnapshot | None = final_state.get("baseline_snapshot")
 

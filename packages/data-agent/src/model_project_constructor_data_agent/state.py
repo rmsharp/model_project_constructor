@@ -30,6 +30,13 @@ class DataAgentState(TypedDict, total=False):
     invalid_sql_error: str | None
     quality_checks: list[list[QualityCheck]]
     db_executed: bool
+    # Set only on the connect-failure branch of EXECUTE_QC, carrying the
+    # (password-redacted) DBConnectionError text. Absent when no --db-url was
+    # supplied, so a missing key means "no database was configured" rather than
+    # "the database was fine". Nothing mechanical catches this key being
+    # dropped -- langgraph silently discards a node return key that is not
+    # declared here -- so test_data_agent.py's discriminator test is its guard.
+    db_error: str | None
     summary_result: SummaryResult
     datasheets: list[Datasheet]
     baseline_snapshot: BaselineSnapshot | None
