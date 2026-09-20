@@ -97,6 +97,17 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 261 Did
+**Deliverable:** Close the BACKLOG item *"`probe_information_schema` says it "never raises" and can
+raise"* (filed Session 223) — make the docstring's promise true for both filed escapes: the
+too-narrow `except` around reflection, and the entry-building and LLM-ranking code that sits outside
+the `try` entirely. One file of product code plus tests; no public API change. (IN PROGRESS)
+**Started:** 2026-09-20 (UTC).
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says *(in progress)*;
+Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 260 Did
 **Deliverable:** **The silent `--db-url` failure now reports its cause — COMPLETE**, options (a) and
 (b) of the item filed in Session 223. A bad port, an unexported shell variable and a genuine

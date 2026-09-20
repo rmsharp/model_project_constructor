@@ -174,6 +174,22 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S261
+date: 2026-09-20
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: Close the BACKLOG item "probe_information_schema says it "never raises" and can raise -- same defect class as the S218/S223 one" (filed Session 223). Two filed escapes in packages/data-agent/src/model_project_constructor_data_agent/discovery.py: (1) the except tuple around db.get_information_schema is too narrow for a KeyError out of ReadOnlyDB._reflect_entity -- read from source, no measured trigger, defence-in-depth; (2) the _entry_from_reflection loop and the llm.rank_candidate_tables call sit outside the try entirely, so `mpc-data discover --rank-with-llm` against a malformed LLM response is an uncaught traceback. The item's own line citations were measured wrong at HEAD by Session 260's review, so every site is re-located by content before it is touched.
+what_was_done: pending
+next_steps: pending
+key_files: pending
+gotchas: pending
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+```handoff
 session: S260
 date: 2026-09-20
 status: complete
