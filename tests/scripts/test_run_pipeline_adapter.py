@@ -168,10 +168,13 @@ def test_build_data_runner_data_mode_routes_through_factory(
         # raised a bare ValueError out of ``sql_dialect_from_url`` — an uncaught
         # traceback out of ``build_data_runner`` and then out of ``main()``,
         # before any pipeline stage ran. It now degrades to None like every other
-        # unparseable URL. Note the pipeline then reports COMPLETE and exits 0:
+        # unparseable URL, and since Session 260 also logs a WARNING naming the
+        # parse failure. Note the pipeline still reports COMPLETE and exits 0:
         # there is no FAILED_AT_DATA off-ramp for a bad --db-url (the halt at
         # pipeline.py:460 gates on a non-COMPLETE DataReport, and the data agent
-        # cannot produce one for a DB problem). Filed in BACKLOG.md.
+        # does not produce one for a DB problem). The cause now reaches the
+        # report's data_quality_concerns; the halt is what still does not exist,
+        # and it needs an operator ruling.
         ("postgresql://user:pw@warehouse.internal:$DB_PORT/claims", None),
     ],
 )

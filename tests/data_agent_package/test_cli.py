@@ -390,16 +390,18 @@ def test_cli_survives_a_non_numeric_port_in_db_url(
     statement, so the bare ``ValueError`` ``make_url`` raises on a non-numeric
     port escaped Typer as a rendered traceback and exited non-zero.
 
-    ⚠ **What this does NOT establish.** The command now exits 0 with a report
-    whose only trace of the problem is the canned "database unreachable at QC
-    execution time" concern — byte-identical to what a well-formed but
-    unreachable URL produces. The operator cannot tell "I forgot to export
-    ``$DB_PORT``" from "the warehouse is down", and there is **no**
-    ``FAILED_AT_DATA`` off-ramp for either: ``nodes.py``'s ``execute_qc``
-    discards the ``DBConnectionError`` and ``agent.py`` reports ``COMPLETE``
-    regardless. That silence is pre-existing and applies to every malformed URL;
-    this fix makes the non-numeric-port case consistent with the rest instead of
-    uniquely fatal. It is filed in ``BACKLOG.md`` as its own item.
+    ⚠ **What this does and does not establish.** Half of the warning that stood
+    here was closed in Session 260 and half was not. The report is no longer
+    byte-identical to a well-formed-but-unreachable URL's: ``execute_qc`` binds
+    the ``DBConnectionError`` and ``agent.py`` appends its cause to the canned
+    "database unreachable at QC execution time" concern, so an unexported
+    ``$DB_PORT`` reads differently from a warehouse that is down, and
+    ``sql_dialect_from_url`` additionally logs a WARNING naming the *parse*
+    failure. What is unchanged: the command still exits 0 and ``agent.py``
+    still reports ``COMPLETE``, so there is still **no** ``FAILED_AT_DATA``
+    off-ramp for either case. That last part is deliberate — it turns runs that
+    succeed today into failures, so it needs an operator ruling — and it is
+    what remains filed.
 
     The unit test in ``tests/data_agent_package/test_db.py`` pins the derivation;
     this pins the *seam*, which is the part a user actually meets.
