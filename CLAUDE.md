@@ -119,7 +119,7 @@ This project's own rows. Until Session 259 they stood in the synced runner's Pha
 
 ### Project-specific Learnings
 
-Project institutional memory (266 learnings, Sessions 9–259) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (307.5 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings live in the synced `FRAMEWORK_LEARNINGS.md` (in `SESSION_RUNNER.md`'s own table until the Session 259 sync).
+Project institutional memory (271 learnings, Sessions 9–260) lives in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — extracted from the `SESSION_RUNNER.md` table to keep `CLAUDE.md` within its size budget (Claude Code targets ~200 lines / ~25 KB). **`grep` it, or `Read` it with `offset`/`limit`, when a task resembles earlier work; append new learnings there, not here.** A default `Read` of it is **refused outright** and returns nothing (311.5 KB against a 256 KB ceiling — re-measure with `wc -c`, never quote this figure; it has been re-derived at every session that appended to the file). Base methodology-level learnings live in the synced `FRAMEWORK_LEARNINGS.md` (in `SESSION_RUNNER.md`'s own table until the Session 259 sync).
 
 ### Project-specific Failure Modes
 

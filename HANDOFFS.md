@@ -176,18 +176,24 @@ manifest existed are not re-judged.
 ```handoff
 session: S260
 date: 2026-09-20
-status: pending
-self_score: pending
-predecessor_score: pending
-active_task: Close the BACKLOG item "A bad or unreachable --db-url fails silently: exit 0, COMPLETE, and the message naming the cause is discarded" — options (a) bind the exception at nodes.py:119 and carry str(e) into data_quality_concerns instead of the canned string, and (b) warn at the derivation site when a non-None --db-url yields a None dialect, so a parse failure is distinguishable from a connect failure. Option (c), a DataReport status that makes pipeline.py:460 halt, is out of scope by the item's own recommendation and needs an operator ruling.
-what_was_done: pending
-next_steps: pending
-key_files: pending
-gotchas: pending
-runtime_smoke: pending
-changelog_ref: pending
+status: complete
+self_score: 9
+predecessor_score: 9
+active_task: The silent --db-url failure is closed for options (a) and (b): the DataReport now names the cause of a DB connect failure instead of a fixed string, with any password masked, and a URL that fails to PARSE additionally logs a WARNING so it is distinguishable from one that parses and cannot be connected to. Option (c) -- a DataReport status that makes the orchestrator halt -- is NOT done and is an operator ruling; BACKLOG.md's item is narrowed to it rather than removed, and its plain-language index row rewritten to match.
+what_was_done: Six commits. 2a648ef claims the session; 945b316 is the fix (nodes.py binds the DBConnectionError it had been catching unbound and returns it as a new db_error state key, declared on DataAgentState because langgraph silently drops an undeclared node return key; agent.py appends the cause to the canned concern rather than replacing it, flattened to one line because SQLAlchemy puts a help URL after a newline on every DBAPIError; db.py gains redact_db_url and redact_secrets and applies both in connect(), and sql_dialect_from_url binds its exception and warns); 6350fda adds 25 tests; 8054a13 corrects two test-file warnings the fix falsified; e6a9edc narrows the BACKLOG item, updates USAGE.md and re-measures README.md's three test-census numerals; this commit closes out. Also one non-commit action with its own ledger entry: the inherited 25-commit backlog was pushed to origin/master at Phase 1 on the operator's instruction (5f173f8..159e739), and CI run 35479804135 went green on it.
+next_steps: Option (c) is the only part of this item left and it is an operator ruling -- BACKLOG.md:326 states three shapes in ascending blast radius, and notes that the same question governs nodes.py's baseline branch ("database not reachable at baseline-collection time"), which should be ruled with it rather than separately. After that the cheapest engineering item on the board is the sibling defect: probe_information_schema promises it "never raises" and can, one file, same defect class -- but re-locate it by content, because this session's review measured that item's own _reflect_entity line citations wrong at HEAD. These six commits are unpushed.
+key_files: packages/data-agent/src/model_project_constructor_data_agent/db.py:21 (the redaction helpers, through :70), db.py:92 (the rewritten Session 223 docstring paragraph), db.py:134 (the option-(b) warning), db.py:167 (connect() redacting both operands), state.py:39 (db_error and the comment saying what guards it), nodes.py:124 (the one-line root cause), agent.py:137 (the cause appended to the canned concern), tests/data_agent_package/test_db.py:184 (redaction + option (b)), tests/agents/data/test_data_agent.py:682 (discriminator, one-line, credential, db-is-None), BACKLOG.md:55 (index row) and BACKLOG.md:326 (the narrowed item), README.md:95 and :100 and :155 (the re-measured census)
+gotchas: redact_db_url and redact_secrets are two functions on purpose -- the URL form matches greedily to the LAST '@' because a password may contain one, and the text form must NOT or a single pass would span from a URL to an unrelated '@' later in a driver's message. Assert a secret's ABSENCE, never that a '***' marker is present: a marker assertion passes on a partial leak, which is the exact mistake an adversarial review caught here. _SECRET_KV is a fixed key list, so a secret under a key not in it is unmasked -- the structural path covers the userinfo password regardless. Adding a DataAgentState key is two edits and mypy catches neither, because langgraph drops an undeclared key silently and both ends are typed dict[str, Any]; the discriminator test is the only guard, verified by deleting the declaration. The canned concern PREFIX was kept rather than replaced -- four existing assertions and docs/tutorial.md:535 depend on it.
+runtime_smoke: RAN, and it is what demonstrates the item closed. `uv run model-data-agent run -r tests/fixtures/sample_request.json -o <out> --fake-llm --db-url <url>` for both `postgresql://user:hunter2@warehouse.internal:$DB_PORT/claims` and `sqlite:////nonexistent/path/does/not/exist.db`: the two reports now carry DIFFERENT data_quality_concerns naming the actual causes ("invalid literal for int() with base 10: '$DB_PORT'" vs "unable to open database file"), the option-(b) WARNING appears on stderr for the unparseable URL only, "hunter2" is absent from both serialized reports, and status stays COMPLETE with exit 0 -- exactly the shape option (c) is deliberately left in. Mechanical evidence: full suite 1,420 passed / 9 skipped / 97.99% against the 95% gate; ruff check src/ tests/ packages/ scripts/, uv run mypy (68 files) and tests/test_data_agent_decoupling.py (the C4 job, run because this diff added a stdlib logging import to the package) all clean; census and read-budget guards 82 passed. .quality-gates.json declares no gates, so quality_ratchet.py has nothing to run. Four mutants against the new tests, each caught by its intended test and no other.
+changelog_ref: CHANGELOG.md "### 2026-09-20 · [ad hoc] S260 — close out: the silent --db-url failure reports its cause"
 commit: pending
 ```
+
+Model: Claude Opus 5 (1M context), single tier. Self-score 9 and predecessor score 9 are argued in
+this session's record in `SESSION_NOTES.md`. The design was mapped and adversarially verified by a
+9-agent workflow (five mapping lenses, a synthesizer, three skeptics): 13 findings, 2 blockers, and
+both blockers plus the partial-leak finding were re-measured in this repo before being accepted.
+All three were against this session's own draft redaction, not against the filed item.
 
 ```handoff
 session: S259

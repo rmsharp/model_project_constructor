@@ -98,15 +98,133 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 260 Did
-**Deliverable:** Close the BACKLOG item *"A bad or unreachable `--db-url` fails silently: exit 0,
-`COMPLETE`, and the message naming the cause is discarded"* — options **(a) + (b)** as that item
-recommends, leaving **(c)** (a `DataReport` status that makes `pipeline.py:460` halt) as the separate
-operator decision it calls for. (IN PROGRESS)
-**Started:** 2026-09-20 (UTC).
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says *(in progress)*;
-Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **The silent `--db-url` failure now reports its cause — COMPLETE**, options (a) and
+(b) of the item filed in Session 223. A bad port, an unexported shell variable and a genuine
+warehouse outage produced byte-identical reports; they no longer do. **(c)** — a `DataReport` status
+that makes the pipeline halt — was deliberately not done: the item calls it an operator ruling, and
+the BACKLOG item is **narrowed to it** rather than deleted. **Started / completed:** 2026-09-20
+(UTC). **Commits: six** — `2a648ef` (claim), `945b316` (the fix), `6350fda` (tests), `8054a13` (two
+test-file warnings the fix falsified), `e6a9edc` (docs + the narrowed item) and this close-out.
+**Ledger: seven entries** — one per commit plus one for the push, which leaves no commit of its own.
+
+#### The filed option was not safe as written, and only running it showed that
+
+The item said: bind the exception, carry `str(e)` into `data_quality_concerns`. Correct about the
+defect. But `ReadOnlyDB.connect` composed its message from `self.url` **raw**, so `str(e)` for
+`postgresql://user:hunter2@host:$DB_PORT/claims` contains `hunter2` verbatim — measured before
+writing any code — and `data_quality_concerns` is serialized into `report.json`, the checkpoint
+envelope and the generated project's `reports/data_report.{json,md}`. Option (a) is precisely what
+first carries that string into a persisted artifact. So the fix redacts at the source: `redact_db_url`
+is structural (`make_url(...).render_as_string(hide_password=True)`) where the URL parses and regex
+where it does not — **which is this project's actual failure case**, an unexpanded `$DB_PORT` — plus
+`redact_secrets` for a driver's own echoed text. Learning #267.
+
+#### The review defeated my redaction twice, and the test I had written would not have noticed
+
+Nine agents: five mapping lenses, a synthesizer, three skeptics. **13 findings, 2 blockers**, and I
+re-measured both myself rather than taking them on trust. (1) A URL has a **second** credential
+channel — `?password=` in the query string, which SQLAlchemy hands to the DBAPI as a real password
+and which no userinfo pattern can see. (2) The userinfo class `[^/@\s]*` **excluded** `/` and space,
+so a password containing either matched nothing and was masked **not at all** — failing open on
+exactly the un-percent-encoded passwords a shell-templated `--db-url` produces. A third finding was
+worse than either: my planned assertion that the `***` marker is present **passes on a partial leak**
+(`user:p@ss@host` → `user:***@ss@host`, marker shown, password tail published). Every redaction test
+now asserts the SECRET's absence, parametrized, and never a marker. Learnings #268, #269.
+
+#### Verification
+
+Full suite **1,420 passed, 9 skipped, 97.99%** (1,395 before); `ruff`, `mypy` (68 files) and the C4
+decoupling job clean; census and read-budget guards 82 passed at the claim, at each step and here.
+**Each new test was mutation-checked, not assumed load-bearing:** deleting `db_error` from
+`DataAgentState` fails the discriminator alone, restoring the unredacted `connect()` fails the three
+credential tests, removing the one-line flattening fails the one-line test, and making the (b)
+warning unconditional fails the negative and seam tests — four mutants, each caught by its intended
+test and no other, source restored with `git checkout --` between them. **Phase 3E ran for real:**
+`model-data-agent run --fake-llm` against both failure URLs now yields two *different* concerns
+naming the actual causes, with the (b) warning on stderr for the unparseable one only, no `hunter2`
+in either serialized report, and `COMPLETE`/exit 0 unchanged — which is exactly the shape option (c)
+is left in.
+
+### Session 259 Handoff Evaluation (by Session 260)
+
+**Score: 9/10.** **+** The receipt's `next_steps` named the one remaining P11 step precisely enough
+that I could confirm it done from the fork's `git log` in a single command (`a127ba1`, `431279b`) —
+the operator's opening message was about that step, and the handoff is why answering it cost one
+call instead of a hunt. **+** Gotcha #2 — *"a `Verified:` bullet about its own commit is measured
+before the entry exists"* — changed how I wrote all seven of this session's ledger entries; none
+cites a numstat about its own commit. **+** Gotcha #5 pre-empted the `context_budget.py` over-ceiling
+report at Phase 0, so I reported it as expected rather than investigating it. **+** The `key_files`
+list resolved exactly, line numbers included. **−** The one gap: it is a framework session's handoff
+and says nothing about the product code, which is where this session's task lived. That is a fair
+scope — but its `next_steps` list was entirely process/operator items, so a session told "pick the
+next thing" would have had no route into `BACKLOG.md`'s engineering items at all. **ROI: high.**
+
+### Session 260 Self-Assessment
+
+**Score: 9/10.**
+**+ Measured before designing, and the measurement changed the design.** The password leak was found
+by running `connect()` with a credential in the URL, before any code was written — not by reading.
+The filed option would have shipped a plaintext secret into a published artifact.
+**+ Took the review's blockers seriously enough to re-derive them.** Both blockers and the
+partial-leak finding were re-measured in this repo's venv before I accepted them; all three held.
+**+ Proved the new tests can fail.** Four mutants, each isolated to its intended test. This project's
+own history says a green test that cannot fail is the failure mode, not the exception.
+**+ Narrowed the backlog item instead of deleting it**, so the open (c) decision survives close-out,
+and updated the plain-language index row in the same commit as that section's rule requires.
+**+ Re-measured the README census rather than computing it** from the number of tests I meant to add.
+**− I drafted a redaction whose own test list would have certified it.** The five cases I chose were
+the five shapes I had in mind; two characters I excluded from a class were the ones that leak, and
+a second credential channel was not in my model at all. Without the adversarial pass this session
+ships a partial leak and a test that calls it clean — the most serious near-miss here, and the reason
+the self-score is not 10.
+**− I did not check whether `--db-url` is documented with a password anywhere**, which would have
+told me the exposure was real rather than theoretical much earlier than the measurement did.
+
+**What's next.**
+1. **Option (c) is an operator ruling, and it is the only thing left of this item.** `BACKLOG.md`'s
+   narrowed item states three shapes, ascending blast radius. It also notes the same question governs
+   `nodes.py`'s baseline branch (`"database not reachable at baseline-collection time"`), which is the
+   parallel case and should be ruled with it rather than separately.
+2. **The sibling defect is now the cheapest one on the board:** `probe_information_schema` says it
+   "never raises" and can — same defect class, one file, and the BACKLOG item's own line citations
+   for `_reflect_entity` were measured wrong at HEAD (flagged by this session's review, not fixed).
+   **Re-locate by content, not by the line numbers in that item.**
+3. **Pushing:** this session pushed the inherited 25-commit backlog at Phase 1 on the operator's
+   instruction, and CI went green on `159e739` (run `35479804135`). These six commits are unpushed.
+4. **Unchanged operator calls:** `PROJECT_LEARNINGS.md` still refused by a default `Read` (311.5 KB —
+   re-measured, it grew this session); `CHANGELOG.md`'s four July entries still out of order inside
+   the legacy part; the `ruff`/sdist fallout from Session 259's sync (see learning #264 first).
+5. **Carried:** the tenth trim when `SESSION_NOTES.md` next exceeds 196,608 B; the two collapse proofs
+   are still guarded by nothing; the NO-OP guard still cannot see a partially inert mutant.
+
+**Key files** (measured at this close-out).
+`packages/data-agent/src/model_project_constructor_data_agent/db.py:21`–`:70` (the two redaction
+helpers and their measured rationale), `:92`–`:105` (`sql_dialect_from_url`'s rewritten docstring
+paragraph — the Session 223 ⚠ block this diff falsified), `:134`–`:144` (the option-(b) warning),
+`:167`–`:171` (`connect()` redacting both operands);
+`.../state.py:33`–`:39` (`db_error`, with the comment saying what guards it);
+`.../nodes.py:124`–`:125` (the one-line root cause);
+`.../agent.py:137`–`:148` (the cause appended to the canned concern, flattened to one line);
+`tests/data_agent_package/test_db.py:184`+ (redaction + option (b)),
+`tests/agents/data/test_data_agent.py:682`+ (discriminator, one-line, credential, `db is None`);
+`BACKLOG.md:55` (index row) and `:326`–`:354` (the narrowed item);
+`README.md:95`, `:100`, `:155` (the re-measured census).
+
+**Gotchas.**
+1. **`redact_db_url` and `redact_secrets` are two functions on purpose.** The URL form matches
+   greedily to the LAST `@` because a password may contain one; the text form must NOT, or a single
+   pass would span from a URL to an unrelated `@` later in a driver's message. Do not collapse them.
+2. **Assert the secret's absence, never that `***` is present.** A marker assertion passes on a
+   partial leak — that exact mistake was caught in review here, and the tests encode the rule.
+3. **`_SECRET_KV` is a fixed key list.** A secret under a key not in it (`sslkey`, a vendor-specific
+   parameter) is not masked. The structural path covers the userinfo password regardless; the key
+   list only covers the query string.
+4. **Adding a `DataAgentState` key is two edits and `mypy` catches neither.** langgraph silently drops
+   an undeclared node return key, and both ends are typed `dict[str, Any]`. The discriminator test in
+   `tests/agents/data/test_data_agent.py` is the only guard — verified by deleting the declaration.
+5. **The canned concern prefix was kept, not replaced.** Four existing assertions and
+   `docs/tutorial.md:535` depend on it. Appending the cause is what keeps them meaningful; replacing
+   the string would have broken all five for no benefit.
 
 ### What Session 259 Did
 **Deliverable:** **BL-57 phase P11 — COMPLETE.** `CHANGELOG.md` now follows the methodology's ledger
