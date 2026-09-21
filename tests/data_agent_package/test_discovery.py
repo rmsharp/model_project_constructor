@@ -11,6 +11,7 @@ Phase 1.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -22,9 +23,11 @@ from model_project_constructor_data_agent import (
     TableRanking,
     probe_information_schema,
 )
+from model_project_constructor_data_agent.anthropic_client import LLMParseError
 from model_project_constructor_data_agent.discovery import (
     PRODUCER_ID,
     PRODUCER_VERSION,
+    RANKING_FAILED_NOTE_PREFIX,
 )
 from model_project_constructor_data_agent.schemas import DataSourceEntry
 
@@ -67,13 +70,95 @@ def seeded_sqlite(tmp_path: Path) -> str:
 
 
 def _probe(url: str, **kwargs: Any) -> DataSourceInventory:
-    """Helper: connect, probe, close."""
+    """Helper: connect, probe, close — for HEALTHY-path tests only.
+
+    ⚠ The ``notes is None`` assertion is load-bearing, not tidiness. Since
+    Session 261 the probe absorbs every ``Exception`` from reflection, entry
+    building and ranking into a labelled inventory, so a healthy-path test that
+    asserts only on ``entries`` would pass with reflection completely broken.
+    Measured Session 261, with ``get_information_schema`` raising on every call:
+    about half the healthy-path tests here still passed without this line, and
+    none do with it. (No count on purpose — two reviewers measured two different
+    figures, because it depends on which breakage and which revision of this
+    file.) A test that WANTS a degraded inventory calls
+    ``probe_information_schema`` directly.
+    """
     db = ReadOnlyDB(url)
     db.connect()
     try:
-        return probe_information_schema(db, **kwargs)
+        inv = probe_information_schema(db, **kwargs)
     finally:
         db.close()
+    assert inv.producers[0].notes is None, inv.producers[0].notes
+    return inv
+
+
+DISCOVERY_LOGGER = "model_project_constructor_data_agent.discovery"
+SECRET = "hunter2"
+
+GOOD_ROW: dict[str, Any] = {
+    "namespace": "main",
+    "name": "claims",
+    "entity_kind": "table",
+    "columns": [{"name": "id", "data_type": "INTEGER"}],
+    "primary_key_columns": ["id"],
+}
+
+
+def _three_rows() -> list[dict[str, Any]]:
+    return [{**GOOD_ROW, "name": n} for n in ("claims", "outcomes", "policies")]
+
+
+def _discovery_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [
+        r
+        for r in caplog.records
+        if r.name == DISCOVERY_LOGGER and r.levelno == logging.WARNING
+    ]
+
+
+class _RowsDB:
+    """Duck-typed DB whose reflection returns whatever it was given."""
+
+    def __init__(self, rows: Any) -> None:
+        self._rows = rows
+
+    def get_information_schema(self, schemas: list[str] | None = None) -> Any:
+        return self._rows
+
+
+class _RaisingDB:
+    def __init__(self, exc: BaseException) -> None:
+        self._exc = exc
+
+    def get_information_schema(self, schemas: list[str] | None = None) -> Any:
+        raise self._exc
+
+
+class _Ranker:
+    """Ranker whose behaviour is a callable; records every call.
+
+    ⚠ Never signal "should not be called" from a fake on the probe's path by
+    raising an ``Exception`` subclass — the probe absorbs it. Record the call
+    and assert on ``calls`` outside the probe.
+    """
+
+    def __init__(self, behaviour: Any) -> None:
+        self._behaviour = behaviour
+        self.calls: list[str | None] = []
+
+    def rank_candidate_tables(
+        self, entries: list[DataSourceEntry], request_context: str | None
+    ) -> Any:
+        self.calls.append(request_context)
+        return self._behaviour(entries)
+
+
+def _raise(exc: BaseException) -> Any:
+    def _behaviour(entries: list[DataSourceEntry]) -> Any:
+        raise exc
+
+    return _behaviour
 
 
 class TestProbeHappyPath:
@@ -183,8 +268,9 @@ class TestProbeDegradation:
         db = ReadOnlyDB(f"sqlite:///{tmp_path / 'x.db'}")
         inv = probe_information_schema(db)
         assert inv.entries == []
-        assert inv.producers[0].notes is not None
-        assert "probe failed" in inv.producers[0].notes
+        notes = inv.producers[0].notes or ""
+        assert notes.startswith("information_schema probe failed: RuntimeError: ")
+        assert "before connect" in notes
 
     def test_sqlalchemy_error_caught(self) -> None:
         """A fake ReadOnlyDB that raises SQLAlchemyError becomes empty-with-note."""
@@ -200,8 +286,9 @@ class TestProbeDegradation:
         inv = probe_information_schema(FailingDB())  # type: ignore[arg-type]
         assert inv.entries == []
         assert len(inv.producers) == 1
-        assert inv.producers[0].notes is not None
-        assert "probe failed" in inv.producers[0].notes
+        notes = inv.producers[0].notes or ""
+        assert notes.startswith("information_schema probe failed: OperationalError: ")
+        assert "permission denied" in notes
 
     def test_not_implemented_error_caught(self) -> None:
         class UnsupportedDB:
@@ -212,7 +299,9 @@ class TestProbeDegradation:
 
         inv = probe_information_schema(UnsupportedDB())  # type: ignore[arg-type]
         assert inv.entries == []
-        assert "probe failed" in (inv.producers[0].notes or "")
+        notes = inv.producers[0].notes or ""
+        assert notes.startswith("information_schema probe failed: NotImplementedError: ")
+        assert "fake_dialect" in notes
 
 
 class TestProbeRoundTrip:
@@ -239,12 +328,16 @@ class TestProbeWithLLMRanking:
 
     def test_llm_ranking_populates_relevance(self, seeded_sqlite: str) -> None:
         class AllSameRankingLLM:
+            # A recorder, not an in-ranker ``assert``: the probe absorbs any
+            # Exception a ranker raises, AssertionError included.
+            contexts: list[str | None] = []
+
             def rank_candidate_tables(
                 self,
                 entries: list[DataSourceEntry],
                 request_context: str | None,
             ) -> list[TableRanking]:
-                assert request_context == "claims domain"
+                self.contexts.append(request_context)
                 return [
                     TableRanking(
                         fully_qualified_name=e.fully_qualified_name,
@@ -257,6 +350,8 @@ class TestProbeWithLLMRanking:
         inv = _probe(
             seeded_sqlite, llm=AllSameRankingLLM(), request_context="claims domain"
         )
+        assert AllSameRankingLLM.contexts == ["claims domain"]
+        assert len(inv.entries) == 4
         for entry in inv.entries:
             assert entry.relevance_score == pytest.approx(0.5)
             assert entry.relevance_reason is not None
@@ -300,15 +395,353 @@ class TestProbeWithLLMRanking:
         finally:
             engine.dispose()
 
-        class ExplodingLLM:
-            def rank_candidate_tables(
-                self,
-                entries: list[DataSourceEntry],
-                request_context: str | None,
-            ) -> list[TableRanking]:
-                raise AssertionError("LLM should not be invoked on empty inventory")
+        # A recorder, not a tripwire that raises: since Session 261 the probe
+        # absorbs any Exception a ranker raises, so ``raise AssertionError``
+        # here would be swallowed into a note and this test could never fail.
+        llm = _Ranker(lambda entries: [])
+        inv = _probe(f"sqlite:///{db_path}", llm=llm, request_context="anything")
+        assert llm.calls == []
+        assert inv.entries == []
 
-        inv = _probe(
-            f"sqlite:///{db_path}", llm=ExplodingLLM(), request_context="anything"
+
+class TestProbeNeverRaises:
+    """Stage 1 — reflection and entry building. Filed Session 223, closed 261.
+
+    Message strings in these fakes deliberately do NOT contain their own
+    exception's type name, or the type-name assertions would pass with
+    ``type(e).__name__`` deleted from the note.
+    """
+
+    @pytest.mark.parametrize(
+        "exc",
+        [KeyError("referred_table"), TypeError("boom"), AttributeError("boom")],
+        ids=lambda e: type(e).__name__,
+    )
+    def test_unlisted_reflection_error_degrades_and_names_its_type(
+        self, exc: Exception
+    ) -> None:
+        """The old guard was a three-type tuple; none of these was in it."""
+        inv = probe_information_schema(_RaisingDB(exc))  # type: ignore[arg-type]
+        assert inv.entries == []
+        notes = inv.producers[0].notes or ""
+        # str(KeyError("referred_table")) is just "'referred_table'" — the type
+        # name is the only informative part of that note.
+        assert notes.startswith(
+            f"information_schema probe failed: {type(exc).__name__}: "
+        )
+
+    @pytest.mark.parametrize(
+        ("rows", "type_name"),
+        [
+            ([{"namespace": "main"}], "KeyError"),
+            ([{**GOOD_ROW, "entity_kind": "procedure"}], "ValidationError"),
+            (None, "TypeError"),
+        ],
+        ids=["missing-name", "bad-entity-kind", "rows-none"],
+    )
+    def test_entry_build_failure_degrades(self, rows: Any, type_name: str) -> None:
+        """Entry building sat outside the ``try`` entirely until Session 261."""
+        inv = probe_information_schema(_RowsDB(rows))  # type: ignore[arg-type]
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            f"information_schema probe failed: {type_name}: "
+        )
+
+    def test_one_bad_table_fails_the_whole_probe(self) -> None:
+        """No per-table skipping: a partial inventory is never returned unlabelled."""
+        inv = probe_information_schema(
+            _RowsDB([GOOD_ROW, {"namespace": "main"}])  # type: ignore[arg-type]
         )
         assert inv.entries == []
+
+    def test_probe_failure_logs_exactly_one_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            probe_information_schema(_RaisingDB(KeyError("k")))  # type: ignore[arg-type]
+        warnings = _discovery_warnings(caplog)
+        assert len(warnings) == 1
+        assert "KeyError" in warnings[0].getMessage()
+
+    def test_note_and_log_mask_a_driver_echoed_password_on_one_line(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Assert the SECRET's absence, never a marker's presence (learning #268)."""
+        exc = sa.exc.OperationalError(
+            statement="",
+            params={},
+            orig=Exception(
+                f"could not connect: postgresql://user:{SECRET}@host/db\nDETAIL: x"
+            ),
+        )
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(_RaisingDB(exc))  # type: ignore[arg-type]
+        notes = inv.producers[0].notes or ""
+        assert SECRET not in notes
+        assert "\n" not in notes
+        assert "could not connect" in notes  # redaction must not eat the cause
+        assert ["\n" in r.getMessage() for r in _discovery_warnings(caplog)] == [False]
+        # caplog.text is the FORMATTED record, traceback included; getMessage()
+        # is not, so it would pass with ``exc_info=True`` leaking the raw text.
+        assert SECRET not in caplog.text
+
+    def test_unprintable_exception_still_degrades(self) -> None:
+        class Unprintable(Exception):
+            def __str__(self) -> str:
+                raise RuntimeError("broken __str__")
+
+        inv = probe_information_schema(_RaisingDB(Unprintable()))  # type: ignore[arg-type]
+        assert inv.entries == []
+        assert "Unprintable" in (inv.producers[0].notes or "")
+
+    def test_str_subclass_message_still_degrades(self) -> None:
+        """``str(e)`` hands a ``str`` SUBCLASS back unchanged, so guarding only the
+        ``str(e)`` call leaves that subclass's own methods free to raise."""
+
+        class Hostile(str):
+            def encode(self, *a: Any, **k: Any) -> bytes:
+                raise RuntimeError("encode boom")
+
+        class StrSubclassError(Exception):
+            def __str__(self) -> str:
+                return Hostile("x")
+
+        inv = probe_information_schema(_RaisingDB(StrSubclassError()))  # type: ignore[arg-type]
+        assert inv.entries == []
+        assert "StrSubclassError: <unprintable>" in (inv.producers[0].notes or "")
+
+    def test_lone_surrogate_in_the_cause_still_serializes(self) -> None:
+        """A message built by formatting an ``os.fsdecode``-d path carries its lone
+        surrogate. (An OS-RAISED OSError repr-escapes its filename and does not —
+        measured — which is why this one is hand-built.)"""
+        inv = probe_information_schema(
+            _RaisingDB(OSError("cannot open /data/\udcff.db"))  # type: ignore[arg-type]
+        )
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    @pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit])
+    def test_base_exception_from_reflection_propagates(
+        self, exc_type: type[BaseException]
+    ) -> None:
+        with pytest.raises(exc_type):
+            probe_information_schema(_RaisingDB(exc_type()))  # type: ignore[arg-type]
+
+
+class TestRankingFailureKeepsEntries:
+    """Stage 2 — ranking is an optional enrichment; its failure keeps the tables."""
+
+    @pytest.mark.parametrize(
+        ("behaviour", "type_name"),
+        [
+            (_raise(LLMParseError("expected JSON array, got dict")), "LLMParseError"),
+            (_raise(KeyError("fully_qualified_name")), "KeyError"),
+            (lambda entries: None, "TypeError"),
+            (lambda entries: [{"fully_qualified_name": "main.claims"}], "AttributeError"),
+            (lambda entries: ["main.claims"], "AttributeError"),
+        ],
+        ids=["parse-error", "wrong-keys", "rankings-none", "rankings-dicts", "rankings-strings"],
+    )
+    def test_ranking_failure_keeps_every_entry_unranked(
+        self, behaviour: Any, type_name: str
+    ) -> None:
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()),  # type: ignore[arg-type]
+            llm=_Ranker(behaviour),
+            request_context="claims",
+        )
+        assert [e.fully_qualified_name for e in inv.entries] == [
+            "main.claims",
+            "main.outcomes",
+            "main.policies",
+        ]
+        assert [e.relevance_score for e in inv.entries] == [None, None, None]
+        assert [e.relevance_reason for e in inv.entries] == [None, None, None]
+        notes = inv.producers[0].notes or ""
+        assert notes.startswith(
+            f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all 3 entries are unranked."
+        )
+        # The two degradations must stay distinguishable by text.
+        assert "probe failed" not in notes
+
+    @pytest.mark.parametrize(
+        ("llm", "expected_note_start"),
+        [
+            (
+                type("LazyProperty", (), {
+                    "rank_candidate_tables": property(
+                        lambda self: (_ for _ in ()).throw(RuntimeError("lazy init failed"))
+                    )
+                })(),
+                f"{RANKING_FAILED_NOTE_PREFIX} (RuntimeError)",
+            ),
+            # ``None`` reads as "this client does not rank" — same as no attribute.
+            (type("NotCallable", (), {"rank_candidate_tables": None})(), None),
+            (
+                type("NotCallable", (), {"rank_candidate_tables": 42})(),
+                f"{RANKING_FAILED_NOTE_PREFIX} (TypeError)",
+            ),
+        ],
+        ids=["attribute-lookup-raises", "attribute-is-none", "attribute-not-callable"],
+    )
+    def test_odd_ranker_attributes_never_escape(
+        self, llm: Any, expected_note_start: str | None
+    ) -> None:
+        """``hasattr`` swallows only AttributeError, so the lookup is inside the try
+        — and a failure there is LABELLED, not swallowed into a healthy-looking
+        inventory."""
+        inv = probe_information_schema(_RowsDB(_three_rows()), llm=llm)  # type: ignore[arg-type]
+        assert len(inv.entries) == 3
+        notes = inv.producers[0].notes
+        if expected_note_start is None:
+            assert notes is None
+        else:
+            assert (notes or "").startswith(expected_note_start)
+
+    def test_ranking_failure_logs_exactly_one_warning_carrying_the_cause(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            probe_information_schema(
+                _RowsDB(_three_rows()),  # type: ignore[arg-type]
+                llm=_Ranker(_raise(LLMParseError("prose reply, not an array"))),
+            )
+        warnings = _discovery_warnings(caplog)
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert "returning 3 entries UNRANKED" in message
+        assert "LLMParseError" in message
+        assert "prose reply, not an array" in message
+
+    @pytest.mark.parametrize(
+        "leak",
+        [
+            f"401 {{'received_headers': {{'x-api-key': '{SECRET}'}}}}",
+            f"Authorization: Bearer {SECRET}",
+            f"opencode exited 1: ANTHROPIC_API_KEY={SECRET}",
+        ],
+        ids=["gateway-body", "bearer", "env-echo"],
+    )
+    def test_ranking_note_never_persists_the_message(self, leak: str) -> None:
+        """The note is PUBLISHED with the inventory; ``redact_secrets`` is blind
+        to every one of these shapes (measured Session 261), so the note carries
+        the exception's type and the message goes to the WARNING only."""
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()),  # type: ignore[arg-type]
+            llm=_Ranker(_raise(RuntimeError(leak))),
+        )
+        assert SECRET not in inv.model_dump_json()
+        assert "RuntimeError" in (inv.producers[0].notes or "")
+
+    def test_ranking_warning_is_masked_and_single_line(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Stage 2 has its OWN ``_safe_message`` call site; stage 1's tests do not
+        reach it. Swapping it for a raw ``str(e)`` survived every other test here
+        (measured Session 261)."""
+        exc = RuntimeError(f"gateway refused postgresql://user:{SECRET}@host/db\nretry later")
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            probe_information_schema(
+                _RowsDB(_three_rows()), llm=_Ranker(_raise(exc))  # type: ignore[arg-type]
+            )
+        assert SECRET not in caplog.text
+        messages = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert len(messages) == 1
+        assert "gateway refused" in messages[0]  # redaction must not eat the cause
+        assert "\n" not in messages[0]
+
+    def test_unprintable_ranker_exception_still_keeps_the_entries(self) -> None:
+        class Unprintable(Exception):
+            def __str__(self) -> str:
+                raise RuntimeError("broken __str__")
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_raise(Unprintable()))  # type: ignore[arg-type]
+        )
+        assert len(inv.entries) == 3
+        assert (inv.producers[0].notes or "").startswith(
+            f"{RANKING_FAILED_NOTE_PREFIX} (Unprintable)"
+        )
+
+    def test_failure_after_a_good_ranking_applies_nothing(self) -> None:
+        """The bad element comes AFTER a good one, so a streaming apply would show.
+
+        ⚠ Measured Session 261: against THIS implementation, which builds the
+        whole ranking map before touching an entry, an apply-in-place mutant
+        survives this test — the failure lands in the map. The test that kills
+        that mutant is the invalid-score one below. This one guards the other
+        design (apply as the rankings stream in), where bad-element-FIRST would
+        fail before applying anything and pass."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [
+                TableRanking(entries[0].fully_qualified_name, 0.9, "ok"),
+                "not a ranking",
+            ]
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+        )
+        assert [e.relevance_score for e in inv.entries] == [None, None, None]
+        assert [e.relevance_reason for e in inv.entries] == [None, None, None]
+
+    def test_ranker_mutating_its_input_then_failing_changes_nothing(self) -> None:
+        """The ranker gets deep copies, so "entries are unranked" stays true."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            entries[0].relevance_score = 0.99
+            # The NESTED mutation is what separates a deep copy from a shallow
+            # ``model_copy()``, which shares the column objects (measured).
+            entries[0].columns[0].name = "mutated"
+            entries.clear()
+            raise RuntimeError("failed after mutating in place")
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+        )
+        assert [e.relevance_score for e in inv.entries] == [None, None, None]
+        assert [c.name for c in inv.entries[0].columns] == ["id"]
+
+    def test_invalid_score_is_a_ranking_failure_not_an_invalid_inventory(self) -> None:
+        """The bad score is on the LAST entry so a partial apply would show.
+
+        ``model_copy(update=...)`` skips validation, and so does
+        ``model_validate(<instance>)`` — validation must start from a dict."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [
+                TableRanking(entries[0].fully_qualified_name, 0.9, "ok"),
+                TableRanking(entries[-1].fully_qualified_name, "high", "bad"),  # type: ignore[arg-type]
+            ]
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+        )
+        assert [e.relevance_score for e in inv.entries] == [None, None, None]
+        assert (inv.producers[0].notes or "").startswith(
+            f"{RANKING_FAILED_NOTE_PREFIX} (ValidationError)"
+        )
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    @pytest.mark.parametrize("exc_type", [KeyboardInterrupt, SystemExit])
+    def test_base_exception_from_ranker_propagates(
+        self, exc_type: type[BaseException]
+    ) -> None:
+        with pytest.raises(exc_type):
+            probe_information_schema(
+                _RowsDB(_three_rows()),  # type: ignore[arg-type]
+                llm=_Ranker(_raise(exc_type())),
+            )
+
+    def test_successful_ranking_leaves_no_note_and_no_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [TableRanking(e.fully_qualified_name, 0.5, "r") for e in entries]
+
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+            )
+        assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, 0.5]
+        assert inv.producers[0].notes is None
+        assert _discovery_warnings(caplog) == []

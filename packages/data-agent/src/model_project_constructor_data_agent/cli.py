@@ -34,7 +34,10 @@ import typer
 from model_project_constructor_data_agent.agent import DataAgent
 from model_project_constructor_data_agent.anthropic_client import DEFAULT_MODEL
 from model_project_constructor_data_agent.db import ReadOnlyDB
-from model_project_constructor_data_agent.discovery import probe_information_schema
+from model_project_constructor_data_agent.discovery import (
+    RANKING_FAILED_NOTE_PREFIX,
+    probe_information_schema,
+)
 from model_project_constructor_data_agent.factory import (
     KNOWN_PROVIDERS,
     make_llm_client,
@@ -166,7 +169,11 @@ def discover(
     rank_with_llm: bool = typer.Option(
         False,
         "--rank-with-llm",
-        help="Ask the LLM to rank each table's relevance to --request-context.",
+        help=(
+            "Ask the LLM to rank each table's relevance to --request-context. "
+            "If ranking fails the inventory is still written, unranked, and the "
+            "command exits 1."
+        ),
     ),
     request_context: str | None = typer.Option(
         None,
@@ -212,6 +219,26 @@ def discover(
 
     output.write_text(json.dumps(inventory.model_dump(mode="json"), indent=2))
     typer.echo(f"wrote {output} ({len(inventory.entries)} entries)")
+
+    # Operator rulings, Session 261: a DEGRADED inventory is still written —
+    # whatever was reflected is kept — and the command exits 1, for a failed
+    # ranking and a failed reflection alike. ``probe_information_schema`` no
+    # longer raises for either, so without this a missing API key would turn
+    # from exit 1 into exit 0, and ``discover ... && next-step`` could not tell
+    # an empty or unranked inventory from a good one. The probe sets ``notes``
+    # only when it degraded; the note is safe to echo — it is in the file.
+    degraded = [p.notes for p in inventory.producers if p.notes]
+    if degraded:
+        what = (
+            "ranking failed, so its entries are UNRANKED"
+            if degraded[0].startswith(RANKING_FAILED_NOTE_PREFIX)
+            else "reflection failed, so it is EMPTY"
+        )
+        typer.echo(
+            f"error: {output} is a degraded inventory — {what}. {degraded[0]}",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
 
 def _load_request(path: Path) -> DataRequest:

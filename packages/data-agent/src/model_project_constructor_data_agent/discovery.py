@@ -7,17 +7,18 @@ SQLAlchemy's dialect-agnostic Inspector) and builds a
 discovered table or view. The resulting JSON is a valid input for any
 downstream consumer that accepts the contract.
 
-Phase 2 scope per ``docs/planning/data-source-inventory-contract-plan.md``:
+Phase 2 scope per ``docs/architecture-history/data-source-inventory-contract-plan.md``:
 
 - PostgreSQL + SQLite tested against fake DBs.
-- Other dialects: SQLAlchemy inspector handles most; dialects that raise
-  during reflection surface as an empty inventory with ``ProducerMetadata.notes``
-  naming the error.
+- Other dialects: SQLAlchemy inspector handles most. Anything that raises
+  during reflection *or while an entry is built from it* surfaces as an empty
+  inventory with ``ProducerMetadata.notes`` naming the error.
 - Optional LLM ranking via the caller-supplied ``llm`` (opt-in through the
   ``--rank-with-llm`` CLI flag). When the ``llm`` object exposes a
   ``rank_candidate_tables`` method, discovery invokes it and assigns
   ``relevance_score`` / ``relevance_reason`` per entry; otherwise those
-  fields stay ``None``.
+  fields stay ``None``. They also stay ``None`` when ranking **fails** — the
+  reflected entries are kept and ``notes`` says the ranking failed.
 
 The producer emits ``producer_type="automated"`` with a stable
 ``producer_id="information_schema_probe_v1"``.
@@ -25,12 +26,11 @@ The producer emits ``producer_type="automated"`` with a stable
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.exc import SQLAlchemyError
-
-from model_project_constructor_data_agent.db import ReadOnlyDB
+from model_project_constructor_data_agent.db import ReadOnlyDB, redact_secrets
 from model_project_constructor_data_agent.schemas import (
     ColumnMetadata,
     DataSourceEntry,
@@ -38,8 +38,43 @@ from model_project_constructor_data_agent.schemas import (
     ProducerMetadata,
 )
 
+_LOG = logging.getLogger(__name__)
+
 PRODUCER_ID = "information_schema_probe_v1"
 PRODUCER_VERSION = "1.0"
+
+#: How ``ProducerMetadata.notes`` begins for each degradation. The two must stay
+#: distinguishable by text: an empty inventory and an unranked one are different
+#: outcomes, and ``cli.discover`` — which exits non-zero on either (operator
+#: ruling, Session 261) — tells the operator which. Compare with ``startswith``.
+PROBE_FAILED_NOTE_PREFIX = "information_schema probe failed"
+RANKING_FAILED_NOTE_PREFIX = "LLM relevance ranking failed"
+
+
+def _safe_message(e: Exception) -> str:
+    """``str(e)`` made safe to log and to persist.
+
+    Runs inside the ``except`` blocks that deliver "never raises", so it must
+    not be a raise site itself. The whole body is guarded, not just ``str(e)``:
+    a broken ``__str__`` raises there, and one returning a ``str`` *subclass*
+    raises later, from that subclass's own ``encode`` / ``split`` (measured).
+
+    Lone surrogates are scrubbed because a note holding one makes
+    ``model_dump_json`` raise and the written file fail to reload (measured).
+    An OS-raised ``OSError`` repr-escapes its filename, so it carries none; a
+    message built by formatting an ``os.fsdecode``-d path into text does.
+
+    Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo
+    and unquoted ``key=value`` forms; measured Session 261, it does not see a
+    prefixed key (``DB_PASSWORD=``), a quoted value, a header or a bearer token.
+    Flattened with the same idiom as ``agent.py`` so the WARNING is one log
+    record: SQLAlchemy puts its help URL after a newline on every ``DBAPIError``.
+    """
+    try:
+        raw = str(e).encode("utf-8", "replace").decode("utf-8")
+        return " ".join(redact_secrets(raw).split())
+    except Exception:
+        return "<unprintable>"
 
 
 def probe_information_schema(
@@ -58,78 +93,137 @@ def probe_information_schema(
             (default), every accessible schema except the system schemas
             (``information_schema``, ``pg_catalog``) is discovered.
         llm: Optional LLM client. If provided AND the object exposes a
-            ``rank_candidate_tables`` method, the method is invoked with the
-            candidate entries and ``request_context``; the returned rankings
-            populate ``DataSourceEntry.relevance_score`` and
+            ``rank_candidate_tables`` method, the method is invoked with
+            copies of the candidate entries and ``request_context``; the
+            returned rankings populate ``DataSourceEntry.relevance_score`` and
             ``relevance_reason``. Clients that do not support ranking are
             ignored here (no error).
         request_context: Free-text description of what the request is about,
             fed to the LLM for relevance ranking. Unused when ``llm`` is
             ``None`` or does not support ranking.
 
-    Returns a valid :class:`DataSourceInventory` — never raises for probe
-    failures. When the database rejects reflection (permission-denied,
-    unsupported dialect, transient connection issue), the returned inventory
-    has ``entries=[]`` and a single :class:`ProducerMetadata` whose
-    ``notes`` names the error for downstream debugging.
+    Returns a valid :class:`DataSourceInventory`. **No** ``Exception`` **raised
+    by** ``db`` **or by** ``llm`` **escapes** — each stage degrades to a labelled
+    result and logs one WARNING on this module's logger. Three limits, all
+    measured: only ``Exception`` is absorbed, never ``KeyboardInterrupt`` /
+    ``SystemExit``; a non-``str`` ``request_context`` still raises, because it is
+    validated while the *result* is built (a bad ``db`` or ``include_schemas``
+    does not — it surfaces as a probe failure); and an exception class hostile
+    enough that reading its ``__name__`` raises is out of scope.
+
+    - **Reflection, or building an entry from it, fails** (permission denied,
+      unsupported dialect, a reflection dict missing a key, a table that fails
+      schema validation): ``entries=[]`` and ``notes`` begins
+      :data:`PROBE_FAILED_NOTE_PREFIX`, then the exception's type and its
+      message — redacted best-effort, on one line. One bad table fails the
+      whole probe: a partial inventory is never returned unlabelled.
+    - **Ranking fails** (no credentials, a malformed or truncated reply, a
+      ranking that fails schema validation): the reflected entries are **kept,
+      all unranked** — ranking is applied all-or-nothing — and ``notes`` begins
+      :data:`RANKING_FAILED_NOTE_PREFIX` and names the exception's **type
+      only**. The message goes to the WARNING and is never persisted: the
+      inventory is published downstream, and an LLM-side error can carry a
+      gateway's echo of a header or an environment variable in shapes no
+      redactor here can see (measured Session 261).
+
+    ``notes`` is ``None`` exactly when neither happened. That is **not** the
+    same as "every entry is ranked": a ranker that returns no ranking for an
+    entry, or names no entry at all, raises nothing and leaves it ``None``.
+    Rankings are re-validated against the schema, so a non-numeric score is a
+    ranking failure — but a score's range and finiteness are not checked.
+
+    Why there is no upper bound on what is absorbed, when the sibling
+    ``db.sql_dialect_from_url`` deliberately has one: that function degrades to
+    a bare ``None``, so an unexpected error must stay loud; this one's degraded
+    result says what happened, in the artifact and on stderr.
     """
     produced_at = datetime.now(UTC)
 
-    try:
-        tables = db.get_information_schema(schemas=include_schemas)
-    except (SQLAlchemyError, NotImplementedError, RuntimeError) as e:
+    def _inventory(entries: list[DataSourceEntry], notes: str | None) -> DataSourceInventory:
         return DataSourceInventory(
-            entries=[],
+            entries=entries,
             producers=[
                 ProducerMetadata(
                     producer_id=PRODUCER_ID,
                     producer_type="automated",
                     produced_at=produced_at,
                     producer_version=PRODUCER_VERSION,
-                    notes=f"information_schema probe failed: {e}",
+                    notes=notes,
                 )
             ],
             created_at=produced_at,
             request_context=request_context,
         )
 
-    entries = [_entry_from_reflection(t) for t in tables]
-
-    if llm is not None and entries and hasattr(llm, "rank_candidate_tables"):
-        rankings = llm.rank_candidate_tables(
-            entries=entries, request_context=request_context
+    try:
+        tables = db.get_information_schema(schemas=include_schemas)
+        entries = [_entry_from_reflection(t) for t in tables]
+    except Exception as e:
+        cause = f"{type(e).__name__}: {_safe_message(e)}"
+        _LOG.warning(
+            "probe_information_schema: reflection failed; returning an EMPTY inventory: %s",
+            cause,
         )
-        ranking_map = {
-            r.fully_qualified_name: (r.relevance_score, r.relevance_reason)
-            for r in rankings
-        }
-        entries = [
-            entry.model_copy(
-                update={
-                    "relevance_score": ranking_map.get(
-                        entry.fully_qualified_name, (None, None)
-                    )[0],
-                    "relevance_reason": ranking_map.get(
-                        entry.fully_qualified_name, (None, None)
-                    )[1],
-                }
+        return _inventory([], f"{PROBE_FAILED_NOTE_PREFIX}: {cause}")
+
+    notes: str | None = None
+    if llm is not None and entries:
+        try:
+            # Looked up INSIDE the try: ``hasattr`` swallows only AttributeError,
+            # so a lazy client whose property raises would escape from the ``if``.
+            ranker = getattr(llm, "rank_candidate_tables", None)
+            if ranker is not None:
+                entries = _ranked(entries, ranker, request_context)
+        except Exception as e:
+            type_name = type(e).__name__
+            _LOG.warning(
+                "probe_information_schema: LLM relevance ranking failed; returning "
+                "%d entries UNRANKED: %s: %s",
+                len(entries),
+                type_name,
+                _safe_message(e),
             )
-            for entry in entries
-        ]
+            notes = (
+                f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all {len(entries)} "
+                "entries are unranked. The cause was logged as a WARNING when "
+                "this inventory was produced."
+            )
 
-    producer = ProducerMetadata(
-        producer_id=PRODUCER_ID,
-        producer_type="automated",
-        produced_at=produced_at,
-        producer_version=PRODUCER_VERSION,
-    )
+    return _inventory(entries, notes)
 
-    return DataSourceInventory(
-        entries=entries,
-        producers=[producer],
-        created_at=produced_at,
+
+def _ranked(
+    entries: list[DataSourceEntry], ranker: Any, request_context: str | None
+) -> list[DataSourceEntry]:
+    """Return NEW entries carrying the ranker's scores — or raise, changing nothing.
+
+    All-or-nothing is the contract the caller's note depends on ("all N entries
+    are unranked"), and two things deliver it. The ranker gets deep copies, so
+    one that scores in place and then fails cannot half-rank the real entries.
+    And the result is built completely before the caller assigns it.
+
+    Each entry is rebuilt through ``model_validate`` **from a dict**.
+    ``model_copy(update=...)`` skips validation, and so does
+    ``model_validate(<instance>)`` — pydantic's ``revalidate_instances`` defaults
+    to ``"never"`` — so either would let a duck-typed client's
+    ``relevance_score="high"`` into an inventory that then fails to reload.
+    """
+    rankings = ranker(
+        entries=[e.model_copy(deep=True) for e in entries],
         request_context=request_context,
     )
+    ranking_map = {
+        r.fully_qualified_name: (r.relevance_score, r.relevance_reason) for r in rankings
+    }
+    ranked: list[DataSourceEntry] = []
+    for entry in entries:
+        score, reason = ranking_map.get(entry.fully_qualified_name, (None, None))
+        ranked.append(
+            DataSourceEntry.model_validate(
+                {**entry.model_dump(), "relevance_score": score, "relevance_reason": reason}
+            )
+        )
+    return ranked
 
 
 def _entry_from_reflection(table: dict[str, Any]) -> DataSourceEntry:

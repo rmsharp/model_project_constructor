@@ -216,6 +216,7 @@ def test_cli_discover_smoke(runner: CliRunner, tmp_path: Path) -> None:
     fqns = {e.fully_qualified_name for e in inv.entries}
     assert fqns == {"main.claims", "main.policies"}
     assert inv.producers[0].producer_type == "automated"
+    assert inv.producers[0].notes is None
 
 
 def test_cli_discover_rank_with_fake_llm(runner: CliRunner, tmp_path: Path) -> None:
@@ -244,6 +245,7 @@ def test_cli_discover_rank_with_fake_llm(runner: CliRunner, tmp_path: Path) -> N
     entry = inv.entries[0]
     assert entry.relevance_score == pytest.approx(0.9)
     assert "fake-llm" in (entry.relevance_reason or "")
+    assert inv.producers[0].notes is None
 
 
 def test_cli_discover_include_schemas_filter(
@@ -268,6 +270,7 @@ def test_cli_discover_include_schemas_filter(
     assert result_main.exit_code == 0, result_main.output
     inv_main = DataSourceInventory.model_validate(json.loads(out_main.read_text()))
     assert len(inv_main.entries) == 2
+    assert inv_main.producers[0].notes is None
 
     out_empty = tmp_path / "inv_empty.json"
     result_empty = runner.invoke(
@@ -286,6 +289,9 @@ def test_cli_discover_include_schemas_filter(
     inv_empty = DataSourceInventory.model_validate(json.loads(out_empty.read_text()))
     assert inv_empty.entries == []
     assert len(inv_empty.producers) == 1
+    # Without this, "the filter matched nothing" and "the probe blew up" are
+    # the same two assertions: a degraded inventory also has entries == [].
+    assert inv_empty.producers[0].notes is None
 
 
 def test_cli_discover_unknown_provider_errors(runner: CliRunner, tmp_path: Path) -> None:
@@ -333,6 +339,146 @@ def test_cli_discover_unreachable_db_errors(runner: CliRunner, tmp_path: Path) -
     )
     assert result.exit_code != 0
     assert not out.exists()
+
+
+class _FailingRanker:
+    """LLM stand-in whose ranking always fails. Records that it was reached."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+        self.calls = 0
+
+    def rank_candidate_tables(self, entries: object, request_context: object) -> object:
+        self.calls += 1
+        raise self._exc
+
+
+def test_cli_discover_failed_ranking_keeps_the_file_and_exits_nonzero(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Operator ruling, Session 261: ``--rank-with-llm`` was asked for and failed.
+
+    Until Session 261 this was an uncaught traceback and NO file. Now the
+    reflection work is saved — the inventory is written, unranked, with a note —
+    and the exit status stays non-zero so ``discover ... && next-step`` can still
+    tell a ranked inventory from an unranked one.
+    """
+    import model_project_constructor_data_agent.cli as cli_mod
+    from model_project_constructor_data_agent.anthropic_client import LLMParseError
+    from model_project_constructor_data_agent.discovery import RANKING_FAILED_NOTE_PREFIX
+
+    ranker = _FailingRanker(LLMParseError("expected JSON array, got dict"))
+    monkeypatch.setattr(cli_mod, "make_llm_client", lambda provider, **kw: ranker)
+
+    db_url = _seed_discover_db(tmp_path / "discover.db", with_policies=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", db_url, "--output", str(out), "--rank-with-llm"],
+    )
+
+    assert ranker.calls == 1  # the failing ranker was really reached
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)  # a clean exit, not a traceback
+    assert "1 entries" in result.stdout
+    # The error goes to STDERR, and stdout stays the one "wrote" line. Asserting
+    # on ``result.output`` would not pin that: click interleaves both into it.
+    assert "UNRANKED" in result.stderr
+    assert "UNRANKED" not in result.stdout
+    assert "(LLMParseError)" in result.stderr  # the note itself is echoed
+
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+    assert inv.entries[0].relevance_score is None
+    assert (inv.producers[0].notes or "").startswith(
+        f"{RANKING_FAILED_NOTE_PREFIX} (LLMParseError)"
+    )
+
+
+def test_cli_discover_missing_credentials_keeps_the_file_and_exits_nonzero(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The ranking failure users will actually hit, through the SHIPPED client.
+
+    With no credentials the Anthropic SDK raises from inside
+    ``rank_candidate_tables`` — not from client construction — so it lands in
+    the probe's ranking stage (measured Session 261: a ``TypeError`` from the
+    SDK's header check, before any send). The dead local port keeps the test
+    offline whatever the SDK does first. The exception TYPE is deliberately not
+    asserted: it is the SDK's, and a connection error from a future SDK that
+    stops checking first is the same outcome for the operator.
+    """
+    for var in (
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "AWS_BEARER_TOKEN_BEDROCK",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "http://127.0.0.1:9")
+
+    db_url = _seed_discover_db(tmp_path / "discover.db", with_policies=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", db_url, "--output", str(out), "--rank-with-llm"],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+    assert inv.entries[0].relevance_score is None
+    assert (inv.producers[0].notes or "").startswith("LLM relevance ranking failed")
+
+
+@pytest.mark.parametrize(
+    ("exc", "type_name"),
+    [
+        (
+            sa.exc.OperationalError(
+                statement="", params={}, orig=Exception("permission denied")
+            ),
+            "OperationalError",
+        ),
+        (KeyError("referred_table"), "KeyError"),
+    ],
+    ids=["a-type-HEAD-already-caught", "a-type-HEAD-let-escape"],
+)
+def test_cli_discover_failed_reflection_keeps_the_file_and_exits_nonzero(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+    type_name: str,
+) -> None:
+    """Operator ruling, Session 261: ANY degraded inventory exits 1, file kept.
+
+    Both rows changed, in opposite directions, and the ruling makes them one
+    rule. A type the old guard caught (first row) was exit 0 with an empty
+    inventory — documented, and silent in any ``discover ... && next-step``. A
+    type it let escape (second row) was a traceback, exit 1 and no file.
+    """
+    import model_project_constructor_data_agent.cli as cli_mod
+
+    def _boom(self: object, schemas: object = None) -> object:
+        raise exc
+
+    monkeypatch.setattr(cli_mod.ReadOnlyDB, "get_information_schema", _boom)
+
+    db_url = _seed_discover_db(tmp_path / "discover.db", with_policies=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(app, ["discover", "--db-url", db_url, "--output", str(out)])
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "0 entries" in result.stdout
+    assert "EMPTY" in result.stderr
+    assert "EMPTY" not in result.stdout
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert inv.entries == []
+    assert (inv.producers[0].notes or "").startswith(
+        f"information_schema probe failed: {type_name}: "
+    )
 
 
 def test_cli_derives_sql_dialect_from_db_url(
