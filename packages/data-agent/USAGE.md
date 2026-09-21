@@ -211,9 +211,33 @@ model-data-agent discover \
 
 The command writes a JSON file conforming to `DataSourceInventory` and
 exits 0 with a one-line confirmation (`wrote inventory.json (N entries)`).
-When reflection fails (permission denied, unsupported dialect), the output
-still conforms to the contract — `entries` is empty and the single
-`ProducerMetadata` carries a `notes` field naming the cause.
+(It exits non-zero and writes nothing when the database cannot be connected to
+or the LLM client cannot be constructed.)
+
+Two outcomes are **degraded**: the file is still written — it conforms to the
+contract and keeps whatever was reflected — and the command **exits 1**, with
+one `error:` line on stderr, so `discover ... && next-step` can tell a degraded
+inventory from a good one. The single `ProducerMetadata.notes` field says which;
+it is `null` on a healthy run.
+
+- **Reflection fails** (permission denied, unsupported dialect, one table or
+  view that cannot be reflected): `entries` is empty and `notes` begins
+  `information_schema probe failed:` followed by the error's type and message,
+  on one line, with any URL password masked (best-effort).
+- **`--rank-with-llm` was requested and ranking fails** (no credentials, a
+  malformed or truncated reply): the reflected tables are **kept, all unranked**,
+  and `notes` begins `LLM relevance ranking failed` and names the error's
+  **type only** — the message is never written to the file, which travels
+  downstream.
+
+Both also log one WARNING, carrying the cause, on the
+`model_project_constructor_data_agent.discovery` logger — with no logging
+configured that is a line on stderr.
+
+Exit 1 for a degraded inventory is an operator ruling of Session 261. Before it,
+a reflection error of a type the probe anticipated exited **0** with the empty
+inventory; any other reflection error, and every ranking failure, was a
+traceback and **no file**.
 
 The same behavior is available in Python via `probe_information_schema`:
 
@@ -408,6 +432,13 @@ curated-producer example.
   error text — with any URL password masked — to
   `DataReport.data_quality_concerns`, so the operator can tell a malformed URL
   from a database that is down. The report status stays `COMPLETE`.
+- `probe_information_schema()` lets no `Exception` raised by the `db` or the
+  `llm` escape: a reflection failure returns an empty inventory, a ranking
+  failure returns the reflected entries unranked, and `notes` labels each
+  (Example 4). A non-`str` `request_context` still raises. `notes` being `null`
+  does not mean every entry is ranked — a ranker that simply returns no ranking
+  for a table raises nothing. The library never exits; turning a degraded
+  inventory into exit 1 is the `discover` command's job.
 
 ## Decoupling guarantee
 

@@ -51,7 +51,9 @@ rows below it are the smaller residue that closing it exposed.
 | A clean `git merge` still publishes nothing | Closing the two items above (Session 241) showed the filed diagnosis was incomplete. `post-commit` now reads merge commits correctly, but git only runs `post-commit` for a merge **you** finish with `git commit` after a conflict. For a clean `git merge` or `git pull` git runs **`post-merge`**, and this repository installs no such hook — so a merge or pull that carries a wiki change still publishes nothing, silently. | Small: a `post-merge` hook using `ORIG_HEAD..HEAD` (a fast-forward pull moves many commits, so inspecting `HEAD` alone is not enough). Verified, and pinned red-if-git-changes by `test_a_clean_merge_never_reaches_this_hook`. |
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
 | Enterprise migration | Handing the project to an enterprise. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. What remains is the fork into an enterprise host. | Blocked on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. |
-| `probe_information_schema` says it "never raises" | Filed Session 223. A docstring promises graceful degradation; a third of the function body sits outside the `try` that would deliver it. Same defect class as the one fixed in Session 223. | Small, one file. Half of it is provable by inspection; half is defence-in-depth. |
+| One broken view empties the whole table inventory | Found Session 261. `discover` lists a database's tables by asking the driver about each one in turn, with no per-table safety net. One view whose underlying table was dropped makes the whole listing fail, so a database with hundreds of good tables reports **zero**. Since Session 261 it is loud at the terminal — a WARNING on stderr and exit 1; before, only a note inside the file said so, and the command exited 0. | Small, one function in `db.py`. Needs a decision on how a skipped table is reported. |
+| A ranking that matches nothing is silent | Found Session 261. If the model ranks tables under names that do not match exactly (`claims` for `main.claims`), or returns an empty list, no table gets a score, nothing is logged, and the command exits 0 — the one ranking failure Session 261's fix cannot see, because nothing raises. Scores are also not range-checked: `NaN` is written to the file as a non-standard JSON literal. | Small, one file. Treat "matched none" as a ranking failure; decide on `NaN`/range. |
+| The password masker misses common shapes | Found Session 261 by measurement. `redact_secrets` masks `password=x` and URL passwords, but **not** `DB_PASSWORD=x`, `PGPASSWORD=x`, `access_token=x`, a quoted `password='x'` (the form a password containing a space requires), `password: x`, or JSON. Anything it is applied to — the `--db-url` cause from Session 260, the probe note from Session 261 — is masked best-effort only. | Small, one regex in `db.py` plus tests. The measured leak/ok table is in the item. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -316,7 +318,8 @@ package code under `mypy --strict`, out of scope for a harness session.
 with **no guard**. A model that returns a well-formed JSON array of objects with the wrong keys raises a
 bare `KeyError` — not an `LLMParseError` — so it is caught by no tier of the sweep's transient taxonomy
 and **kills the run mid-sweep** instead of scoring one miss. The same gap sits at `:401-407`
-(`rank_candidate_tables`).
+(`rank_candidate_tables`) — since Session 261 `probe_information_schema` absorbs that one into a
+labelled, unranked inventory, but the client itself still raises the bare `KeyError`.
 
 **The intake twin already does this correctly:** `src/model_project_constructor/agents/intake/anthropic_client.py:439-440`
 wraps the identical pattern in `_build_draft`. So the fix is to mirror an existing, shipped convention —
@@ -352,45 +355,104 @@ a status that halts, which means deciding whether an unreachable DB is a *failed
 *degraded* one. Note the same question governs `nodes.py`'s baseline branch, whose
 `"database not reachable at baseline-collection time"` caveat is the parallel case.
 
-### `probe_information_schema` says it "never raises" and can raise — same defect class as the S218/S223 one
+**A precedent now exists, and it is not this ruling.** In Session 261 the operator ruled twice on the
+sibling command, `model-data-agent discover`: a **degraded** `DataSourceInventory` — reflection failed
+so it is empty, or ranking failed so it is unranked — is still **written**, and the command **exits
+1**. That is the third shape above, in the form "keep the artifact, fail the status". It was ruled
+for `discover` only; it does not decide `run` or the orchestrator's halt, whose blast radius is the
+reason this item is still open.
 
-**Found Session 223** by the blast-radius sweep that accompanied the `sql_dialect_from_url` fix — an
-explicit search for *other* instances of that defect class. **Filed, not fixed:** one deliverable per
-session, and this is a different function in a different module. It is the **only** same-class site
-the sweep found in shipped code; everything else it flagged (`_extract_json`, the `_build_draft`
-pairs, the `opencode_client._run` twins) was ruled LEAVE because those functions make no
-graceful-degradation promise in a docstring, which is the third criterion of the class.
+### One unreflectable view empties the whole inventory
 
-`packages/data-agent/src/model_project_constructor_data_agent/discovery.py:70` promises: *"Returns a
-valid `DataSourceInventory` — never raises for probe failures."* Two escapes:
+**Found Session 261** by the design review of the `probe_information_schema` fix, and re-measured by
+the session itself. **Filed, not fixed:** it is `db.py`, a different function from the one that
+session closed, and it needs a reporting decision.
 
-1. **Too-narrow `except` (read from source, not run).** The guard at `:80` is
-   `except (SQLAlchemyError, NotImplementedError, RuntimeError)`, around `db.get_information_schema(...)`.
-   That call reaches `ReadOnlyDB._reflect_entity` (`db.py:129-176`), which does unguarded dict
-   subscripts — `fk["referred_table"]`, `fk["constrained_columns"]`, `fk["referred_columns"]`
-   (`:150-152`), `col["name"]`, `col["type"]` (`:158`, `:162`) — on inspector-returned dicts. A
-   dialect whose reflection dicts omit a key raises `KeyError`, which is not in the tuple.
-2. **No `except` at all (provable from the code as written, and the larger half).** Lines `:96` and
-   `:98-118` sit **outside** the try entirely. `:96` calls `_entry_from_reflection`, which subscripts
-   `table["name"]`/`table["entity_kind"]` and constructs a pydantic model (`ValidationError`). `:99`
-   calls `llm.rank_candidate_tables(...)`, which reaches `anthropic_client.py:395-408` and can raise
-   `LLMParseError`, `KeyError` on `item["fully_qualified_name"]`, `ValueError`/`TypeError` from
-   `float(item["relevance_score"])`, and any SDK error from `_call_claude`. **The only caller,
-   `cli.py:204-209`, wraps it in `try:`/`finally:` with no `except` clause** — so
-   `mpc-data discover --rank-with-llm` against a malformed LLM response is an uncaught traceback out
-   of a function whose docstring says it never raises. This is the same shape as the defect closed in
-   Session 223, and it shares a root cause with the `KeyError` item above.
+`ReadOnlyDB.get_information_schema` loops `inspector.get_table_names` / `get_view_names` and calls
+`_reflect_entity` on each with **no per-entity guard**, so one entity the driver cannot reflect aborts
+the whole loop. Measured on SQLite: four tables plus one view whose base table was dropped →
+`entries: 0`, note `information_schema probe failed: OperationalError: (sqlite3.OperationalError) no
+such table: main.doomed [SQL: PRAGMA "main".table_xinfo("v_stale")] (Background on this error at: …)`.
+Stale views are ordinary in a long-lived warehouse, and the inventory is what steers the
+query-writing prompt toward real tables.
 
-**Sketch:** move `:96` and `:98-118` inside the existing try and widen the tuple — `KeyError` at
-minimum, or `Exception`, since the handler already stringifies the error into `ProducerMetadata.notes`
-so nothing is silently lost. ~20-40 changed lines plus 3-5 tests, one file, no public API change, no
-caller change. **Honest caveat carried from the finding:** escape (1) is read-from-source and has no
-measured trigger — unlike the `make_url` bug, nobody has produced a dialect that omits a reflection
-key. Escape (2) needs no trigger; it is unguarded by inspection. Fix (2) with confidence; treat (1)
-as defence-in-depth.
+The note already named the view before Session 261 (`OperationalError` was inside the old guard).
+What that session added is the terminal: a WARNING on stderr, the error's type in the note, and —
+by operator ruling — **exit 1** where this case used to exit 0. It deliberately did **not** add
+per-table skipping to `probe_information_schema`: the shipped
+`_reflect_entity` always emits every key `_entry_from_reflection` reads, so skipping there would
+catch nothing real. The skip belongs in `get_information_schema`'s loop.
 
-⚠ `discovery.py` is **not** twinned with an intake copy, so `tests/test_llm_json_parity.py`'s
-pairwise battery does not force a matching edit — unlike most of this package's error-handling code.
+**Sketch:** catch `SQLAlchemyError` per entity, collect the skipped names, and surface them. **The
+open question is where:** the method returns `list[dict]` with no side channel, so either it grows a
+second return (an API change `probe_information_schema` must then thread into `notes`), or it logs
+and the inventory silently omits the entity — which is the unlabelled partial result Session 261's
+docstring promises never to return. Decide that first. `test_one_bad_table_fails_the_whole_probe`
+pins today's all-or-nothing behaviour at the probe level and will need to move with it.
+
+### A ranking that matches no entry is silent, and scores are not range-checked
+
+**Found Session 261**, measured at HEAD and again after that session's fix — which does not reach
+it, because nothing raises. `probe_information_schema` joins rankings to entries on a byte-identical
+`fully_qualified_name`. A ranker that returns `claims` for `main.claims`, or returns `[]`, leaves
+every `relevance_score` `None` with `notes=None`, no WARNING, and `discover --rank-with-llm` **exits
+0** — the operator ruling of Session 261 (a degraded inventory exits 1) does not fire. Downstream,
+`anthropic_client.py` sends only the top `MAX_INVENTORY_ENTRIES_IN_PROMPT` (20) entries by score, so
+above 20 tables an unranked inventory can drop the relevant table from the prompt.
+
+**Sketch, one file:** inside `discovery._ranked`, raise `ValueError` when the ranking map matches
+**none** of the entries — it then becomes an ordinary ranking failure, labelled and exit 1. Partial
+rankings must stay legal (`test_partial_ranking_leaves_unranked_entries_none`). Second half, same
+function: rankings are re-validated against the schema, which catches a non-numeric score but not
+`NaN`, `inf`, `7.5` or `-1.0` — `relevance_score` is a bare `float | None` — and `cli.discover`
+writes with `json.dumps`, which emits the non-RFC literals `NaN`/`Infinity`. The prompt asks for
+0.0–1.0; nothing enforces it. Rule on reject-vs-clamp before coding.
+
+**Third half, same family — a file that exits 0 and then fails to reload.** Session 261 scrubs lone
+surrogates from the *note*; three other channels still carry one into the file untouched: an
+LLM-supplied `relevance_reason` (a reply that cuts an escaped emoji pair, `"…\ud83d"`, passes
+`_extract_json`, `TableRanking` and schema validation), a reflected table or column **name**, and the
+caller's `request_context`. Measured for the first: `notes=None`, exit 0, and
+`DataSourceInventory.model_validate_json` — the orchestrator's loader — rejects the file. Not a
+regression (HEAD behaved the same). Cheapest guard: `model_dump_json()` each rebuilt entry inside
+`_ranked`, so a serialization error becomes an ordinary labelled ranking failure.
+
+### `redact_secrets` fails open on shapes inside its own claimed coverage
+
+**Found Session 261** by the secrets lens of the design review, confirmed by an independent skeptic,
+and spot-checked by the session (8 shapes, same result). `db.py`'s `_SECRET_KV` begins with `\b`, and
+`_` is a word character, so a **prefixed** key never matches; its value class needs a non-quote
+character straight after `=`, so a **quoted** value is not masked at all — and the quoted form is
+the one libpq requires for a password containing a space, which the comment above the regex claims
+to cover. Learning #269's "an excluded character in a secret is a fail-open", one level further.
+
+| masked | **not masked** (secret survives verbatim) |
+|---|---|
+| `password=x`, `Password=x`, `PWD=x;`, `&password=x`, URL userinfo `scheme://u:x@h` | `DB_PASSWORD=x`, `PGPASSWORD=x`, `db_password=x`, `access_token=x`, `client_secret=x`, `password='x'`, `password="x y"`, `password = x`, `password: x`, `{'password': 'x'}`, `{"password": "x"}` |
+
+Four more classes, measured by a second reviewer, that the table above does not list: **(1)** URL
+userinfo whose *username* contains `@` — `postgresql://svc@myserver:x@host/db`, the Azure and
+email-login form, which SQLAlchemy accepts unencoded — survives `redact_secrets` whole (the
+structural `redact_db_url` masks it; the text pass does not), so the table's "URL userinfo" cell is
+true only for an `@`-free username; **(2)** a *tail* leak when the secret contains a character the
+value class stops at — `password=x1&y2` → `***&y2`, and the ODBC brace form `PWD={x1 y2};` →
+`*** y2};`; **(3)** a percent-encoded `odbc_connect=…PWD%3Dx%3B`; **(4)** keys outside the fixed
+list or camel-cased — `AccessToken=`, `sessionToken=`, `passcode=`, `X-Amz-Signature=`.
+
+It also cannot see header, `Bearer`, bare-key, SigV4 or env-echo shapes at all — which is why
+Session 261 persists only the exception's **type** for a ranking failure. **Reach today:** the
+`--db-url` cause appended to `DataReport.data_quality_concerns` (Session 260) and the reflection
+note in a `DataSourceInventory` (Session 261); both are published with the generated project. No
+leak has been measured with the one installed driver (SQLite) — SQLAlchemy adds no URL to a
+`DBAPIError` itself — so this is exposure under drivers this repo cannot test, not a known leak.
+
+**Sketch:** drop the leading `\b` in favour of a suffix match on the key, accept an optional quote
+around the value and `:` or spaced `=` as separators — that fixes the table and class (4) only. Class
+(1) needs the in-text userinfo pattern to mask up to the LAST `@` before the host, class (2) needs
+the value class to honour `{…}` and quotes instead of stopping inside them, and class (3) needs a
+percent-decoded pass. Add the table and all four classes to
+`tests/data_agent_package/test_db.py` as parametrized secret-ABSENCE cases (never a marker-presence
+assertion — learning #268). Watch for false positives on prose; the existing tests pin the URL forms.
 
 ### No circuit breaker on a systematically-failing live sweep
 
