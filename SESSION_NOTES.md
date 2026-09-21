@@ -98,15 +98,123 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 261 Did
-**Deliverable:** Close the BACKLOG item *"`probe_information_schema` says it "never raises" and can
-raise"* (filed Session 223) — make the docstring's promise true for both filed escapes: the
-too-narrow `except` around reflection, and the entry-building and LLM-ranking code that sits outside
-the `try` entirely. One file of product code plus tests; no public API change. (IN PROGRESS)
-**Started:** 2026-09-20 (UTC).
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says *(in progress)*;
-Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **`probe_information_schema`'s "never raises" promise is true — COMPLETE**, closing
+the item filed in Session 223, picked by the operator from a four-option picker at Phase 1.
+**Started** 2026-09-20, **completed** 2026-09-21 (UTC). **Commits, through this close-out:**
+`62da800` (claim), `ae20310` (the fix and its tests), `2a38d00` (docs, the item closed, three filed)
+and this one. **Ledger:** one entry per commit. Nothing is pushed — that is the operator's call.
+
+#### The filed sketch was unsafe in two ways, and both were exit statuses
+
+The item said: move the unguarded lines inside the one `try`, widen the tuple, *"one file, no caller
+change"*. Every escape was reproduced at HEAD before any code — and then a five-lens design attack,
+run **before** the code existed, found what reading the item could not. **(1)** One `try` around
+everything means a failed *ranking* throws away a successful *reflection*. The fix guards two stages:
+reflection failure → empty inventory; ranking failure → the tables **kept, all unranked**. **(2)**
+With the CLI untouched, absorbing the exception turns a missing `ANTHROPIC_API_KEY` from exit 1 into
+exit 0 — the same class as the open `--db-url` ruling. I re-measured it through the real console
+script and put it to the operator, who ruled: **keep the file, exit non-zero.**
+
+Then the diff review caught **me** making the mirror-image change unruled. Reflection errors of a
+type the old tuple missed had been exit 1 + no file; my fix made them exit 0 — and I had written a
+test named `…exit_status_is_unchanged` whose own input (`KeyError`) was one of the changed cases.
+Second picker, second ruling: **any degraded inventory is written and exits 1.** That is now one
+rule in `cli.py`, and it changes the *documented* exit 0 for already-caught reflection errors too.
+
+#### What else the reviews changed
+
+Seventeen agents across the two reviews; I re-measured each blocker rather than accepting it.
+**Tests that would have stopped being able to fail:** `except Exception` absorbs `AssertionError`,
+so a tripwire fake (`raise AssertionError("should not be invoked")`) inside the guarded region passes
+under the very regression it exists to catch; and about half the healthy-path tests asserted only on
+`entries`, which an absorbed failure satisfies. Fixed with recorders and one line in the shared
+`_probe` helper. **The ranking note persists the exception's type only** — `redact_secrets` is blind
+to every shape an LLM-side error carries a secret in, and the inventory is published.
+**`model_validate(<instance>)` is a no-op**, so the obvious one-line revalidation did nothing; the
+mutant is what proves the dict form works. **Three defects found, re-measured, and filed rather than
+fixed:** one unreflectable view empties the whole inventory; a ranking that matches nothing is
+silent; `redact_secrets` fails open inside its own claimed coverage.
+
+#### Verification
+
+Full suite **1,458 passed, 9 skipped, 98.01%** (1,420 before); `ruff`, `mypy` (68 files), the C4
+decoupling test and the census and read-budget guards clean. **40 mutants, 0 survivors**, run twice
+— thirteen were added after the diff review showed mutants outside my first 27 surviving. **Phase 3E
+ran against the real console script:** no credentials + `--rank-with-llm` → exit 1, file written,
+one unranked table, type-only note; a stale view → exit 1, empty inventory, the view named on stderr;
+`--fake-llm` → exit 0, ranked.
+
+### Session 260 Handoff Evaluation (by Session 261)
+
+**Score: 9/10.** **+** What's-next #2 named this item as the cheapest on the board and said
+*"re-locate by content, not by the line numbers in that item"* — correct and useful: the item's
+`discovery.py` citations still resolved, its `db.py` ones (`_reflect_entity` at `:129-176`) did not;
+the function is a hundred lines further down. **+** Its record's own heading — *"the filed option was
+not safe as written, and only running it showed that"* — is why I reproduced every escape and ran a
+design attack before writing code, which is where both exit-status problems surfaced. **+** Gotcha #2
+(assert a secret's absence, never a marker's presence) shaped every redaction test here. **+** Key
+files `db.py:21`–`:70` led straight to `redact_secrets`, reused as-is. **−** It carried the item's
+*"small, one file"* estimate forward without the caveat its own experience had just earned; this
+"one file" fix took two operator rulings. **−** Learning #272 warned about self-counts; I read it and
+still committed a wrong count (below), so the warning is necessary but not sufficient. **ROI: high.**
+
+### Session 261 Self-Assessment
+
+**Score: 8/10.**
+**+ Attacked the design before writing it.** Both exit-status problems, the type-only note, the
+no-op revalidation and the disarmed tripwire were found on paper, not in a diff.
+**+ Took behaviour changes to the operator instead of choosing** — twice, each with the measurement.
+**+ Tests first, red for the stated reasons; then 40 mutants, none surviving.**
+**+ Re-measured the three filed defects myself** rather than filing a reviewer's report.
+**− I mislabelled an exit-status change as "unchanged" and wrote a test enshrining the label** — the
+same class of change I had just asked the operator to rule on, one stage over. A review caught it.
+**− Two false numerals, one of them committed.** *"Ten tests"* in a test docstring was a reviewer's
+figure I had not re-derived (two reviewers then measured 9 and 8). *"9 skeptics"* and a loose mutant
+attribution went into `ae20310`'s ledger entry; `2a38d00`'s entry carries the correction, because a
+committed entry is never edited. Learning #277.
+**− Scope grew well past the item's estimate** — `discovery.py`, `cli.py`, two test files, three
+docs. Each step was forced by a measurement or a ruling, but the item said "one file".
+**Decay term:** one `BACKLOG.md` item removed, three added; nothing else could be reduced. This file
+is about 157 KB (`wc -c`) against a 196,608 B trim trigger.
+
+**What's next.**
+1. **Pushing is the operator's call** — four commits ahead of `origin/master` through this close-out.
+2. **The three items this session filed are the cheapest engineering on the board**, and each has its
+   measurement in the item: `BACKLOG.md` *"One unreflectable view…"*, *"A ranking that matches no
+   entry…"*, *"`redact_secrets` fails open…"*. The first needs a reporting decision before code; the
+   second is one function (`discovery._ranked`); the third is one regex plus a parametrized table.
+3. **The `--db-url` ruling is still open**, and now has a precedent recorded beside it: for
+   `discover`, the operator chose *keep the artifact, fail the status*. It was ruled for `discover`
+   only.
+4. **Unchanged operator calls:** `PROJECT_LEARNINGS.md` refused by a default `Read`; `CHANGELOG.md`'s
+   four July entries out of order; the `ruff`/sdist fallout from Session 259's sync (learning #264).
+5. **Carried:** the tenth trim past 196,608 B; the two collapse proofs guarded by nothing; the NO-OP
+   guard blind to a partially inert mutant; `tests/eval/README.md`'s three stale statements.
+
+**Key files** (measured at this close-out).
+`packages/data-agent/src/model_project_constructor_data_agent/discovery.py:50`–`:51` (the two note
+prefixes), `:54` (`_safe_message`), `:158`–`:167` (stage 1), `:170`–`:190` (stage 2, lookup inside
+the `try` at `:174`), `:195` (`_ranked` — deep copies, dict revalidation);
+`.../cli.py:223`–`:241` (the exit-1 rule and the rulings comment);
+`tests/data_agent_package/test_discovery.py:72` (`_probe`, the load-bearing `notes is None`), `:138`
+(`_Ranker`, a recorder), `:407` (`TestProbeNeverRaises`), `:530` (`TestRankingFailureKeepsEntries`);
+`tests/data_agent_package/test_cli.py:356`, `:398`, `:447` (the three exit-status tests);
+`packages/data-agent/USAGE.md:217` (the degraded-outcome contract) and `:435`;
+`BACKLOG.md:54`–`:56` (index rows), `:358` (the precedent), `:365`, `:393`, `:420` (the three items).
+
+**Gotchas.**
+1. **Never signal "should not be called" by raising from a fake on the probe's path.** The probe
+   absorbs `Exception`, `AssertionError` included. Record the call; assert outside. (`pytest.fail`
+   raises a `BaseException` and does pass through, but a recorder reads better.)
+2. **A healthy-path probe test must assert `notes is None`** — use `_probe`. A degraded inventory
+   also has `entries == []`.
+3. **The CLI's rule is "any note → exit 1".** The probe sets `notes` only when it degraded. A future
+   producer that writes an informational note would make `discover` exit 1; give it another field.
+4. **`notes is None` does not mean ranked.** A ranker that returns `[]`, or names no entry, raises
+   nothing — filed, not fixed.
+5. **The two notes carry different things on purpose.** Reflection: type + redacted message.
+   Ranking: type only, message to the WARNING. Do not "harmonise" them.
+6. **Revalidate from a dict.** `model_validate(entry)` and `model_copy(update=…)` both skip it.
 
 ### What Session 260 Did
 **Deliverable:** **The silent `--db-url` failure now reports its cause — COMPLETE**, options (a) and
