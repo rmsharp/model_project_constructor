@@ -694,12 +694,31 @@ def _m08_the_retention_rule_has_no_compliant_cut(root: pathlib.Path) -> None:
     catcher of anything (Session 258, in the after-a-wide-close-out-then-claim state). Session
     256's review had already repaired this mutant twice, for the pad's width and for a tail cut
     at the FLOOR-th record; both of those fixes are what the swap preserves.
+
+    Session 262 found the line count was still only held "to the width the filler is cut at",
+    which is not exactly. A pad at the ledger's MEAN width replaces a tail that need not be at
+    the mean: in the wide state built on the Session 261 ledger the tail ran 71 B/line against
+    a mean of 81, so 396 removed lines came back as 347, the file lost 49 lines, the predicted
+    page fell from 457 to 448 against a K prefix ending at 455, and check_k_lines co-fired.
+    The claim commit was the first state to build that model. So the swap is now exact: whole
+    tail lines are removed, and the pad is that many lines summing to those same bytes, which
+    leaves length, line count and head untouched and hence page_estimate identical to the
+    unmutated ledger's. A ledger with no tail beyond the FLOOR-th record to swap from (a freshly
+    trimmed one) keeps the padded form above.
     """
     data, _front, records = _ledger(root)
     beyond_k = _must(nth_non_stub(records, K + 1)).end_byte
     floor_end = _must(nth_non_stub(records, FLOOR)).end_byte
-    pad = _filler(STOP_BYTES - floor_end + 1_000, width=_mean_width(data))
-    out = (data[:beyond_k] + pad + data[beyond_k:])[:max(len(data), floor_end + len(pad))]
+    need = STOP_BYTES - floor_end + 1_000
+    cut = data.rfind(b"\n", 0, max(0, len(data) - need)) + 1
+    lines = data[cut:].count(b"\n")
+    if cut >= floor_end and lines and (len(data) - cut) // lines >= 2:
+        width, extra = divmod(len(data) - cut, lines)
+        pad = b"".join(b"x" * (width + (i < extra) - 1) + b"\n" for i in range(lines))
+        out = data[:beyond_k] + pad + data[beyond_k:cut]
+    else:
+        pad = _filler(need, width=_mean_width(data))
+        out = (data[:beyond_k] + pad + data[beyond_k:])[:max(len(data), floor_end + len(pad))]
     assert nth_non_stub(parse_ledger(out)[1], FLOOR) is not None, (
         "giving the pad back from the tail left fewer than FLOOR non-stub records, so "
         "check_satisfiable returns early and the mutant cannot fire it")
