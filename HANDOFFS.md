@@ -174,6 +174,22 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S262
+date: 2026-09-21
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: Close the BACKLOG item "redact_secrets fails open on shapes inside its own claimed coverage" (filed Session 261). db.py's _SECRET_KV misses prefixed keys (DB_PASSWORD=x, PGPASSWORD=x), quoted values (password='x y'), ':' and spaced '=' separators, JSON/dict repr, and four further classes (userinfo with '@' in the username, tail leaks on '&' and '{...}', percent-encoded odbc_connect, camel-cased keys). Fix in db.py plus parametrized secret-ABSENCE tests in tests/data_agent_package/test_db.py.
+what_was_done: pending
+next_steps: pending
+key_files: pending
+gotchas: pending
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+```handoff
 session: S261
 date: 2026-09-21
 status: complete

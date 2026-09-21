@@ -97,6 +97,15 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 262 Did
+**Deliverable:** **`redact_secrets` stops failing open on shapes inside its own claimed coverage**
+(IN PROGRESS) — the `BACKLOG.md` item filed in Session 261, picked by the operator from a four-option
+picker at Phase 1. One function-pair in `packages/data-agent/src/model_project_constructor_data_agent/db.py`
+plus parametrized secret-ABSENCE tests in `tests/data_agent_package/test_db.py`.
+**Started:** 2026-09-21.
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 261 Did
 **Deliverable:** **`probe_information_schema`'s "never raises" promise is true — COMPLETE**, closing
 the item filed in Session 223, picked by the operator from a four-option picker at Phase 1.

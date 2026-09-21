@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-21 · [ad hoc] S262 claim: make `redact_secrets` stop failing open on shapes inside its own claimed coverage *(in progress)*
+- **Change:** Session 262 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the `BACKLOG.md` item *"`redact_secrets` fails open on shapes inside its own claimed coverage"* (filed Session 261), chosen by the operator at Phase 1 from a four-option picker. Scope is `_SECRET_KV` / `_USERINFO_TEXT` in `packages/data-agent/src/model_project_constructor_data_agent/db.py` and secret-absence tests in `tests/data_agent_package/test_db.py`; the item's measured leak table plus its four further classes are the acceptance list.
+- **Commit/PR:** this commit
+- **Session:** S262 · **Verified:** n/a — ledger-only; the census and read-budget guards are run at the claim state before this commit
+- **Model:** Claude Sonnet 5
+
 ### 2026-09-21 · [ad hoc] S261 — close out: `probe_information_schema` never raises; a degraded `discover` exits 1
 - **Change:** `SESSION_NOTES.md` carries the full Session 261 record with the Session 260 handoff evaluation (9/10) and this session's self-assessment (8/10); `HANDOFFS.md`'s receipt is `status: complete`; `PROJECT_LEARNINGS.md` gains #273–#277 — that making a function stop raising changes its caller's exit status in *both* directions and is an operator decision; that `except Exception` disarms test tripwires inside the guarded region and lets collection-only assertions pass on a broken function (a pointer to the gate, the `_probe` helper's `notes is None`); that pydantic's `model_validate(<instance>)` is a no-op; persist the type and log the message where the redactor is blind; and that a reviewer's numeral is second-hand until re-derived. `CLAUDE.md`'s learnings count and size figure are re-measured (277; 317.6 KB). The claim entry below still reads *(in progress)*, as the ledger's rules require — the two entries above it are what closed it.
 - **Commit/PR:** this commit
