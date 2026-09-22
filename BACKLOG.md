@@ -51,7 +51,6 @@ rows below it are the smaller residue that closing it exposed.
 | A clean `git merge` still publishes nothing | Closing the two items above (Session 241) showed the filed diagnosis was incomplete. `post-commit` now reads merge commits correctly, but git only runs `post-commit` for a merge **you** finish with `git commit` after a conflict. For a clean `git merge` or `git pull` git runs **`post-merge`**, and this repository installs no such hook — so a merge or pull that carries a wiki change still publishes nothing, silently. | Small: a `post-merge` hook using `ORIG_HEAD..HEAD` (a fast-forward pull moves many commits, so inspecting `HEAD` alone is not enough). Verified, and pinned red-if-git-changes by `test_a_clean_merge_never_reaches_this_hook`. |
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
-| One broken view empties the whole table inventory | Found Session 261. `discover` lists a database's tables by asking the driver about each one in turn, with no per-table safety net. One view whose underlying table was dropped makes the whole listing fail, so a database with hundreds of good tables reports **zero**. Since Session 261 it is loud at the terminal — a WARNING on stderr and exit 1; before, only a note inside the file said so, and the command exited 0. | Small, one function in `db.py`. Needs a decision on how a skipped table is reported. |
 | A `--request-context` with a stray byte writes a file that will not reload | What is left of Session 261's *"a ranking that matches nothing is silent"*, which Session 264 closed: a ranking that names no table, a score outside 0.0–1.0 and a model reason that cannot be written now each fail the ranking and exit 1. One channel was left open by operator ruling: if the text passed as `--request-context` holds a byte that is not valid UTF-8, the command exits 0 and writes a file the pipeline then refuses to load. | Small — reject it in `discover` before probing — but it changes an exit status, so it needs a ruling. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
@@ -359,35 +358,10 @@ sibling command, `model-data-agent discover`: a **degraded** `DataSourceInventor
 so it is empty, or ranking failed so it is unranked — is still **written**, and the command **exits
 1**. That is the third shape above, in the form "keep the artifact, fail the status". It was ruled
 for `discover` only; it does not decide `run` or the orchestrator's halt, whose blast radius is the
-reason this item is still open.
-
-### One unreflectable view empties the whole inventory
-
-**Found Session 261** by the design review of the `probe_information_schema` fix, and re-measured by
-the session itself. **Filed, not fixed:** it is `db.py`, a different function from the one that
-session closed, and it needs a reporting decision.
-
-`ReadOnlyDB.get_information_schema` loops `inspector.get_table_names` / `get_view_names` and calls
-`_reflect_entity` on each with **no per-entity guard**, so one entity the driver cannot reflect aborts
-the whole loop. Measured on SQLite: four tables plus one view whose base table was dropped →
-`entries: 0`, note `information_schema probe failed: OperationalError: (sqlite3.OperationalError) no
-such table: main.doomed [SQL: PRAGMA "main".table_xinfo("v_stale")] (Background on this error at: …)`.
-Stale views are ordinary in a long-lived warehouse, and the inventory is what steers the
-query-writing prompt toward real tables.
-
-The note already named the view before Session 261 (`OperationalError` was inside the old guard).
-What that session added is the terminal: a WARNING on stderr, the error's type in the note, and —
-by operator ruling — **exit 1** where this case used to exit 0. It deliberately did **not** add
-per-table skipping to `probe_information_schema`: the shipped
-`_reflect_entity` always emits every key `_entry_from_reflection` reads, so skipping there would
-catch nothing real. The skip belongs in `get_information_schema`'s loop.
-
-**Sketch:** catch `SQLAlchemyError` per entity, collect the skipped names, and surface them. **The
-open question is where:** the method returns `list[dict]` with no side channel, so either it grows a
-second return (an API change `probe_information_schema` must then thread into `notes`), or it logs
-and the inventory silently omits the entity — which is the unlabelled partial result Session 261's
-docstring promises never to return. Decide that first. `test_one_bad_table_fails_the_whole_probe`
-pins today's all-or-nothing behaviour at the probe level and will need to move with it.
+reason this item is still open. Session 265 added a variant, also for `discover` only: a *partial*
+inventory (tables the database could not reflect were skipped) exits 1 too, but an opt-in flag,
+`--allow-skipped`, accepts it with exit 0. That is "fail by default, let the operator accept a known
+degradation", a shape option (c) could borrow.
 
 ### A `--request-context` that cannot be written as UTF-8 writes a file that will not reload
 

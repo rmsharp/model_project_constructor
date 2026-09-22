@@ -214,22 +214,36 @@ exits 0 with a one-line confirmation (`wrote inventory.json (N entries)`).
 (It exits non-zero and writes nothing when the database cannot be connected to
 or the LLM client cannot be constructed.)
 
-Two outcomes are **degraded**: the file is still written — it conforms to the
+Three outcomes are **degraded**: the file is still written — it conforms to the
 contract and keeps whatever was reflected — and the command **exits 1**, with
 one `error:` line on stderr, so `discover ... && next-step` can tell a degraded
-inventory from a good one. The single `ProducerMetadata.notes` field says which;
+inventory from a good one. The one exception is `--allow-skipped`, described
+below. The single `ProducerMetadata.notes` field says which;
 it is `null` on a healthy run.
 
-- **Reflection fails** (permission denied, unsupported dialect, one table or
-  view that cannot be reflected, or reflected text — a name, a column type —
-  that cannot be written as UTF-8): `entries` is empty and `notes` begins
+- **Some tables or views cannot be reflected** — typically a view whose base
+  table was dropped, which SQLite and MySQL allow and PostgreSQL refuses, or a
+  table dropped while the command ran. Each one is **skipped** and the rest are
+  kept. `notes` begins `information_schema probe skipped N of M tables and
+  views, which could not be reflected:` and names up to ten of them with each
+  one's error type, for example `view 'main.v_stale' (OperationalError)`. It
+  counts the rest. Each cause is logged on stderr and never written to the
+  file. If nothing at all could be reflected, `entries` is empty. A lost
+  connection is **not** a skip: a dropped connection is retried once, and a
+  database that stops answering fails the whole probe (next bullet), so an
+  outage can never pass for a warehouse full of broken views.
+- **Reflection fails in any other way** (permission denied listing the tables,
+  the connection lost during the walk, unsupported dialect, an error that is
+  not the database's while reflecting,
+  or reflected text — a name, a column type — that cannot be written as
+  UTF-8): `entries` is empty and `notes` begins
   `information_schema probe failed:` followed by the error's type and message,
   on one line, with any URL password masked (best-effort).
 - **`--rank-with-llm` was requested and ranking fails** (no credentials, a
   malformed or truncated reply, a reply that names none of the discovered
   tables exactly, a score that is not a finite number from 0.0 to 1.0 on a
   table it names, or a reason that cannot be written as UTF-8): the reflected
-  tables are **kept, all unranked**, and `notes` begins `LLM relevance ranking
+  tables are **kept, all unranked**, and the note's ranking part begins `LLM relevance ranking
   failed` and names the error's **type only** — the message is never written
   to the file, which travels downstream. The type says which: for the three
   replies above it is `RankingMatchedNoEntryError`,
@@ -238,14 +252,35 @@ it is `null` on a healthy run.
   order. A reply that ranks only some of the tables is **not** a failure: the
   rest stay unranked.
 
-Both also log one WARNING, carrying the cause, on the
-`model_project_constructor_data_agent.discovery` logger — with no logging
-configured that is a line on stderr.
+Ranking runs on whatever was reflected, so a skip and a ranking failure can
+both happen. `notes` then holds both, the skip part first.
+
+A read-only role can neither repair nor drop a stale view, and
+`--include-schemas` cannot leave out one view, so a warehouse with one would
+exit 1 on every run. **`--allow-skipped`** accepts that case: when skipped
+tables or views are the **only** fault, the command exits 0 and the `error:`
+line becomes a `warning:` line. The file and the note are the same either way.
+It does not excuse an inventory with nothing reflected, a failed ranking or a
+failed probe; those still exit 1.
+
+```bash
+model-data-agent discover \
+    --db-url "mysql+pymysql://readonly_user@db.internal/claims" \
+    --output inventory.json \
+    --allow-skipped
+```
+
+Each failed stage logs one WARNING carrying the cause, and each skipped table
+or view logs one of its own, on the
+`model_project_constructor_data_agent.discovery` logger. With no logging
+configured, that is a line on stderr.
 
 Exit 1 for a degraded inventory is an operator ruling of Session 261. Before it,
 a reflection error of a type the probe anticipated exited **0** with the empty
 inventory; any other reflection error, and every ranking failure, was a
-traceback and **no file**.
+traceback and **no file**. Skipping, and `--allow-skipped`, are operator rulings
+of Session 265. Before them, one table or view that could not be reflected
+emptied the whole inventory, and only the first such one was named.
 
 The same behavior is available in Python via `probe_information_schema`:
 
@@ -441,14 +476,20 @@ curated-producer example.
   `DataReport.data_quality_concerns`, so the operator can tell a malformed URL
   from a database that is down. The report status stays `COMPLETE`.
 - `probe_information_schema()` lets no `Exception` raised by the `db` or the
-  `llm` escape: a reflection failure returns an empty inventory, a ranking
-  failure returns the reflected entries unranked, and `notes` labels each
-  (Example 4). A non-`str` `request_context` still raises. `notes` being `null`
+  `llm` escape: a table or view the database cannot reflect is skipped and the
+  rest are returned, any other reflection failure returns an empty inventory, a
+  ranking failure returns the reflected entries unranked, and `notes` labels
+  each (Example 4). A non-`str` `request_context` still raises. `notes` being `null`
   does not mean every entry is ranked — a ranker that simply returns no ranking
   for a table raises nothing — but when a ranker ran, it does mean at least one
   entry is ranked and every score applied is a finite number from 0.0 to 1.0.
   The library never exits; turning a degraded inventory into exit 1 is the
-  `discover` command's job.
+  `discover` command's job, and `--allow-skipped` is its one opt-out, for
+  skipped tables and views only.
+- `ReadOnlyDB.get_information_schema()` raises on the first table or view it
+  cannot reflect, as it always has. Pass `skipped=[]` to have each database
+  error from reflecting one entity collected there as a `SkippedEntity` instead;
+  any other error still raises.
 
 ## Decoupling guarantee
 
