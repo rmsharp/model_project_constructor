@@ -16,6 +16,18 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-21 · [ad hoc] S263 — the enterprise-migration item carries the readiness audit's punch list
+- **Change:** `BACKLOG.md`'s *Enterprise migration* index row and item no longer say "only the fork remains". The item gains the Session 263 readiness audit's result: the one blocker (unpushed commits) and its clearing, five fixes to land on the original before a fork (the methodology README's superseded no-redistribution licence text with three `NOTICE` corrections; local-only `4795c29`; the missing `v0.3.0` tag; the stale B2 secrets packet; a local-vs-`origin` pre-flight for Phase C4), the C4-time facts the plan does not carry (ledger proofs vs a history rewrite, `refs/pull/*` and `gh-pages` under `push --mirror`, `publish_wiki.sh:48`'s personal-wiki fallback, stale figures, arm 1's 243 hits), and that Phase C2 was never started. The plan itself is not edited.
+- **Commit/PR:** this commit — `BACKLOG.md`, `CHANGELOG.md`
+- **Session:** S263 · **Verified:** every line citation in the item was read off the file at this commit (`NOTICE:28`, `:40`; `docs/methodology/README.md:361-369`; `scripts/publish_wiki.sh:48`; `CLAUDE.md:75`); census and read-budget guards run before committing.
+- **Model:** Claude Opus 5
+
+### 2026-09-21 · [ad hoc] S263 — pushed `master` to `origin` (`f987a6f..0adc8ae`), on the operator's instruction *(non-commit action)*
+- **Change:** a fast-forward of 10 commits — Session 261's four and Session 262's six — which a Phase C4 mirror of `origin` would otherwise have dropped for good; the readiness audit had ranked it the only blocker. No pushed path matches `publish-tutorial.yml`'s filter and none is under `docs/wiki/`, so only `CI` ran: run 35683413293, all six jobs green (lint, mypy, decoupling, both proof modes, pytest **1,481 passed, 9 skipped**). `feat/bedrock-mantle-migration` (holding local-only `4795c29`) was deliberately not pushed — an open operator call.
+- **Commit/PR:** none — push only
+- **Session:** S263 · **Verified:** `git ls-remote origin refs/heads/master` → `0adc8ae` after the push; `gh run watch 35683413293 --exit-status` → 0; the pytest line read from the run's own log.
+- **Model:** Claude Opus 5
+
 ### 2026-09-21 · [ad hoc] S262 — close out: `redact_secrets` stops failing open inside its own claimed coverage
 - **Change:** `SESSION_NOTES.md` carries the full Session 262 record with the Session 261 handoff evaluation and this session's self-assessment; `HANDOFFS.md`'s receipt is `status: complete`; `PROJECT_LEARNINGS.md` gains #278–#279 (a redaction test needs a secret that CONTAINS the character its quote/brace support protects, or a bare-value mutant passes for the wrong reason; `git checkout --` during ad-hoc mutation testing discards an uncommitted fix, not just the mutation). `CLAUDE.md`'s learnings count and size figure are re-measured (279; 327.2 KB). **Three prior commits this session (`1e53c20`, `1fac1dd`, `3505ce9`) each omitted their own ledger entry** — a process gap, caught only at this close-out rather than at each commit as the convention requires. Backfilled below, in commit order, cited by hash since they cannot carry "this commit" retroactively.
 - **Commit/PR:** this commit

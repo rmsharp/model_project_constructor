@@ -50,7 +50,7 @@ rows below it are the smaller residue that closing it exposed.
 | `SESSION_NOTES.md` shards past the read cap | Session 222 moved 24,564 lines of history into an archive. When an agent reads a file past the cap it gets an **announced partial view** — the notice names the overage and the next page — and past a separate byte ceiling the read is refused outright. Nothing is dropped in silence. (This item said *“silently stops at 2,000 lines — no error, no marker”* until Session 249; that was measured and is false.) The dashboard has a watch-list for exactly this, but it is a list of exact filenames and the archive is not on it. **Session 224 made it two archives, Session 228 a third, Session 231 a fourth, Session 235 a fifth, Session 239 a sixth, Session 242 a seventh, Session 245 an eighth and Session 256 a ninth** (804, 933, 790, 976, 1,057, 644 and 792 lines for the second through eighth, 1,732 for the ninth) — not all of the eight newer ones read whole either (measured Session 249 by probing each, and Session 256 for the ninth, never by line count; the count and the per-shard result are in the item below); all are equally unwatched, and every future trim adds one more. | **Operator call.** The fix is one line in shared fleet tooling at `~/Development/methodology`, synced to 13 projects — not this repo's to edit. |
 | A clean `git merge` still publishes nothing | Closing the two items above (Session 241) showed the filed diagnosis was incomplete. `post-commit` now reads merge commits correctly, but git only runs `post-commit` for a merge **you** finish with `git commit` after a conflict. For a clean `git merge` or `git pull` git runs **`post-merge`**, and this repository installs no such hook — so a merge or pull that carries a wiki change still publishes nothing, silently. | Small: a `post-merge` hook using `ORIG_HEAD..HEAD` (a fast-forward pull moves many commits, so inspecting `HEAD` alone is not enough). Verified, and pinned red-if-git-changes by `test_a_clean_merge_never_reaches_this_hook`. |
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
-| Enterprise migration | Handing the project to an enterprise. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. What remains is the fork into an enterprise host. | Blocked on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. |
+| Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | One broken view empties the whole table inventory | Found Session 261. `discover` lists a database's tables by asking the driver about each one in turn, with no per-table safety net. One view whose underlying table was dropped makes the whole listing fail, so a database with hundreds of good tables reports **zero**. Since Session 261 it is loud at the terminal — a WARNING on stderr and exit 1; before, only a note inside the file said so, and the command exited 0. | Small, one function in `db.py`. Needs a decision on how a skipped table is reported. |
 | A ranking that matches nothing is silent | Found Session 261. If the model ranks tables under names that do not match exactly (`claims` for `main.claims`), or returns an empty list, no table gets a score, nothing is logged, and the command exits 0 — the one ranking failure Session 261's fix cannot see, because nothing raises. Scores are also not range-checked: `NaN` is written to the file as a non-standard JSON literal. | Small, one file. Treat "matched none" as a ranking failure; decide on `NaN`/range. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
@@ -783,6 +783,40 @@ run as soon as the operator supplies D9 (destination host), D5 (import strategy)
 (wiki destination), and D16 (release disposition) live at that session's start — see
 `enterprise-migration.md` Phase C4's "Before step 1" note and dragons #22/#24. This repository does
 not pre-answer those five; whoever runs C4 gets them from the operator directly.
+
+**Readiness audit (Session 263, 2026-09-21): not ready yet, but close.** A 13-agent read-only audit
+(six dimensions, each adversarially re-verified) measured the tree against the plan; this list is
+what the plan's text does not yet say — the plan stays authoritative on the phases. Its one
+blocker — local `master` 10 commits ahead of `origin`, which a mirror of `origin` would have dropped
+for good, `1e53c20`'s `redact_secrets` fix among them — was cleared the same session by the
+operator's push (`f987a6f..0adc8ae`, CI green, 1,481 passed). It reopens whenever a session leaves
+commits unpushed. **Do on the original before forking** — the clone cannot receive a fix later:
+1. `docs/methodology/README.md:361-369` still carries the superseded no-redistribution licence and
+   links a `LICENSE` that does not exist (upstream relicensed to MIT in `49a103a`; `bin/sync` does not
+   distribute this file). Fix `NOTICE` with it: `:28` says no listed file has a copyright header,
+   `:40` names the canonical upstream as the sync source (it is the operator's fork), and it never
+   cites the public relicense.
+2. `4795c29` (Session 189's close-out record) exists only on local `feat/bedrock-mantle-migration`:
+   push it or drop it deliberately.
+3. Tag `v0.3.0` (D12's tag half): both `pyproject.toml` files say 0.3.0; only `v0.1.0`/`v0.2.0` exist.
+4. Refresh `audits/2026-07-28-b2-import-readiness.md`: 385 commits scanned where history has 579, a
+   pre-rename wiki path, and 39 placeholder database-URL credential lines left unclassified.
+5. Give Phase C4 a local-vs-`origin` parity pre-flight (`git ls-remote origin` against local `master`,
+   and CI green on that tip); it has none.
+
+**C4-time facts the plan does not carry:** a squash import or signed-history rewrite (D5/D4) turns
+all 11 ledger proofs red permanently. `git push --mirror` carries `refs/pull/*`, which GitHub-family
+hosts reject, and `gh-pages`, which bundles `wordcut.js` from `mkdocs-material` (upstream LGPL-3.0;
+Python runtime deps remain copyleft-free) — push `refs/heads`/`refs/tags` explicitly. On GHES,
+disable Actions before the push or `publish-tutorial.yml` fires. `scripts/publish_wiki.sh:48` falls
+back to the personal wiki when `WIKI_CLONE` is empty, and the C4/C5 "fails closed" check *runs* the
+publisher — step 4 must land before that check or any hook. Stale figures: the wiki has 44 commits /
+25 pages (plan: 33 / 23), 188 intra-wiki links (plan: 157), and step 6's `SESSION_RUNNER.md:209`
+text is now `CLAUDE.md:75`. Arm 1 of the independence check measures 243 hits against "→ 0"; its
+exclusions need a ruling. **C2 was never started** (htmx from unpkg, no intake-UI auth,
+`MPC_HOST_URL` ignored, stores created 0644, `--model` defaults wrong for Bedrock, proxy/CA
+undocumented) — not a C4 gate, so it becomes the clone's work. Evidence: `SESSION_NOTES.md`,
+Session 263.
 
 - **B1 — The legal packet.** **D3-independent core: DONE (Session 190)** — wiki LGPL mislabeling
   fixed, root `SECURITY.md`/`CODEOWNERS`/`THIRD-PARTY-LICENSES`/baseline `CONTRIBUTING.md`/`NOTICE`
