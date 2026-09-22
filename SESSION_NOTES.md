@@ -97,6 +97,18 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 264 Did
+**Deliverable:** **a ranking that matches no inventory entry becomes a reported ranking failure, and
+ranking scores are range-checked** — `BACKLOG.md` *"A ranking that matches no entry is silent, and
+scores are not range-checked"* (filed Session 261), chosen by the operator from a four-option picker
+at Phase 1. (IN PROGRESS)
+**Started:** 2026-09-22
+**Status:** Session claimed. Work beginning. The operator ruled *not* to push Session 263's two
+commits at this session's start.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 263 Did
 **Deliverable:** **a readiness verdict on migrating this repository into a private environment —
 answered: not ready, one blocker, cleared the same session.** The operator asked it as *"a question

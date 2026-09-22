@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S264
+date: 2026-09-22
+status: pending
+active_task: A ranking that matches no inventory entry becomes a reported ranking failure (exit 1), and ranking scores are range-checked -- BACKLOG.md "A ranking that matches no entry is silent, and scores are not range-checked", filed Session 261, chosen by the operator at Phase 1.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S263
 date: 2026-09-21
 status: complete

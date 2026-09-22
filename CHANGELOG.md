@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-22 · [ad hoc] S264 claim: a ranking that matches no entry becomes a reported failure; scores are range-checked *(in progress)*
+- **Change:** Session 264 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the `BACKLOG.md` item *"A ranking that matches no entry is silent, and scores are not range-checked"* (filed Session 261), chosen by the operator at Phase 1 from a four-option picker. Scope is `discovery._ranked` in `packages/data-agent/src/model_project_constructor_data_agent/discovery.py` and its tests in `tests/data_agent_package/test_discovery.py`. The item's reject-vs-clamp question is put to the operator before any code.
+- **Commit/PR:** this commit
+- **Session:** S264 · **Verified:** n/a — ledger-only; the census and read-budget guards are run at the claim state before this commit
+- **Model:** Claude Opus 5
+
 ### 2026-09-21 · [ad hoc] S263 — close out: the repository is one push from fork-ready; the punch list is filed
 - **Change:** `SESSION_NOTES.md` carries the full Session 263 record — the readiness verdict and its method, what the 13-agent audit found and what its verifiers refuted, a correction to one overstated claim made to the operator (*"no copyleft dependencies remain"* dropped the qualifier *"Python package metadata"*; `gh-pages` and `mkdocs-material` bundle an LGPL-3.0 `wordcut.js`), the push, the Session 262 handoff evaluation (8/10) and this session's self-assessment (6/10). **Phase 1B was skipped** — no stub, no `pending` receipt — and the record says so. `HANDOFFS.md`'s receipt is written `status: complete` directly. `PROJECT_LEARNINGS.md` gains #280: a one-time mirror of `origin` is ready when `origin` is, so fork readiness starts with `git ls-remote` parity and CI on that SHA. `CLAUDE.md`'s learnings count and size are re-measured (280; 328.3 KB).
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `PROJECT_LEARNINGS.md`, `CLAUDE.md`, `CHANGELOG.md`
