@@ -336,11 +336,13 @@ def test_redact_secrets_masks_the_item_leak_table(text: str, secret: str) -> Non
          SECRET, None),
         # Class 4: camel-cased / hyphenated keys outside the original fixed list.
         (redact_secrets, f"AccessToken={SECRET}", SECRET, None),
+        (redact_secrets, f"sessionToken={SECRET}", SECRET, None),
         (redact_secrets, f"X-Amz-Signature={SECRET}", SECRET, None),
         (redact_secrets, f"passcode={SECRET}", SECRET, None),
     ],
     ids=["userinfo-at-in-username", "tail-after-ampersand", "tail-inside-odbc-brace",
-         "percent-encoded-odbc-connect", "camel-cased-key", "hyphenated-key", "passcode-key"],
+         "percent-encoded-odbc-connect", "camel-cased-key", "camel-cased-key-session",
+         "hyphenated-key", "passcode-key"],
 )
 def test_redact_secrets_masks_the_four_further_classes(
     fn: object, text: str, secret: str, also_gone: str | None

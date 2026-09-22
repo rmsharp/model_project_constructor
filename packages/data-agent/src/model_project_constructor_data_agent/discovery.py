@@ -64,11 +64,13 @@ def _safe_message(e: Exception) -> str:
     An OS-raised ``OSError`` repr-escapes its filename, so it carries none; a
     message built by formatting an ``os.fsdecode``-d path into text does.
 
-    Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo
-    and unquoted ``key=value`` forms; measured Session 261, it does not see a
-    prefixed key (``DB_PASSWORD=``), a quoted value, a header or a bearer token.
-    Flattened with the same idiom as ``agent.py`` so the WARNING is one log
-    record: SQLAlchemy puts its help URL after a newline on every ``DBAPIError``.
+    Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo,
+    a wide `key=value`/`key: value`/quoted/braced key list (Session 262), and
+    a secret percent-encoded inside `odbc_connect=`; it still does not see a
+    bare-key, header, ``Bearer``, or SigV4-signature shape with no `key=`/
+    `key:` form at all, nor a key outside its fixed list. Flattened with the
+    same idiom as ``agent.py`` so the WARNING is one log record: SQLAlchemy
+    puts its help URL after a newline on every ``DBAPIError``.
     """
     try:
         raw = str(e).encode("utf-8", "replace").decode("utf-8")

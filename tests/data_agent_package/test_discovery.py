@@ -622,9 +622,16 @@ class TestRankingFailureKeepsEntries:
         ids=["gateway-body", "bearer", "env-echo"],
     )
     def test_ranking_note_never_persists_the_message(self, leak: str) -> None:
-        """The note is PUBLISHED with the inventory; ``redact_secrets`` is blind
-        to every one of these shapes (measured Session 261), so the note carries
-        the exception's type and the message goes to the WARNING only."""
+        """The note is PUBLISHED with the inventory, so it carries the
+        exception's TYPE only, unconditionally, and the message goes to the
+        WARNING instead -- by design, not because ``redact_secrets`` happens
+        to miss these shapes. It still does: Session 262 widened the key list
+        enough that ``redact_secrets`` now masks two of the three ("gateway-
+        body" and "env-echo" both contain a `key=`/`key:` form under a key the
+        wider list matches), leaving only "bearer" -- a header with no `key=`/
+        `key:` form at all -- genuinely blind (measured). None of that changes
+        this test: the note is type-only regardless of what the redactor can
+        see, which is the point of the design."""
         inv = probe_information_schema(
             _RowsDB(_three_rows()),  # type: ignore[arg-type]
             llm=_Ranker(_raise(RuntimeError(leak))),

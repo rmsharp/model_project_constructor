@@ -53,7 +53,6 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. What remains is the fork into an enterprise host. | Blocked on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. |
 | One broken view empties the whole table inventory | Found Session 261. `discover` lists a database's tables by asking the driver about each one in turn, with no per-table safety net. One view whose underlying table was dropped makes the whole listing fail, so a database with hundreds of good tables reports **zero**. Since Session 261 it is loud at the terminal — a WARNING on stderr and exit 1; before, only a note inside the file said so, and the command exited 0. | Small, one function in `db.py`. Needs a decision on how a skipped table is reported. |
 | A ranking that matches nothing is silent | Found Session 261. If the model ranks tables under names that do not match exactly (`claims` for `main.claims`), or returns an empty list, no table gets a score, nothing is logged, and the command exits 0 — the one ranking failure Session 261's fix cannot see, because nothing raises. Scores are also not range-checked: `NaN` is written to the file as a non-standard JSON literal. | Small, one file. Treat "matched none" as a ranking failure; decide on `NaN`/range. |
-| The password masker misses common shapes | Found Session 261 by measurement. `redact_secrets` masks `password=x` and URL passwords, but **not** `DB_PASSWORD=x`, `PGPASSWORD=x`, `access_token=x`, a quoted `password='x'` (the form a password containing a space requires), `password: x`, or JSON. Anything it is applied to — the `--db-url` cause from Session 260, the probe note from Session 261 — is masked best-effort only. | Small, one regex in `db.py` plus tests. The measured leak/ok table is in the item. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -416,43 +415,6 @@ caller's `request_context`. Measured for the first: `notes=None`, exit 0, and
 `DataSourceInventory.model_validate_json` — the orchestrator's loader — rejects the file. Not a
 regression (HEAD behaved the same). Cheapest guard: `model_dump_json()` each rebuilt entry inside
 `_ranked`, so a serialization error becomes an ordinary labelled ranking failure.
-
-### `redact_secrets` fails open on shapes inside its own claimed coverage
-
-**Found Session 261** by the secrets lens of the design review, confirmed by an independent skeptic,
-and spot-checked by the session (8 shapes, same result). `db.py`'s `_SECRET_KV` begins with `\b`, and
-`_` is a word character, so a **prefixed** key never matches; its value class needs a non-quote
-character straight after `=`, so a **quoted** value is not masked at all — and the quoted form is
-the one libpq requires for a password containing a space, which the comment above the regex claims
-to cover. Learning #269's "an excluded character in a secret is a fail-open", one level further.
-
-| masked | **not masked** (secret survives verbatim) |
-|---|---|
-| `password=x`, `Password=x`, `PWD=x;`, `&password=x`, URL userinfo `scheme://u:x@h` | `DB_PASSWORD=x`, `PGPASSWORD=x`, `db_password=x`, `access_token=x`, `client_secret=x`, `password='x'`, `password="x y"`, `password = x`, `password: x`, `{'password': 'x'}`, `{"password": "x"}` |
-
-Four more classes, measured by a second reviewer, that the table above does not list: **(1)** URL
-userinfo whose *username* contains `@` — `postgresql://svc@myserver:x@host/db`, the Azure and
-email-login form, which SQLAlchemy accepts unencoded — survives `redact_secrets` whole (the
-structural `redact_db_url` masks it; the text pass does not), so the table's "URL userinfo" cell is
-true only for an `@`-free username; **(2)** a *tail* leak when the secret contains a character the
-value class stops at — `password=x1&y2` → `***&y2`, and the ODBC brace form `PWD={x1 y2};` →
-`*** y2};`; **(3)** a percent-encoded `odbc_connect=…PWD%3Dx%3B`; **(4)** keys outside the fixed
-list or camel-cased — `AccessToken=`, `sessionToken=`, `passcode=`, `X-Amz-Signature=`.
-
-It also cannot see header, `Bearer`, bare-key, SigV4 or env-echo shapes at all — which is why
-Session 261 persists only the exception's **type** for a ranking failure. **Reach today:** the
-`--db-url` cause appended to `DataReport.data_quality_concerns` (Session 260) and the reflection
-note in a `DataSourceInventory` (Session 261); both are published with the generated project. No
-leak has been measured with the one installed driver (SQLite) — SQLAlchemy adds no URL to a
-`DBAPIError` itself — so this is exposure under drivers this repo cannot test, not a known leak.
-
-**Sketch:** drop the leading `\b` in favour of a suffix match on the key, accept an optional quote
-around the value and `:` or spaced `=` as separators — that fixes the table and class (4) only. Class
-(1) needs the in-text userinfo pattern to mask up to the LAST `@` before the host, class (2) needs
-the value class to honour `{…}` and quotes instead of stopping inside them, and class (3) needs a
-percent-decoded pass. Add the table and all four classes to
-`tests/data_agent_package/test_db.py` as parametrized secret-ABSENCE cases (never a marker-presence
-assertion — learning #268). Watch for false positives on prose; the existing tests pin the URL forms.
 
 ### No circuit breaker on a systematically-failing live sweep
 

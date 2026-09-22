@@ -97,7 +97,7 @@ tests/
   agents/website/                       # 199 website agent tests (templates, fake client, nodes, agent, CLI, governance, retry, gitlab + github adapters)
   orchestrator/                         # 250 orchestrator tests (pipeline halt paths, adapters, checkpoints, config, logging, metrics)
   ui/intake/                            # 32 web UI tests (FastAPI, runner, SQLite resume, SSE)
-  data_agent_package/                   # 316 CLI + Anthropic/Bedrock/OpenCode client tests
+  data_agent_package/                   # 339 CLI + Anthropic/Bedrock/OpenCode client tests
   eval/                                 # 157 eval/parity harness tests (corpus, scoring, cutover gate, interview sweep, stakeholder sim, live)
   scripts/                              # 109 run_pipeline.py adapter/resume, site-asset + published-site guards, wiki publisher + hook
   fixtures/sample_request.json          # canonical DataRequest fixture
@@ -152,7 +152,7 @@ uv sync --extra agents --extra ui --extra dev
 uv run pytest
 ```
 
-All 1458 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈98.01%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
+All 1481 tests should pass (9 more skip without live LLM credentials) with coverage above 95% (currently ≈98.02%). `uv sync` uses a workspace to build and install both `model-project-constructor` and `model-project-constructor-data-agent` editable in one step.
 
 Production deployments read every secret and every deployment-variable parameter from the environment (or from a `.env` file loaded by the caller). See `.env.example` for the full matrix and `OPERATIONS.md` for the runbook. Common failure modes live in `TROUBLESHOOTING.md`; resume a halted run with `scripts/run_pipeline.py --resume <run_id>` (see `OPERATIONS.md` §5).
 
