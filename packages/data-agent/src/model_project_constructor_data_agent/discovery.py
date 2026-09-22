@@ -27,6 +27,7 @@ The producer emits ``producer_type="automated"`` with a stable
 from __future__ import annotations
 
 import logging
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -49,6 +50,23 @@ PRODUCER_VERSION = "1.0"
 #: ruling, Session 261) — tells the operator which. Compare with ``startswith``.
 PROBE_FAILED_NOTE_PREFIX = "information_schema probe failed"
 RANKING_FAILED_NOTE_PREFIX = "LLM relevance ranking failed"
+
+
+class RankingMatchedNoEntryError(ValueError):
+    """The ranker returned, but named no entry's ``fully_qualified_name`` exactly.
+
+    Raised by :func:`_ranked`, so it becomes an ordinary ranking failure. The
+    ranking note persists the exception's type only, so this name IS the
+    note's explanation — which is why it is a class of its own.
+    """
+
+
+class InvalidRelevanceScoreError(ValueError):
+    """A score the ranker applied to an entry is not a finite number in [0.0, 1.0].
+
+    Rejected, never clamped (operator ruling, Session 264): a reply on the
+    wrong scale would clamp to all 1.0 and lose the order ranking exists for.
+    """
 
 
 def _safe_message(e: Exception) -> str:
@@ -115,12 +133,15 @@ def probe_information_schema(
 
     - **Reflection, or building an entry from it, fails** (permission denied,
       unsupported dialect, a reflection dict missing a key, a table that fails
-      schema validation): ``entries=[]`` and ``notes`` begins
+      schema validation or has a name that cannot be written as UTF-8):
+      ``entries=[]`` and ``notes`` begins
       :data:`PROBE_FAILED_NOTE_PREFIX`, then the exception's type and its
       message — redacted best-effort, on one line. One bad table fails the
       whole probe: a partial inventory is never returned unlabelled.
     - **Ranking fails** (no credentials, a malformed or truncated reply, a
-      ranking that fails schema validation): the reflected entries are **kept,
+      ranking that fails schema validation, names no entry, applies a score that
+      is not a finite number in [0.0, 1.0], or carries a reason that cannot be
+      written as UTF-8): the reflected entries are **kept,
       all unranked** — ranking is applied all-or-nothing — and ``notes`` begins
       :data:`RANKING_FAILED_NOTE_PREFIX` and names the exception's **type
       only**. The message goes to the WARNING and is never persisted: the
@@ -129,10 +150,10 @@ def probe_information_schema(
       redactor here can see (measured Session 261).
 
     ``notes`` is ``None`` exactly when neither happened. That is **not** the
-    same as "every entry is ranked": a ranker that returns no ranking for an
-    entry, or names no entry at all, raises nothing and leaves it ``None``.
-    Rankings are re-validated against the schema, so a non-numeric score is a
-    ranking failure — but a score's range and finiteness are not checked.
+    same as "every entry is ranked": a partial ranking is legal, so an entry the
+    ranker returns no ranking for keeps ``relevance_score=None``. When a ranker
+    ran, it does mean at least one entry is ranked (Session 264), and every
+    applied score is a finite number in [0.0, 1.0].
 
     Why there is no upper bound on what is absorbed, when the sibling
     ``db.sql_dialect_from_url`` deliberately has one: that function degrades to
@@ -160,6 +181,11 @@ def probe_information_schema(
     try:
         tables = db.get_information_schema(schemas=include_schemas)
         entries = [_entry_from_reflection(t) for t in tables]
+        for entry in entries:
+            # A lone surrogate in a reflected name validates as a ``str`` but
+            # cannot be written as UTF-8: the file would be written and then fail
+            # to reload. Checked HERE so it is blamed on reflection, not ranking.
+            entry.model_dump_json()
     except Exception as e:
         cause = f"{type(e).__name__}: {_safe_message(e)}"
         _LOG.warning(
@@ -209,6 +235,14 @@ def _ranked(
     ``model_validate(<instance>)`` — pydantic's ``revalidate_instances`` defaults
     to ``"never"`` — so either would let a duck-typed client's
     ``relevance_score="high"`` into an inventory that then fails to reload.
+
+    Three rankings return normally and are still failures (Session 264), each
+    of which used to leave ``notes=None``: one that names **no** entry
+    (:class:`RankingMatchedNoEntryError` — a partial ranking stays legal, and a
+    name matching no entry is ignored); a score, on an entry it is applied to,
+    that is not a finite number in [0.0, 1.0] (:class:`InvalidRelevanceScoreError`);
+    and a reason that cannot be written as UTF-8 (pydantic's serialization
+    error), which would otherwise write a file that fails to reload.
     """
     rankings = ranker(
         entries=[e.model_copy(deep=True) for e in entries],
@@ -217,14 +251,28 @@ def _ranked(
     ranking_map = {
         r.fully_qualified_name: (r.relevance_score, r.relevance_reason) for r in rankings
     }
+    if not any(e.fully_qualified_name in ranking_map for e in entries):
+        raise RankingMatchedNoEntryError(
+            f"{len(ranking_map)} distinct name(s) returned and none is an entry's "
+            f"fully_qualified_name exactly; returned {list(ranking_map)[:3]!r}, "
+            f"expected names like {[e.fully_qualified_name for e in entries[:3]]!r}"
+        )
     ranked: list[DataSourceEntry] = []
     for entry in entries:
         score, reason = ranking_map.get(entry.fully_qualified_name, (None, None))
-        ranked.append(
-            DataSourceEntry.model_validate(
-                {**entry.model_dump(), "relevance_score": score, "relevance_reason": reason}
-            )
+        rebuilt = DataSourceEntry.model_validate(
+            {**entry.model_dump(), "relevance_score": score, "relevance_reason": reason}
         )
+        if entry.fully_qualified_name in ranking_map:
+            # Checked AFTER validation, so the score is a float (or None) by now.
+            applied = rebuilt.relevance_score
+            if applied is None or not (math.isfinite(applied) and 0.0 <= applied <= 1.0):
+                raise InvalidRelevanceScoreError(
+                    f"relevance_score {applied!r} for {entry.fully_qualified_name!r} "
+                    "is not a finite number in [0.0, 1.0]"
+                )
+            rebuilt.model_dump_json()  # a lone surrogate in the reason raises here
+        ranked.append(rebuilt)
     return ranked
 
 

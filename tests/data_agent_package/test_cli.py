@@ -14,7 +14,12 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 from model_project_constructor_data_agent.cli import app
-from model_project_constructor_data_agent.schemas import DataReport, DataSourceInventory
+from model_project_constructor_data_agent.llm import TableRanking
+from model_project_constructor_data_agent.schemas import (
+    DataReport,
+    DataSourceEntry,
+    DataSourceInventory,
+)
 from typer.testing import CliRunner
 
 FIXTURE_REQUEST = (
@@ -392,6 +397,53 @@ def test_cli_discover_failed_ranking_keeps_the_file_and_exits_nonzero(
     assert inv.entries[0].relevance_score is None
     assert (inv.producers[0].notes or "").startswith(
         f"{RANKING_FAILED_NOTE_PREFIX} (LLMParseError)"
+    )
+
+
+class _NamesNothingRanker:
+    """LLM stand-in that ranks every table under its BARE name, so nothing matches."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def rank_candidate_tables(
+        self, entries: list[DataSourceEntry], request_context: object
+    ) -> object:
+        self.calls += 1
+        return [TableRanking(e.name, 0.9, "matches nothing") for e in entries]
+
+
+def test_cli_discover_ranking_that_names_no_table_exits_nonzero(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Session 264: a ranking that returns normally but names no table is a
+    ranking failure, so the Session 261 exit-1 ruling now fires for it. Before,
+    nothing raised: every score stayed ``None``, ``notes`` was ``null`` and the
+    command exited 0 (measured)."""
+    import model_project_constructor_data_agent.cli as cli_mod
+    from model_project_constructor_data_agent.discovery import RANKING_FAILED_NOTE_PREFIX
+
+    ranker = _NamesNothingRanker()
+    monkeypatch.setattr(cli_mod, "make_llm_client", lambda provider, **kw: ranker)
+
+    db_url = _seed_discover_db(tmp_path / "discover.db", with_policies=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", db_url, "--output", str(out), "--rank-with-llm"],
+    )
+
+    assert ranker.calls == 1
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "UNRANKED" in result.stderr
+    assert "(RankingMatchedNoEntryError)" in result.stderr
+
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+    assert inv.entries[0].relevance_score is None
+    assert (inv.producers[0].notes or "").startswith(
+        f"{RANKING_FAILED_NOTE_PREFIX} (RankingMatchedNoEntryError)"
     )
 
 

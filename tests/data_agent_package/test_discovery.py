@@ -11,6 +11,7 @@ Phase 1.
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -447,6 +448,34 @@ class TestProbeNeverRaises:
             f"information_schema probe failed: {type_name}: "
         )
 
+    @pytest.mark.parametrize(
+        "row",
+        [
+            {**GOOD_ROW, "name": "bad\udc80name"},
+            {**GOOD_ROW, "namespace": "sch\udcffema"},
+            {**GOOD_ROW, "columns": [{"name": "c\ud83d", "data_type": "INTEGER"}]},
+        ],
+        ids=["table-name", "namespace", "column-name"],
+    )
+    def test_a_reflected_name_that_cannot_serialize_fails_the_probe(
+        self, row: dict[str, Any]
+    ) -> None:
+        """A lone surrogate validates as a ``str`` but cannot be written as UTF-8,
+        so until Session 264 the inventory built, the file was written with exit
+        0, and ``model_validate_json`` then refused to load it (measured). It is
+        now a probe failure — blamed on reflection, where it came from, and
+        never on ranking, which a later stage would otherwise report."""
+        llm = _Ranker(lambda entries: [])
+        inv = probe_information_schema(
+            _RowsDB([GOOD_ROW, row]), llm=llm  # type: ignore[arg-type]
+        )
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: PydanticSerializationError: "
+        )
+        assert llm.calls == []  # stage 1 failed, so stage 2 never ran
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
     def test_one_bad_table_fails_the_whole_probe(self) -> None:
         """No per-table skipping: a partial inventory is never returned unlabelled."""
         inv = probe_information_schema(
@@ -752,3 +781,172 @@ class TestRankingFailureKeepsEntries:
         assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, 0.5]
         assert inv.producers[0].notes is None
         assert _discovery_warnings(caplog) == []
+
+
+def _last_one_scored(score: Any, reason: str = "r") -> Any:
+    """A ranking whose LAST entry carries ``score`` — the others are good — so an
+    implementation that applied rankings one at a time would show a partial."""
+
+    def _behaviour(entries: list[DataSourceEntry]) -> Any:
+        return [TableRanking(e.fully_qualified_name, 0.5, "ok") for e in entries[:-1]] + [
+            TableRanking(entries[-1].fully_qualified_name, score, reason)
+        ]
+
+    return _behaviour
+
+
+def _assert_unranked_with(inv: DataSourceInventory, type_name: str) -> None:
+    assert [e.fully_qualified_name for e in inv.entries] == [
+        "main.claims",
+        "main.outcomes",
+        "main.policies",
+    ]
+    assert [e.relevance_score for e in inv.entries] == [None, None, None]
+    assert [e.relevance_reason for e in inv.entries] == [None, None, None]
+    assert (inv.producers[0].notes or "").startswith(
+        f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all 3 entries are unranked."
+    )
+
+
+class TestRankingThatCannotBeApplied:
+    """Stage 2 — a ranker that RETURNS, but with a ranking that cannot be applied.
+
+    Filed Session 261, closed Session 264. Every case here raised nothing at
+    HEAD, so the probe wrote ``notes=None`` and ``discover`` exited 0 (measured
+    Session 264). Each is now an ordinary ranking failure: all-or-nothing, the
+    entries kept unranked, the note naming a type that says what went wrong.
+    """
+
+    @pytest.mark.parametrize(
+        "behaviour",
+        [
+            lambda entries: [],
+            lambda entries: iter(()),
+            lambda entries: [TableRanking(e.name, 0.9, "r") for e in entries],
+            lambda entries: [
+                TableRanking(e.fully_qualified_name.upper(), 0.9, "r") for e in entries
+            ],
+            lambda entries: [TableRanking("main.invented", 0.9, "r")],
+        ],
+        ids=["empty-list", "empty-iterator", "bare-names", "case-differs", "invented-only"],
+    )
+    def test_a_ranking_that_names_no_entry_is_a_failure(self, behaviour: Any) -> None:
+        """``anthropic_client.py`` sends the prompt only the top 20 entries by
+        score, so above 20 tables an unranked inventory can drop the relevant
+        one — and nothing said the ranking had not been applied."""
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(behaviour)  # type: ignore[arg-type]
+        )
+        _assert_unranked_with(inv, "RankingMatchedNoEntryError")
+
+    def test_the_no_match_warning_shows_what_was_returned_and_what_was_expected(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The note carries the type only; the WARNING is where the operator sees
+        that ``claims`` came back for ``main.claims``."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [TableRanking(e.name, 0.9, "r") for e in entries]
+
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            probe_information_schema(
+                _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+            )
+        messages = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert len(messages) == 1
+        assert "'claims'" in messages[0]
+        assert "'main.claims'" in messages[0]
+
+    def test_a_partial_ranking_with_invented_names_is_still_legal(self) -> None:
+        """Partial rankings stay legal: matching ONE entry is enough, and a name
+        that matches nothing is ignored, as it always was."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [
+                TableRanking("main.invented", 0.9, "not a real table"),
+                TableRanking(entries[1].fully_qualified_name, 0.7, "real"),
+            ]
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+        )
+        assert inv.producers[0].notes is None
+        assert [e.relevance_score for e in inv.entries] == [None, 0.7, None]
+
+    @pytest.mark.parametrize(
+        "score",
+        [
+            float("nan"),
+            float("inf"),
+            float("-inf"),
+            7.5,
+            -1.0,
+            1.0000001,
+            -0.0000001,
+            None,
+            "nan",
+        ],
+        ids=[
+            "nan",
+            "inf",
+            "minus-inf",
+            "wrong-scale",
+            "negative",
+            "just-above-one",
+            "just-below-zero",
+            "none",
+            "nan-as-text",
+        ],
+    )
+    def test_a_score_that_is_not_a_finite_number_in_0_1_is_a_failure(
+        self, score: Any
+    ) -> None:
+        """Operator ruling, Session 264: reject, never clamp. A reply on the wrong
+        scale (0-10) would clamp to all 1.0 and lose the order ranking exists
+        for. ``NaN`` also defeated the prompt's sort outright — five entries
+        scored ``[0.1, nan, 0.9, 0.5, 0.2]`` came back in input order (measured).
+        ``nan-as-text`` is what ``float("NaN")`` in the shipped client produces."""
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_last_one_scored(score))  # type: ignore[arg-type]
+        )
+        _assert_unranked_with(inv, "InvalidRelevanceScoreError")
+        # RFC 8259 has no NaN or Infinity; ``json.dumps`` writes them unless told not to.
+        json.dumps(inv.model_dump(mode="json"), allow_nan=False)
+
+    @pytest.mark.parametrize("score", [0.0, 1.0], ids=["zero", "one"])
+    def test_the_bounds_themselves_are_legal(self, score: float) -> None:
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_last_one_scored(score))  # type: ignore[arg-type]
+        )
+        assert inv.producers[0].notes is None
+        assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, score]
+
+    def test_a_bad_score_on_an_invented_name_is_never_applied_so_never_checked(
+        self,
+    ) -> None:
+        """The check is on APPLIED scores: a ranking for a table that does not
+        exist is ignored whole, exactly as the partial-ranking rule ignores it."""
+
+        def _behaviour(entries: list[DataSourceEntry]) -> Any:
+            return [TableRanking(e.fully_qualified_name, 0.5, "r") for e in entries] + [
+                TableRanking("main.invented", float("nan"), "r")
+            ]
+
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
+        )
+        assert inv.producers[0].notes is None
+        assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, 0.5]
+
+    def test_a_reason_that_cannot_serialize_is_a_failure_and_the_file_reloads(
+        self,
+    ) -> None:
+        """A reply cut inside an escaped emoji pair (``"…\\ud83d"``) passes
+        ``_extract_json`` and schema validation. Until Session 264 the file was
+        written with exit 0 and then refused to reload (measured)."""
+        inv = probe_information_schema(
+            _RowsDB(_three_rows()),  # type: ignore[arg-type]
+            llm=_Ranker(_last_one_scored(0.5, reason="cut mid-emoji \ud83d")),
+        )
+        _assert_unranked_with(inv, "PydanticSerializationError")
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
