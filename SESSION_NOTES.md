@@ -98,16 +98,142 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 265 Did
-**Deliverable:** **one unreflectable view no longer empties the whole inventory** — `BACKLOG.md`
-*"One unreflectable view empties the whole inventory"* (filed Session 261), chosen by the operator
-from a two-step picker at Phase 1 (area: `discover` fixes; item: this one). (IN PROGRESS)
-**Started:** 2026-09-22
-**Status:** Session claimed. Work beginning. The item's reporting question (how a skipped entity is
-surfaced, and the exit status of a partial inventory) goes to the operator, with measurements, before
-any code. The operator ruled to **push `master` to `origin` at close-out**.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **one unreflectable view no longer empties the whole inventory — COMPLETE**, closing
+the `BACKLOG.md` item filed in Session 261. The operator chose it from a two-step picker (area, then
+item) after the first, capped picker hid the other open items (learning #285).
+**Started / completed:** 2026-09-22 (UTC). **Commits:** `340139b` (claim), `4cd881b` (db layer),
+`31b4c8b` (probe and CLI), `5a27874` and `c61aea6` (what the review found, in two parts to respect
+the 5-file cap), `1beebca` (docs, item closed, census) and this close-out. Each has its own
+`CHANGELOG.md` entry. **Pushed at close-out on the operator's ruling**; the push is recorded in the
+close-out's own ledger entry.
+
+**Rulings (operator, by picker, after the measurements):** (1) skipped entities are reported in the
+existing `ProducerMetadata.notes` field, so the inventory contract does not change. (2) `discover`
+still exits 1 on a partial inventory, and a new `--allow-skipped` flag accepts skipped tables alone
+with exit 0.
+
+#### What changed
+
+Measured at HEAD first. A SQLite warehouse with four tables, a good view and one view whose base
+table was dropped gave **0 entries**. With two such views only the first was named. A read-only role
+can neither repair nor drop such a view, and `--include-schemas` cannot leave one out, so the
+warehouse could not be discovered at all.
+
+- **`db.py`.** `get_information_schema(..., skipped=list)` collects a new frozen `SkippedEntity` per
+  table or view whose reflection raises a `SQLAlchemyError`, and carries on. Without a list the
+  first error still propagates; the eval corpus relies on that. A non-database exception propagates
+  either way.
+- **A lost connection is never a skip** (from the review). A `connection_invalidated` error is
+  retried once on a fresh connection. Any other error becomes a skip only while
+  `_answers_select_1` (a fresh `SELECT 1`) still succeeds.
+- **`discovery.py`.** The probe writes a skip part beginning `SKIPPED_NOTE_PREFIX`. It names up to
+  ten entities in full, `repr`-quoted, with each exception type, counts the rest, and logs one
+  WARNING per skip. A ranking-failure part, if any, follows it.
+- **`cli.py`.** `--allow-skipped` gives exit 0 plus a `warning:` line, and only when skips are the
+  sole fault and something was reflected. The ranking part is looked for only under
+  `--rank-with-llm`.
+
+#### How it was verified
+
+- **Tests first:** 26 red at HEAD for the first two commits, and 8 more red against `31b4c8b` for
+  the review fixes, run from an archived copy with `-o pythonpath` (#281). Full suite **1,587
+  passed, 9 skipped, 98.07%** (was 1,546); `ruff` and `mypy` (68 files) clean.
+- **Runtime (3E), at $0, the real `model-data-agent discover`**:
+  - **SQLite:** 0 entries before; the rest kept after, exit 1, or 0 with the flag.
+  - **MySQL 8.4 (Docker):** the drop is allowed and reflection raises `UnreflectableTableError`.
+    It gave 0 entries before and 3 after, with both broken views named.
+  - **PostgreSQL 17 (Docker):** it refuses the drop, so the docstring's claim is measured, not
+    assumed. Both outage forms were measured with `--allow-skipped`. With the database gone after
+    the first view, the old code exited **0** with two good views "skipped"; the fix exits **1**
+    with a probe failure. With one backend killed, the old code exited **0** with healthy `t2`
+    "skipped"; the fix exits **0** with all five entries.
+- **Adversarial review:** four reviewers (correctness, mutation, security, stale docs), each told to
+  refute its own findings first. There was no blocker. One medium defect was found by two reviewers
+  independently: the lost connection, now fixed. The mutation pass killed 45 of 58 mutants; its 9
+  real gaps are closed and its 3 equivalents are proved. All other "now false" doc locations were
+  fixed.
+
+### Session 264 Handoff Evaluation (by Session 265)
+
+**Score: 9/10.**
+- **+** What's-next #3 named this item and its line (`BACKLOG.md:364`) as needing a reporting
+  decision. That was exactly the operator's question, and the item's own sketch matched what I
+  measured at HEAD.
+- **+** Gotcha #1, the mutation harness's `pythonpath`, went straight into the mutation reviewer's
+  brief, and that reviewer's harness was valid on its first run. Gotcha #5 (`and entries` is
+  load-bearing) is now load-bearing twice: it also keeps an all-skipped inventory from reading as a
+  ranking failure.
+- **+** "Seven commits are local" and the size figure were accurate at Orient.
+- **−** Nothing wrong. It did not flag that the probe's all-or-nothing test would have to move, but
+  the backlog item did.
+- **ROI:** high. The pickers and the tests were shaped by it.
+
+### Session 265 Self-Assessment
+
+**Score: 8/10.**
+- **+** Measured every failure at HEAD before asking for rulings, and put the measurements in the
+  pickers.
+- **+** Runtime-verified on three real dialects, old code against fix. Checked the two docstring
+  claims about PostgreSQL and MySQL rather than leaving them assumed.
+- **+** Read every reviewer's report; fixed the medium defect with real PostgreSQL evidence for
+  both of its forms.
+- **−** **My first design caught every `SQLAlchemyError` per entity without asking what a lost
+  connection does** (#284). Two reviewers found it; I should have.
+- **−** **The first picker silently dropped about 26 open items**, which cost the operator a round
+  trip (#285).
+- **−** Three runtime runs measured the wrong object (zsh word-splitting, #286). The output file's
+  name caught it before any result was reported.
+- **−** Wrote a coverage figure (98.05%) into the ledger before re-measuring after a later code
+  change. It was caught before the commit, but it is the same class as #257/#277.
+- **Decay term:** one `BACKLOG.md` item and its index row were **removed** (29 lines), and one
+  sentence was added to another item.
+
+**What's next.**
+1. **The tenth trim of `SESSION_NOTES.md` is due.** At this close-out the file passes the
+   196,608 B trigger (the size is in `HANDOFFS.md`'s receipt). It is its own session: claim, trim,
+   close out.
+2. **Restore Session 262's record heading** before that trim, with the operator's go-ahead. It is a
+   one-line insert above Session 262's headless body, which now starts at the line beginning
+   `**Deliverable:** **\`redact_secrets\` stops failing open` inside Session 263's span. Find it with
+   `grep -n`.
+3. **Rulings still owed:** the `--request-context` item (`BACKLOG.md:366`, reject or scrub) and the
+   `--db-url` option (c) (`BACKLOG.md:327`). That item's precedent paragraph now names `discover`'s
+   opt-in-flag shape (`:361`).
+4. **Observed, not filed:**
+   - `_safe_message` passes terminal control characters from a driver's message to stderr. A
+     table's name is embedded in its SQL, and it predates this session; the probe-failed note
+     persists them too. The fix is small: escape non-printables in `_safe_message`.
+   - A duck-typed `db` can put an unescaped `entity_kind` in the note. The real `ReadOnlyDB`
+     cannot.
+   - `discover --db-url sqlite:///<typo>` creates an empty file and exits 0.
+   - `cli.py`'s module docstring says only `anthropic` exists.
+   - `BACKLOG.md`'s README-counts index row states a sum of 1,347, which was already false.
+
+**Key files** (read off `grep -n` at this close-out).
+- `db.py:141` `SkippedEntity`; `:229` `_answers_select_1`; `:281` `get_information_schema`; `:344`
+  `reflect()`, with `:350` the disconnect retry and `:357` the `SELECT 1` gate.
+- `discovery.py:59` `SKIPPED_NOTE_PREFIX`; `:64` `_SKIPPED_NAMED`; `:251` the skip note, inside the
+  stage-1 `try`; `:260` the WARNING loop; `:294` `_skipped_note`; `:375` `_fqn`.
+- `cli.py:172` `--allow-skipped`; `:254` `unranked`; `:268` `acceptable`.
+- `test_db.py:467` the skip section; `:606` `_outage_at`; `:629` outage; `:663` retry.
+- `test_discovery.py:148` `_SkippingDB`; `:174` `_skip_note`; `:666`
+  `TestUnreflectableEntitiesAreSkipped`.
+- `test_cli.py:537` `_seed_stale_view_db`; `:587` the ranking-prefix-name test.
+- `USAGE.md:217`, `:260`, `:489`. `BACKLOG.md:361`.
+- `PROJECT_LEARNINGS.md` #284–#286.
+
+**Gotchas.**
+1. **Keep `get_information_schema`'s default strict.** With no list it raises, and
+   `tests/eval/eval_corpus.py` depends on that.
+2. **Every duck-typed test DB must accept `skipped=`.** Otherwise the probe's `TypeError` becomes a
+   probe-failure note; `test_cli.py`'s `_boom` fakes take `**kwargs`.
+3. **To simulate an outage on SQLite:** `inspector.bind.dispose()`, then rename the directory.
+   Pooled connections survive a rename, so dispose first.
+4. **The shell is zsh:** no word splitting of `$var`. Run measurement loops through `bash`.
+5. **Verifying a partial commit:** `git stash push --keep-index`, run the suite, commit, pop. Do not
+   edit a staged file after stashing, or the pop conflicts; it did once here, over one line.
+6. **Real-dialect checks:** `postgres:17-alpine` is local and `mysql:8.4` was pulled this session.
+   Get the drivers with `uv run --with 'psycopg[binary]'` or `--with pymysql --with cryptography`.
 
 ### What Session 264 Did
 **Deliverable:** **a ranking that cannot be applied is a ranking failure — COMPLETE**, on the
