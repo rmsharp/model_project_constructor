@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-22 · [ad hoc] S265 — `ReadOnlyDB.get_information_schema` can skip a table or view the database cannot reflect, and say which
+- **Change:** a new keyword-only `skipped` list. Pass one, and a `SQLAlchemyError` from reflecting ONE table or view appends a new frozen `SkippedEntity` (namespace, name, kind, the error) to it instead of ending the walk; everything else is returned. Without a list nothing changes: the first error propagates, which the eval corpus (`tests/eval/eval_corpus.py`) relies on. A non-database exception propagates either way, since it is a defect and not a database fault, and so does an error listing the schemas, tables or views. **Measured first, on the unchanged code:** a SQLite warehouse with four tables, a good view and one view whose base table was dropped gave `OperationalError` from the walk, so the probe returned **0 entries**; with two such views only the first was ever named. `discovery.py` does not pass a list yet; the next entry wires it in.
+- **Commit/PR:** this commit — `db.py`, `tests/data_agent_package/test_db.py`, `CHANGELOG.md`
+- **Session:** S265 · **Verified:** eight new `test_db.py` tests — a stale view first, middle and last among the views; two stale views, both collected in order; a table dropped mid-walk, listed first and last; a non-database error never collected; the default still raising. Seven were red before the change; the eighth pins the unchanged default and was green on both. Full suite green at this commit with the probe half stashed; `ruff` and `mypy` clean.
+- **Model:** Claude Opus 5.5
+
 ### 2026-09-22 · [ad hoc] S265 claim: one unreflectable view no longer empties the whole inventory *(in progress)*
 - **Change:** Session 265 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the `BACKLOG.md` item *"One unreflectable view empties the whole inventory"* (filed Session 261), chosen by the operator at Phase 1 from a two-step picker. Scope is `ReadOnlyDB.get_information_schema` in `packages/data-agent/src/model_project_constructor_data_agent/db.py`, what `discovery.probe_information_schema` does with a skipped entity, and their tests. The reporting question goes to the operator before any code. The operator also ruled that `master` is pushed to `origin` at close-out.
 - **Commit/PR:** this commit

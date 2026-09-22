@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 import sqlalchemy as sa
@@ -136,6 +137,23 @@ class DBConnectionError(Exception):
     """Raised when the Data Agent cannot reach its database."""
 
 
+@dataclass(frozen=True)
+class SkippedEntity:
+    """A table or view :meth:`ReadOnlyDB.get_information_schema` could not reflect.
+
+    ``error`` is the database error that reflecting it raised. Measured Session
+    265: a view whose base table was dropped gives ``OperationalError`` on
+    SQLite and ``UnreflectableTableError`` on MySQL 8.4 (wrapping error 1356);
+    a table dropped while the walk ran gives ``NoSuchTableError`` (SQLite and
+    PostgreSQL 17). PostgreSQL refuses to drop a table a view depends on.
+    """
+
+    namespace: str
+    name: str
+    entity_kind: str
+    error: sa.exc.SQLAlchemyError
+
+
 def sql_dialect_from_url(url: str) -> str | None:
     """Return the SQLAlchemy backend name for ``url`` (e.g. ``"sqlite"``).
 
@@ -242,7 +260,10 @@ class ReadOnlyDB:
             return [dict(row) for row in result.mappings().all()]
 
     def get_information_schema(
-        self, schemas: list[str] | None = None
+        self,
+        schemas: list[str] | None = None,
+        *,
+        skipped: list[SkippedEntity] | None = None,
     ) -> list[dict[str, Any]]:
         """Introspect the database and return table/view metadata.
 
@@ -261,12 +282,19 @@ class ReadOnlyDB:
         ``is_primary_key``, ``is_foreign_key``, ``foreign_key_target``), and
         ``primary_key_columns`` (a list of PK column names).
 
-        Raises :class:`RuntimeError` if called before :meth:`connect`. Any
-        :class:`sqlalchemy.exc.SQLAlchemyError` raised by the inspector
-        (permission-denied on a system view, dialect that does not support
-        reflection, etc.) propagates — callers that need graceful
-        degradation (``discovery.probe_information_schema``) catch it
-        themselves.
+        Pass a list as ``skipped`` to keep going past a table or view the
+        database cannot reflect: each is appended to it as a
+        :class:`SkippedEntity` and left out of the result. The case that forced
+        it is a view whose base table was dropped — SQLite and MySQL allow the
+        drop — which, before Session 265, emptied the whole inventory, naming
+        only the first such view. Only a
+        :class:`sqlalchemy.exc.SQLAlchemyError` from reflecting ONE entity is
+        collected. Any other exception is a defect, not a database fault, and
+        propagates; so does an error listing the schemas, tables or views.
+
+        Without ``skipped`` nothing is collected, and the first error of any
+        kind propagates, as it always has. Raises :class:`RuntimeError` if
+        called before :meth:`connect`.
         """
         if self._engine is None:
             raise RuntimeError(
@@ -283,15 +311,20 @@ class ReadOnlyDB:
             ]
 
         result: list[dict[str, Any]] = []
+
+        def reflect(schema: str, name: str, entity_kind: str) -> None:
+            try:
+                result.append(self._reflect_entity(inspector, schema, name, entity_kind))
+            except sa.exc.SQLAlchemyError as e:
+                if skipped is None:
+                    raise
+                skipped.append(SkippedEntity(schema, name, entity_kind, e))
+
         for schema in target_schemas:
             for table_name in inspector.get_table_names(schema=schema):
-                result.append(
-                    self._reflect_entity(inspector, schema, table_name, "table")
-                )
+                reflect(schema, table_name, "table")
             for view_name in inspector.get_view_names(schema=schema):
-                result.append(
-                    self._reflect_entity(inspector, schema, view_name, "view")
-                )
+                reflect(schema, view_name, "view")
         return result
 
     @staticmethod

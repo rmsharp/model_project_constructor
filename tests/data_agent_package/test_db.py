@@ -26,11 +26,17 @@ catch, and its upper bound.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
 
 import pytest
+import sqlalchemy as sa
 from model_project_constructor_data_agent.db import (
     DBConnectionError,
     ReadOnlyDB,
+    SkippedEntity,
     redact_db_url,
     redact_secrets,
     sql_dialect_from_url,
@@ -456,3 +462,142 @@ def test_readonly_db_dialect_seam_warns(caplog: pytest.LogCaptureFixture) -> Non
         assert ReadOnlyDB("postgresql://user:pw@host:$DB_PORT/claims").dialect is None
 
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+
+
+# --- get_information_schema: one entity that cannot be reflected is skipped ---
+
+#: What a warehouse built by ``_warehouse`` reflects, in the order it does:
+#: tables first, then views, each alphabetical.
+GOOD = ["claims", "policies", "v_b_good", "v_y_good"]
+
+
+def _warehouse(path: Path, *stale: str) -> str:
+    """Two tables and two good views, plus one view per ``stale`` name whose base
+    table was dropped. SQLite allows that drop (PostgreSQL refuses it), and
+    reflecting such a view's columns raises ``OperationalError`` (measured
+    Session 265, on SQLAlchemy 2.0.49)."""
+    statements = [
+        "CREATE TABLE claims (claim_id INTEGER PRIMARY KEY)",
+        "CREATE TABLE policies (policy_id INTEGER PRIMARY KEY)",
+        "CREATE VIEW v_b_good AS SELECT claim_id FROM claims",
+        "CREATE VIEW v_y_good AS SELECT policy_id FROM policies",
+    ]
+    for name in stale:
+        statements += [
+            f"CREATE TABLE doomed_{name} (x INTEGER)",
+            f"CREATE VIEW {name} AS SELECT x FROM doomed_{name}",
+            f"DROP TABLE doomed_{name}",
+        ]
+    engine = sa.create_engine(f"sqlite:///{path}")
+    try:
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(sa.text(statement))
+    finally:
+        engine.dispose()
+    return f"sqlite:///{path}"
+
+
+@contextmanager
+def _connected(url: str) -> Iterator[ReadOnlyDB]:
+    db = ReadOnlyDB(url)
+    db.connect()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def _described(skipped: list[SkippedEntity]) -> list[tuple[str, str, str]]:
+    return [(s.namespace, s.name, s.entity_kind) for s in skipped]
+
+
+def test_without_a_collector_an_unreflectable_view_still_raises(tmp_path: Path) -> None:
+    """The default is unchanged. A caller that wants all or nothing — the eval
+    corpus, ``tests/eval/eval_corpus.py`` — passes no list and still gets the
+    error rather than a silently shorter result."""
+    with (
+        _connected(_warehouse(tmp_path / "w.db", "v_stale")) as db,
+        pytest.raises(sa.exc.OperationalError, match="no such table: main.doomed_v_stale"),
+    ):
+        db.get_information_schema()
+
+
+@pytest.mark.parametrize(
+    "stale", ["v_a_stale", "v_m_stale", "v_z_stale"], ids=["first", "middle", "last"]
+)
+def test_an_unreflectable_view_is_collected_and_the_rest_kept(
+    tmp_path: Path, stale: str
+) -> None:
+    """Session 265. The stale view goes first, between and after the good views,
+    so a walk that stops at the first skip, or checks only one end, cannot pass."""
+    skipped: list[SkippedEntity] = []
+    with _connected(_warehouse(tmp_path / "w.db", stale)) as db:
+        rows = db.get_information_schema(skipped=skipped)
+
+    assert [r["name"] for r in rows] == GOOD
+    assert _described(skipped) == [("main", stale, "view")]
+    assert isinstance(skipped[0].error, sa.exc.OperationalError)
+    assert f"no such table: main.doomed_{stale}" in str(skipped[0].error)
+
+
+def test_every_unreflectable_view_is_collected_in_order(tmp_path: Path) -> None:
+    """Before Session 265 only the FIRST was ever named: the error stopped the
+    walk, so a second stale view stayed invisible until the first was fixed."""
+    skipped: list[SkippedEntity] = []
+    with _connected(_warehouse(tmp_path / "w.db", "v_a_stale", "v_z_stale")) as db:
+        rows = db.get_information_schema(skipped=skipped)
+
+    assert [r["name"] for r in rows] == GOOD
+    assert _described(skipped) == [
+        ("main", "v_a_stale", "view"),
+        ("main", "v_z_stale", "view"),
+    ]
+
+
+@pytest.mark.parametrize("first", [True, False], ids=["ghost-first", "ghost-last"])
+def test_a_table_dropped_mid_walk_is_collected_as_a_table(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, first: bool
+) -> None:
+    """A table listed and then dropped before its columns are read — concurrent
+    DDL on a busy warehouse, and a failure any dialect can have. SQLAlchemy
+    reports it as ``NoSuchTableError``, which the walk must skip like any other
+    database error."""
+    listed = sa.engine.reflection.Inspector.get_table_names
+
+    def _with_ghost(self: Any, schema: str | None = None, **kw: Any) -> list[str]:
+        real = listed(self, schema=schema, **kw)
+        return ["ghost", *real] if first else [*real, "ghost"]
+
+    monkeypatch.setattr(sa.engine.reflection.Inspector, "get_table_names", _with_ghost)
+    skipped: list[SkippedEntity] = []
+    with _connected(_warehouse(tmp_path / "w.db")) as db:
+        rows = db.get_information_schema(skipped=skipped)
+
+    assert [r["name"] for r in rows] == GOOD
+    assert _described(skipped) == [("main", "ghost", "table")]
+    assert isinstance(skipped[0].error, sa.exc.NoSuchTableError)
+
+
+def test_a_non_database_error_is_never_collected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a database error is skippable. Anything else is a defect in this code
+    or in a dialect, and skipping it would hide the defect table by table."""
+    reflect = ReadOnlyDB._reflect_entity
+
+    def _broken_for_policies(
+        inspector: Any, schema: str, name: str, entity_kind: str
+    ) -> dict[str, Any]:
+        if name == "policies":
+            raise KeyError("referred_table")
+        return reflect(inspector, schema, name, entity_kind)
+
+    monkeypatch.setattr(ReadOnlyDB, "_reflect_entity", staticmethod(_broken_for_policies))
+    skipped: list[SkippedEntity] = []
+    with (
+        _connected(_warehouse(tmp_path / "w.db")) as db,
+        pytest.raises(KeyError, match="referred_table"),
+    ):
+        db.get_information_schema(skipped=skipped)
+    assert skipped == []
