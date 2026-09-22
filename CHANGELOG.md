@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-22 · [ad hoc] S265 claim: one unreflectable view no longer empties the whole inventory *(in progress)*
+- **Change:** Session 265 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the `BACKLOG.md` item *"One unreflectable view empties the whole inventory"* (filed Session 261), chosen by the operator at Phase 1 from a two-step picker. Scope is `ReadOnlyDB.get_information_schema` in `packages/data-agent/src/model_project_constructor_data_agent/db.py`, what `discovery.probe_information_schema` does with a skipped entity, and their tests. The reporting question goes to the operator before any code. The operator also ruled that `master` is pushed to `origin` at close-out.
+- **Commit/PR:** this commit
+- **Session:** S265 · **Verified:** n/a — ledger-only; the census and read-budget guards are run at the claim state before this commit
+- **Model:** Claude Opus 5.5
+
 ### 2026-09-22 · [ad hoc] S264 — close out: a ranking that cannot be applied is a ranking failure; the item is narrowed to the channel left open
 - **Change:** `SESSION_NOTES.md` carries the full Session 264 record: the two operator rulings, the HEAD measurements, the runtime check (the real console script and client over real HTTP to a local stand-in, parent against fix), the review and its three medium test gaps, and the mutation re-run. It also holds the Session 263 handoff evaluation (6/10) and this session's self-assessment (8/10). The 6/10 is mostly for `6360c2c`, which deleted Session 262's record heading: its body now sits headless inside Session 263's span, where the heading-counting guards cannot see it. That is reported for the operator, not repaired. `HANDOFFS.md`'s receipt is `status: complete`. `PROJECT_LEARNINGS.md` gains #281–#283: pytest's `pythonpath` ini option beats `PYTHONPATH` in a scratch-copy mutation harness, so run a baseline and a must-die control; put a bad element first, middle and last, and exercise the default path's mode; isolated workflow worktrees start at `origin/master`, not local HEAD. `CLAUDE.md`'s learnings count and size are re-measured (283; 331.1 KB). The claim entry below still reads *(in progress)*, as the ledger's rules require.
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `PROJECT_LEARNINGS.md`, `CLAUDE.md`, `CHANGELOG.md`

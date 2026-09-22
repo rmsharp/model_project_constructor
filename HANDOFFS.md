@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S265
+date: 2026-09-22
+status: pending
+active_task: One unreflectable view no longer empties the whole inventory -- BACKLOG.md "One unreflectable view empties the whole inventory", filed Session 261, chosen by the operator at Phase 1 from a two-step picker. The reporting question (how a skipped entity is surfaced; exit status of a partial inventory) goes to the operator with measurements before any code. Push master to origin at close-out (operator ruling).
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S264
 date: 2026-09-22
 status: complete

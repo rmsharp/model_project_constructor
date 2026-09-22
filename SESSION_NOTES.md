@@ -97,6 +97,18 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 265 Did
+**Deliverable:** **one unreflectable view no longer empties the whole inventory** — `BACKLOG.md`
+*"One unreflectable view empties the whole inventory"* (filed Session 261), chosen by the operator
+from a two-step picker at Phase 1 (area: `discover` fixes; item: this one). (IN PROGRESS)
+**Started:** 2026-09-22
+**Status:** Session claimed. Work beginning. The item's reporting question (how a skipped entity is
+surfaced, and the exit status of a partial inventory) goes to the operator, with measurements, before
+any code. The operator ruled to **push `master` to `origin` at close-out**.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 264 Did
 **Deliverable:** **a ranking that cannot be applied is a ranking failure — COMPLETE**, on the
 `BACKLOG.md` item *"A ranking that matches no entry is silent, and scores are not range-checked"*
