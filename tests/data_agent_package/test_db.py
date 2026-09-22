@@ -272,65 +272,85 @@ def test_redact_secrets_preserves_a_message_with_no_secret() -> None:
 # ---------------------------------------------------------------------------
 
 
+SPACED_SECRET = "hunter two"  # libpq requires quoting/bracing precisely BECAUSE of
+# the space -- a case built around plain SECRET (no space) cannot tell a quote-
+# or brace-aware value class from a bare `\S+` one that merely swallows the
+# quote/brace characters along with an unspaced secret and passes by accident.
+
+
 @pytest.mark.parametrize(
-    "text",
+    ("text", "secret"),
     [
-        f"DB_PASSWORD={SECRET}",
-        f"PGPASSWORD={SECRET}",
-        f"db_password={SECRET}",
-        f"access_token={SECRET}",
-        f"client_secret={SECRET}",
-        f"password='{SECRET}'",
-        f'password="{SECRET} tail"',
-        f"password = {SECRET}",
-        f"password: {SECRET}",
-        f"{{'password': '{SECRET}'}}",
-        f'{{"password": "{SECRET}"}}',
+        (f"DB_PASSWORD={SECRET}", SECRET),
+        (f"PGPASSWORD={SECRET}", SECRET),
+        (f"db_password={SECRET}", SECRET),
+        (f"access_token={SECRET}", SECRET),
+        (f"client_secret={SECRET}", SECRET),
+        (f"password='{SPACED_SECRET}'", SPACED_SECRET),
+        (f'password="{SPACED_SECRET}"', SPACED_SECRET),
+        (f"password = {SECRET}", SECRET),
+        (f"password: {SECRET}", SECRET),
+        (f"{{'password': '{SPACED_SECRET}'}}", SPACED_SECRET),
+        (f'{{"password": "{SPACED_SECRET}"}}', SPACED_SECRET),
     ],
     ids=[
         "prefixed-key-upper", "prefixed-key-pg", "prefixed-key-lower", "access_token",
-        "client_secret", "single-quoted", "double-quoted-with-space", "spaced-equals",
-        "colon-separator", "single-quoted-json", "double-quoted-json",
+        "client_secret", "single-quoted-with-space", "double-quoted-with-space",
+        "spaced-equals", "colon-separator", "single-quoted-json-with-space",
+        "double-quoted-json-with-space",
     ],
 )
-def test_redact_secrets_masks_the_item_leak_table(text: str) -> None:
-    """`BACKLOG.md`'s leak table, one row per case."""
-    assert SECRET not in redact_secrets(text)
+def test_redact_secrets_masks_the_item_leak_table(text: str, secret: str) -> None:
+    """`BACKLOG.md`'s leak table, one row per case. The quoted/braced rows use
+    `SPACED_SECRET`: a bare, unquoted value class stops at the first
+    whitespace, so only a secret containing one actually exercises the quote
+    handling the item is about (`password='x'` with no space would pass even
+    with quote support ripped out, because bare `\\S+` matches the quotes too)."""
+    assert secret not in redact_secrets(text)
 
 
 @pytest.mark.parametrize(
-    ("fn", "text", "also_gone"),
+    ("fn", "text", "secret", "also_gone"),
     [
         # Class 1: a userinfo USERNAME containing '@' (Azure / email-login,
         # which SQLAlchemy accepts unencoded) defeated a pattern that stops at
         # the FIRST '@' rather than the last one before the host.
-        (redact_secrets, f"connect to postgresql://svc@myserver:{SECRET}@host/db failed", None),
+        (redact_secrets, f"connect to postgresql://svc@myserver:{SECRET}@host/db failed",
+         SECRET, None),
         # Class 2: a TAIL leak -- the secret's own unescaped tail past a
-        # separator that does not itself open a fresh key=value pair.
-        (redact_secrets, f"password={SECRET}&y2", "y2"),
-        (redact_secrets, f"Driver={{X}};PWD={{{SECRET};y2}};Database=d", "y2"),
+        # character the value class stops at. The ODBC case uses a SPACED
+        # secret (the item's own example, `PWD={x1 y2};` -> `*** y2};`):
+        # without brace support the bare class stops at the space, same as
+        # the ampersand case stops at `&`. `secret` is deliberately just the
+        # part BEFORE the stop character -- the part a bare, unbraced/
+        # unescaped match still catches -- so the test cannot pass merely
+        # because the whole string never contained `secret` to begin with;
+        # `also_gone` is the tail past the stop character.
+        (redact_secrets, f"password={SECRET}&y2", SECRET, "y2"),
+        (redact_secrets, f"Driver={{X}};PWD={{{SPACED_SECRET}}};Database=d",
+         SPACED_SECRET.split()[0], SPACED_SECRET.split()[-1]),
         # Class 3: percent-encoded inside an `odbc_connect=` payload.
         (redact_db_url,
          "mssql+pyodbc:///?odbc_connect=DRIVER%3D%7BODBC+Driver+17%7D%3BUID%3Dsa%3B"
          f"PWD%3D{SECRET}%3B",
-         None),
+         SECRET, None),
         # Class 4: camel-cased / hyphenated keys outside the original fixed list.
-        (redact_secrets, f"AccessToken={SECRET}", None),
-        (redact_secrets, f"X-Amz-Signature={SECRET}", None),
-        (redact_secrets, f"passcode={SECRET}", None),
+        (redact_secrets, f"AccessToken={SECRET}", SECRET, None),
+        (redact_secrets, f"X-Amz-Signature={SECRET}", SECRET, None),
+        (redact_secrets, f"passcode={SECRET}", SECRET, None),
     ],
     ids=["userinfo-at-in-username", "tail-after-ampersand", "tail-inside-odbc-brace",
          "percent-encoded-odbc-connect", "camel-cased-key", "hyphenated-key", "passcode-key"],
 )
 def test_redact_secrets_masks_the_four_further_classes(
-    fn: object, text: str, also_gone: str | None
+    fn: object, text: str, secret: str, also_gone: str | None
 ) -> None:
     """The item's second table: four classes a second reviewer measured, not
     themselves in the leak table. `also_gone`, where given, is the secret's
-    own tail -- the shape that a mask stopping at the first separator leaves
-    published."""
+    own tail -- the shape that a mask stopping at the first stop character
+    leaves published."""
     out = fn(text)  # type: ignore[operator]
-    assert SECRET not in out
+    assert secret not in out
     if also_gone is not None:
         assert also_gone not in out
 
