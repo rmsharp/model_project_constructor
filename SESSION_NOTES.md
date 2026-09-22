@@ -97,7 +97,152 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
-### What Session 262 Did
+### What Session 263 Did
+**Deliverable:** **a readiness verdict on migrating this repository into a private environment —
+answered: not ready, one blocker, cleared the same session.** The operator asked it as *"a question
+and not a request for the migration"*; no migration step was performed. Then, on the operator's
+instructions, a push and this close-out. **Started / completed:** 2026-09-21 (UTC). **Commits:**
+`26e84d9` (the punch list into `BACKLOG.md`, plus the push's ledger entry) and this close-out.
+**Non-commit action:** pushed `master` to `origin`, `f987a6f..0adc8ae`. **Ledger:** one entry per
+action, three in all.
+
+**Two protocol steps were skipped, and neither was necessary:** Phase 0's report-and-STOP was
+compressed into a one-line update, and **Phase 1B never happened** — no stub, no `pending` receipt —
+because I read a question as not a task. It was one: it produced a 13-agent audit and then a push,
+and a crash mid-audit would have left no trace. See the Self-Assessment.
+
+#### How it was answered
+
+**Interpretation:** the plan's own — `docs/planning/enterprise-migration.md` §1.2, a one-time
+`git clone --mirror` of the public `origin` into an enterprise host with no sync afterwards. So
+readiness is the readiness of `origin`, not of this working tree. **Method:** workflow
+`wf_a5108b71-83a`. Six read-only auditors covered plan/backlog status, git topology, secrets and
+data, licensing, build/test health, and host coupling/runtime gaps. Each was followed by one
+adversarial verifier briefed to refute every blocker, high and medium finding and to re-check three
+verified-good claims. A synthesis came last: 13 agents, 0 failed, ~1.7 M subagent tokens, 26 min.
+**Before reporting I re-derived the headlines first-hand:** `git ls-remote origin` (tip `f987a6f`,
+10 behind), `docs/methodology/README.md:361-369`, tags local vs remote,
+`git branch -a --contains 4795c29`, `scripts/publish_wiki.sh:48`, both workflows' `on:` blocks, and
+that no unpushed path matched `publish-tutorial.yml`'s filter.
+
+#### What it found — the punch list lives in `BACKLOG.md`'s *Enterprise migration* item
+
+- **Blocker, cleared by the push:** 10 local-only commits (Sessions 261–262, `1e53c20`'s
+  `redact_secrets` fix among them). That included 61 tests: CI on `f987a6f` ran 1,420, and this tree
+  runs 1,481.
+- **Do on the original before forking (five):**
+  - the methodology README's superseded licence text, plus three `NOTICE` corrections;
+  - `4795c29`, which exists only locally;
+  - the missing `v0.3.0` tag;
+  - the stale B2 secrets packet;
+  - a parity pre-flight for C4.
+- **C4-time facts the plan omits:**
+  - a squash import or a signed-history rewrite turns all 11 ledger proofs red;
+  - `push --mirror` carries `refs/pull/*` and `gh-pages`;
+  - Actions on a GHES destination;
+  - `publish_wiki.sh`'s fallback to the personal wiki, and a "fails closed" check that runs the
+    publisher;
+  - stale figures;
+  - arm 1's 243 hits against "→ 0".
+- **The clone's own work:** Phase C2 was never started. The plan says it is not a gate, but
+  `BACKLOG.md` and the plan header both said "only the fork remains".
+- **Verified ready:**
+  - **Tests:** 1,481 passed, 9 skipped, 98.02% coverage, identical on Python 3.11 and 3.14 and on a
+    fresh clone, with no network. `ruff` and `mypy` (68 files) are clean.
+  - **Proofs:** all 11 green in both modes.
+  - **Secrets:** gitleaks over 579 commits found 1 known false positive, and 0 with the allowlist.
+    `.env`, `intake_sessions.db` and `.orchestrator/` were never committed.
+  - **Licensing and history:** MIT with one human author; Python dependencies copyleft-free (B3
+    holds); A1–A4 containment holds (`/audits/` → 404); history is 15,459 KB, with no LFS or
+    submodules.
+- **Refuted or corrected by the verifiers:**
+  - LIC-08's "no copyleft anywhere" is false: `gh-pages` and `mkdocs-material` bundle
+    `wordcut.js`, which upstream licenses as LGPL-3.0.
+  - HIC-01/02 were downgraded to C4-time.
+  - PB-05/06 were downgraded to low.
+
+**A correction to what I told the operator.** My verdict said *"no copyleft dependencies remain after
+the LGPL removal in Phase B3."* The synthesis had said *"Python package metadata declares no
+copyleft"* and, separately, that `gh-pages` bundles an LGPL-3.0 file. I dropped the qualifier, and
+the verifier's `holds=false` on LIC-08 sat in output I had not read. It was corrected to the
+operator at close-out and in the `BACKLOG.md` item. This is a recurrence of learnings #131 and #257.
+
+#### The push
+
+A fast-forward (`git push origin master`); `feat/bedrock-mantle-migration` was deliberately left
+alone. Only `CI` fired: run 35683413293, all six jobs green, and its log reads
+`1481 passed, 9 skipped`. `publish-tutorial.yml` did not fire, and neither did the wiki hook.
+
+#### Verification
+
+The census and read-budget guards passed 82/82 before each commit. No code changed, so the full
+suite was not re-run after the audit's own run. There is no runtime surface to smoke-test:
+docs-only.
+
+### Session 262 Handoff Evaluation (by Session 263)
+
+**Score: 8/10.**
+- **+** What's-next #1 — *"this session's commits plus the four inherited from Session 261 are
+  unpushed"* — was exactly true (4 + 6 = 10, checked with `git log f987a6f..0adc8ae`), and it turned
+  out to be the question's only blocker.
+- **+** Its verification figures (1,481 / 9 / 98.02%) reproduced in the audit's run and again in CI.
+- **+** Every dashboard HIGH flag was already explained by `CLAUDE.md`, so orientation spent nothing
+  there.
+- **−** It framed pushing as routine and did not connect unpushed commits to the pending fork of
+  `origin`, which is what made them a blocker.
+- **−** It said nothing about the migration's real state (the stale "only the fork remains", C2
+  never run). Both predate it by some 55 sessions, so this is a small deduction.
+- **ROI:** high, for the one line that mattered.
+
+### Session 263 Self-Assessment
+
+**Score: 6/10.**
+- **+** Re-derived the synthesis's headline claims first-hand before reporting any of them.
+- **+** Before pushing, proved the push could fire neither the public deploy nor the wiki publish.
+  After it, watched CI to green and read the pytest line from the run's own log.
+- **+** Filed the punch list into the backlog item rather than leaving it in a what's-next list
+  (#180), and rewrote that item's index row instead of appending a new one.
+- **−** **Phase 1B skipped.** A question that spends 13 agents and ends in a push is a task.
+- **−** **Phase 0's report-and-STOP was compressed** into a single line.
+- **−** **Overstated copyleft to the operator**, a paraphrase that dropped a qualifier (#257).
+- **−** Relayed the synthesis without first reading the verifiers' `holds=false` verdicts. That is a
+  recurrence of learnings #45 and #167: the refutations are the part of an adversarial run most
+  likely to change the answer.
+- **Decay term:** one index row rewritten in place, with no growth in rows. Nothing else could be
+  reduced.
+
+**What's next.**
+1. **Two commits are unpushed again** (`26e84d9` and this close-out). That reopens the blocker in its
+   trivial form. Pushing is the operator's call.
+2. **The five before-fork fixes in `BACKLOG.md`'s *Enterprise migration* item** are each small.
+   Only #1 (the README licence text and `NOTICE`) needs a ruling first — see gotcha 1. #2 (push or
+   drop `4795c29`) and #3 (tag `v0.3.0`) are operator actions, not sessions.
+3. **Unchanged from Session 262:** Session 261's two cheap items (*"One broken view empties the whole
+   table inventory"*, *"A ranking that matches nothing is silent"*); the `--db-url` exit-0 ruling;
+   `PROJECT_LEARNINGS.md` refused by a default `Read`; the tenth trim past 196,608 B.
+
+**Key files** (read at this close-out).
+- `BACKLOG.md:53`: the rewritten index row.
+- `BACKLOG.md:787`–`:819`: the audit block in the *Enterprise migration* item.
+- `docs/planning/enterprise-migration.md:1266`–`:1391`: Phase C4, whose text the block supplements
+  and does not replace.
+- `docs/methodology/README.md:361`–`:369`: the superseded licence.
+- `NOTICE:28` and `NOTICE:40`: the two wrong statements.
+- `scripts/publish_wiki.sh:48`: the `WIKI_CLONE` fallback.
+
+**Gotchas.**
+1. **`docs/methodology/README.md` is an orphan inside the "do not edit synced files" set.** The
+   methodology repository has no `docs/methodology/README.md`, only a root `README.md`, so `bin/sync`
+   can never refresh it. Fixing it means deleting it or rewriting its licence section by hand. Either
+   one changes a file `NOTICE` §1 and `CLAUDE.md` count among the 13 synced `docs/methodology/`
+   files. Rule on that before editing.
+2. **Never execute `scripts/publish_wiki.sh` to test "fails closed."** With `WIKI_CLONE` empty it
+   falls back to the personal public wiki (`:48`). The plan's own C4/C5 check runs it.
+3. **The plan's C4/C5 figures are stale.** Re-derive them at C4 time by running the commands; never
+   quote the plan's numbers.
+4. **Readiness for this fork is readiness of `origin`** (#280). Run `git ls-remote origin` before any
+   claim about what the clone will contain.
+
 **Deliverable:** **`redact_secrets` stops failing open on shapes inside its own claimed coverage —
 COMPLETE**, closing the item filed in Session 261, picked by the operator from a four-option picker
 at Phase 1. **Started / completed:** 2026-09-21 (UTC). **Commits:** `0d76da2` (claim), `69c5aba` (an

@@ -174,6 +174,30 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S263
+date: 2026-09-21
+status: complete
+self_score: 6
+predecessor_score: 8
+active_task: Readiness verdict on migrating the repository into a private environment (the plan's one-time git clone --mirror of the public origin into an enterprise host) -- answered, not ready, one blocker, cleared the same session by the operator's push. The operator asked it as a question, not a migration request; no migration step was performed. The five before-fork fixes, the C4-time facts the plan omits, and the never-started Phase C2 are now in BACKLOG.md's Enterprise migration item.
+what_was_done: A 13-agent read-only workflow (wf_a5108b71-83a: six dimension auditors, one adversarial verifier each, one synthesis; 0 failed), with the headline claims re-derived first-hand before reporting. On the operator's instruction, pushed master to origin f987a6f..0adc8ae (a non-commit action; CI run 35683413293 green on all six jobs, 1481 passed / 9 skipped in its log; publish-tutorial and the wiki hook did not fire; feat/bedrock-mantle-migration deliberately not pushed). 26e84d9 files the punch list into BACKLOG.md's Enterprise migration item and index row, and records the push in CHANGELOG.md. The last commit is this close-out: the record, learning #280, this receipt, CLAUDE.md's learnings count and size. Phase 1B was skipped (no stub, no pending receipt) -- a deviation, stated in the record.
+next_steps: Two commits (26e84d9 and this close-out) are unpushed again, which reopens the blocker in its trivial form -- pushing is the operator's call. Then the five before-fork fixes in BACKLOG.md's Enterprise migration item: (1) docs/methodology/README.md's superseded licence text plus three NOTICE corrections -- needs a ruling first, see gotchas; (2) push or deliberately drop local-only 4795c29; (3) tag v0.3.0; (4) refresh audits/2026-07-28-b2-import-readiness.md; (5) add a local-vs-origin parity pre-flight to Phase C4. (2) and (3) are operator actions, not sessions. Session 262's carried items are unchanged.
+key_files: BACKLOG.md:53 (the rewritten index row), BACKLOG.md:787 (the Session 263 audit block, through :819), docs/planning/enterprise-migration.md:1266 (Phase C4, through :1391), docs/methodology/README.md:361 (the superseded licence, through :369), NOTICE:28 and NOTICE:40 (the two wrong statements), scripts/publish_wiki.sh:48 (the WIKI_CLONE fallback to the personal wiki)
+gotchas: docs/methodology/README.md is an orphan inside the do-not-edit synced set -- the methodology repository has no docs/methodology/README.md (only a root README.md), so bin/sync can never refresh it; deleting or rewriting it changes a file NOTICE section 1 and CLAUDE.md count among the 13 synced docs/methodology/ files, so rule on that first. Never execute scripts/publish_wiki.sh to test "fails closed" -- with WIKI_CLONE empty it falls back to the personal public wiki (:48), and the plan's own C4/C5 check runs it. The plan's C4/C5 figures are stale (wiki 44 commits / 25 pages, 188 intra-wiki links) -- re-derive by running the commands. Readiness for this fork is readiness of origin (learning #280): git ls-remote origin before any claim about what the clone will contain. Python runtime deps are copyleft-free, but gh-pages and mkdocs-material bundle wordcut.js, which upstream licenses LGPL-3.0 -- do not say "no copyleft anywhere".
+runtime_smoke: n/a -- docs-only; no runtime behaviour changed. Evidence for the verdict: the audit's own run of the full suite (1,481 passed / 9 skipped / 98.02%), ruff, mypy (68 files) and all 11 proofs in both modes; CI run 35683413293 green on 0adc8ae after the push. Census and read-budget guards 82/82 before each commit. .quality-gates.json declares no gates, so quality_ratchet.py has nothing to run.
+changelog_ref: CHANGELOG.md "### 2026-09-21 · [ad hoc] S263 — close out: the repository is one push from fork-ready; the punch list is filed"
+commit: pending
+```
+
+Session 263 ran on Claude Opus 5. Score 6/10:
+- **+** The headline claims were re-derived first-hand before reporting.
+- **+** The push was proven unable to fire a deploy, then watched to green in CI.
+- **+** The punch list was filed rather than carried in a what's-next list.
+- **−** Phase 1B was skipped.
+- **−** The Phase 0 report was compressed to one line.
+- **−** A copyleft claim reached the operator with its qualifier dropped (#257). It was corrected at close-out.
+
+```handoff
 session: S262
 date: 2026-09-21
 status: complete

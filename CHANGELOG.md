@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-21 · [ad hoc] S263 — close out: the repository is one push from fork-ready; the punch list is filed
+- **Change:** `SESSION_NOTES.md` carries the full Session 263 record — the readiness verdict and its method, what the 13-agent audit found and what its verifiers refuted, a correction to one overstated claim made to the operator (*"no copyleft dependencies remain"* dropped the qualifier *"Python package metadata"*; `gh-pages` and `mkdocs-material` bundle an LGPL-3.0 `wordcut.js`), the push, the Session 262 handoff evaluation (8/10) and this session's self-assessment (6/10). **Phase 1B was skipped** — no stub, no `pending` receipt — and the record says so. `HANDOFFS.md`'s receipt is written `status: complete` directly. `PROJECT_LEARNINGS.md` gains #280: a one-time mirror of `origin` is ready when `origin` is, so fork readiness starts with `git ls-remote` parity and CI on that SHA. `CLAUDE.md`'s learnings count and size are re-measured (280; 328.3 KB).
+- **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `PROJECT_LEARNINGS.md`, `CLAUDE.md`, `CHANGELOG.md`
+- **Session:** S263 · **Verified:** census and read-budget guards run after the record was written; every line number in the record and the receipt read off `grep -n` at this close-out; the agent count (13, 0 failed) taken from the workflow's own `agent_count`, not from memory (#277). **Decay term:** one `BACKLOG.md` index row rewritten in place, no row added; nothing in a mandated-read file could be reduced.
+- **Model:** Claude Opus 5
+
 ### 2026-09-21 · [ad hoc] S263 — the enterprise-migration item carries the readiness audit's punch list
 - **Change:** `BACKLOG.md`'s *Enterprise migration* index row and item no longer say "only the fork remains". The item gains the Session 263 readiness audit's result: the one blocker (unpushed commits) and its clearing, five fixes to land on the original before a fork (the methodology README's superseded no-redistribution licence text with three `NOTICE` corrections; local-only `4795c29`; the missing `v0.3.0` tag; the stale B2 secrets packet; a local-vs-`origin` pre-flight for Phase C4), the C4-time facts the plan does not carry (ledger proofs vs a history rewrite, `refs/pull/*` and `gh-pages` under `push --mirror`, `publish_wiki.sh:48`'s personal-wiki fallback, stale figures, arm 1's 243 hits), and that Phase C2 was never started. The plan itself is not edited.
 - **Commit/PR:** this commit — `BACKLOG.md`, `CHANGELOG.md`
