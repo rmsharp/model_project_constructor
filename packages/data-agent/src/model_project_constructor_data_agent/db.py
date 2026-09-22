@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import sqlalchemy as sa
@@ -146,12 +146,15 @@ class SkippedEntity:
     SQLite and ``UnreflectableTableError`` on MySQL 8.4 (wrapping error 1356);
     a table dropped while the walk ran gives ``NoSuchTableError`` (SQLite and
     PostgreSQL 17). PostgreSQL refuses to drop a table a view depends on.
+
+    ``error`` is left out of the ``repr``: a driver's message can echo the
+    connection string, and a caller that logs its list would print it unredacted.
     """
 
     namespace: str
     name: str
     entity_kind: str
-    error: sa.exc.SQLAlchemyError
+    error: sa.exc.SQLAlchemyError = field(repr=False)
 
 
 def sql_dialect_from_url(url: str) -> str | None:
@@ -223,6 +226,22 @@ def sql_dialect_from_url(url: str) -> str | None:
         return None
 
 
+def _answers_select_1(engine: sa.Engine) -> bool:
+    """Whether a fresh connection can still run ``SELECT 1``.
+
+    Tells "this entity cannot be reflected" from "the database has gone away"
+    for :meth:`ReadOnlyDB.get_information_schema`. Any exception at all counts
+    as gone: the caller then re-raises the reflection error, so a doubtful
+    answer fails loudly rather than skipping.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(sa.text("SELECT 1"))
+    except Exception:
+        return False
+    return True
+
+
 class ReadOnlyDB:
     """Thin SQLAlchemy wrapper used by EXECUTE_QC."""
 
@@ -292,16 +311,26 @@ class ReadOnlyDB:
         collected. Any other exception is a defect, not a database fault, and
         propagates; so does an error listing the schemas, tables or views.
 
+        **A lost connection is never a skip** (Session 265's review, measured on
+        PostgreSQL 17). Without these two checks it would be collected like any
+        other database error — a healthy table blamed for a dropped connection,
+        or every entity after an outage — and ``discover --allow-skipped`` would
+        exit 0 over it. So: an error SQLAlchemy flags as a disconnect is retried
+        once on a fresh connection, and propagates if it happens again; and any
+        other error is collected only if a fresh ``SELECT 1`` — :meth:`connect`'s
+        own test — still succeeds, and propagates if it does not.
+
         Without ``skipped`` nothing is collected, and the first error of any
         kind propagates, as it always has. Raises :class:`RuntimeError` if
         called before :meth:`connect`.
         """
-        if self._engine is None:
+        engine = self._engine
+        if engine is None:
             raise RuntimeError(
                 "ReadOnlyDB.get_information_schema called before connect()"
             )
 
-        inspector = sa.inspect(self._engine)
+        inspector = sa.inspect(engine)
         all_schemas = inspector.get_schema_names()
         if schemas is not None:
             target_schemas = [s for s in all_schemas if s in schemas]
@@ -312,11 +341,20 @@ class ReadOnlyDB:
 
         result: list[dict[str, Any]] = []
 
-        def reflect(schema: str, name: str, entity_kind: str) -> None:
+        def reflect(schema: str, name: str, entity_kind: str, *, retry: bool = True) -> None:
             try:
                 result.append(self._reflect_entity(inspector, schema, name, entity_kind))
             except sa.exc.SQLAlchemyError as e:
                 if skipped is None:
+                    raise
+                if isinstance(e, sa.exc.DBAPIError) and e.connection_invalidated:
+                    if not retry:
+                        raise
+                    # The pool has discarded that connection, so this attempt
+                    # gets a fresh one.
+                    reflect(schema, name, entity_kind, retry=False)
+                    return
+                if not _answers_select_1(engine):
                     raise
                 skipped.append(SkippedEntity(schema, name, entity_kind, e))
 

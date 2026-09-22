@@ -601,3 +601,106 @@ def test_a_non_database_error_is_never_collected(
     ):
         db.get_information_schema(skipped=skipped)
     assert skipped == []
+
+
+def _outage_at(monkeypatch: pytest.MonkeyPatch, target: str, directory: Path) -> None:
+    """Make the database unreachable just before ``target`` is reflected.
+
+    Disposing the pool drops every open connection, and moving the database's
+    directory away makes each new one fail with SQLite's "unable to open
+    database file" — a real ``OperationalError`` from a real connect, which is
+    what a warehouse that goes away mid-walk raises for every entity after it."""
+    reflect = ReadOnlyDB._reflect_entity
+
+    def _reflect(inspector: Any, schema: str, name: str, entity_kind: str) -> dict[str, Any]:
+        if name == target:
+            inspector.bind.dispose()
+            directory.rename(directory.with_name(directory.name + "_gone"))
+        return reflect(inspector, schema, name, entity_kind)
+
+    monkeypatch.setattr(ReadOnlyDB, "_reflect_entity", staticmethod(_reflect))
+
+
+@pytest.mark.parametrize(
+    ("target", "skipped_before"),
+    [("policies", []), ("v_y_good", [("main", "v_a_stale", "view")])],
+    ids=["at-a-table", "at-the-last-view"],
+)
+def test_a_database_lost_mid_walk_raises_rather_than_skipping(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    target: str,
+    skipped_before: list[tuple[str, str, str]],
+) -> None:
+    """Session 265's review measured this on PostgreSQL 17: once the database
+    went away, every entity after it was collected as "could not be reflected",
+    so ``discover --allow-skipped`` exited 0 over an outage. An entity is
+    skipped only while a fresh ``SELECT 1`` still succeeds. The genuine skip
+    before the outage stays collected; the outage itself propagates."""
+    directory = tmp_path / "warehouse"
+    directory.mkdir()
+    url = _warehouse(directory / "w.db", "v_a_stale")
+    _outage_at(monkeypatch, target, directory)
+    skipped: list[SkippedEntity] = []
+    with (
+        _connected(url) as db,
+        pytest.raises(sa.exc.OperationalError, match="unable to open database file"),
+    ):
+        db.get_information_schema(skipped=skipped)
+    assert _described(skipped) == skipped_before
+
+
+def _disconnect() -> sa.exc.OperationalError:
+    return sa.exc.OperationalError(
+        statement="SELECT 1",
+        params={},
+        orig=Exception("server closed the connection unexpectedly"),
+        connection_invalidated=True,
+    )
+
+
+@pytest.mark.parametrize("disconnects", [1, 2], ids=["once", "twice"])
+def test_a_dropped_connection_is_retried_once_and_never_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, disconnects: int
+) -> None:
+    """Measured by the review on PostgreSQL 17: killing the probe's backend
+    during the walk got a perfectly good table collected as skipped. Only that
+    connection was lost, so ``SELECT 1`` alone cannot tell; SQLAlchemy's own
+    disconnect flag can. One disconnect is retried and the table is kept; a
+    second propagates."""
+    reflect = ReadOnlyDB._reflect_entity
+    failures = {"left": disconnects}
+
+    def _flaky_policies(
+        inspector: Any, schema: str, name: str, entity_kind: str
+    ) -> dict[str, Any]:
+        if name == "policies" and failures["left"]:
+            failures["left"] -= 1
+            raise _disconnect()
+        return reflect(inspector, schema, name, entity_kind)
+
+    monkeypatch.setattr(ReadOnlyDB, "_reflect_entity", staticmethod(_flaky_policies))
+    skipped: list[SkippedEntity] = []
+    with _connected(_warehouse(tmp_path / "w.db")) as db:
+        if disconnects == 1:
+            rows = db.get_information_schema(skipped=skipped)
+            assert [r["name"] for r in rows] == GOOD
+        else:
+            with pytest.raises(sa.exc.OperationalError, match="server closed"):
+                db.get_information_schema(skipped=skipped)
+    assert skipped == []
+
+
+def test_a_skipped_entity_repr_hides_the_error() -> None:
+    """A driver's message can echo the connection string; a caller that logs
+    its ``skipped`` list must not print it."""
+    entity = SkippedEntity(
+        "main",
+        "v_stale",
+        "view",
+        sa.exc.OperationalError(
+            statement="", params={}, orig=Exception(f"postgresql://u:{SECRET}@h/db")
+        ),
+    )
+    assert SECRET not in repr(entity)
+    assert "v_stale" in repr(entity)
