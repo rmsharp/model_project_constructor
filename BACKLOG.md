@@ -52,7 +52,7 @@ rows below it are the smaller residue that closing it exposed.
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | One broken view empties the whole table inventory | Found Session 261. `discover` lists a database's tables by asking the driver about each one in turn, with no per-table safety net. One view whose underlying table was dropped makes the whole listing fail, so a database with hundreds of good tables reports **zero**. Since Session 261 it is loud at the terminal — a WARNING on stderr and exit 1; before, only a note inside the file said so, and the command exited 0. | Small, one function in `db.py`. Needs a decision on how a skipped table is reported. |
-| A ranking that matches nothing is silent | Found Session 261. If the model ranks tables under names that do not match exactly (`claims` for `main.claims`), or returns an empty list, no table gets a score, nothing is logged, and the command exits 0 — the one ranking failure Session 261's fix cannot see, because nothing raises. Scores are also not range-checked: `NaN` is written to the file as a non-standard JSON literal. | Small, one file. Treat "matched none" as a ranking failure; decide on `NaN`/range. |
+| A `--request-context` with a stray byte writes a file that will not reload | What is left of Session 261's *"a ranking that matches nothing is silent"*, which Session 264 closed: a ranking that names no table, a score outside 0.0–1.0 and a model reason that cannot be written now each fail the ranking and exit 1. One channel was left open by operator ruling: if the text passed as `--request-context` holds a byte that is not valid UTF-8, the command exits 0 and writes a file the pipeline then refuses to load. | Small — reject it in `discover` before probing — but it changes an exit status, so it needs a ruling. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -389,32 +389,32 @@ and the inventory silently omits the entity — which is the unlabelled partial 
 docstring promises never to return. Decide that first. `test_one_bad_table_fails_the_whole_probe`
 pins today's all-or-nothing behaviour at the probe level and will need to move with it.
 
-### A ranking that matches no entry is silent, and scores are not range-checked
+### A `--request-context` that cannot be written as UTF-8 writes a file that will not reload
 
-**Found Session 261**, measured at HEAD and again after that session's fix — which does not reach
-it, because nothing raises. `probe_information_schema` joins rankings to entries on a byte-identical
-`fully_qualified_name`. A ranker that returns `claims` for `main.claims`, or returns `[]`, leaves
-every `relevance_score` `None` with `notes=None`, no WARNING, and `discover --rank-with-llm` **exits
-0** — the operator ruling of Session 261 (a degraded inventory exits 1) does not fire. Downstream,
-`anthropic_client.py` sends only the top `MAX_INVENTORY_ENTRIES_IN_PROMPT` (20) entries by score, so
-above 20 tables an unranked inventory can drop the relevant table from the prompt.
+**What remains of an item filed in Session 261** (*"A ranking that matches no entry is silent, and
+scores are not range-checked"*). **Session 264 closed the rest of it**, on two operator rulings.
+A ranking that names no entry, a score applied to an entry that is not a finite number in
+[0.0, 1.0] (rejected, never clamped), and an LLM reason carrying a lone surrogate are each now an
+ordinary ranking failure (`RankingMatchedNoEntryError`, `InvalidRelevanceScoreError`,
+`UnwritableEntryError`) with exit 1. Reflected text carrying one is now a probe failure. The
+second ruling closed the ranking and reflection channels **and deliberately left this one open**.
 
-**Sketch, one file:** inside `discovery._ranked`, raise `ValueError` when the ranking map matches
-**none** of the entries — it then becomes an ordinary ranking failure, labelled and exit 1. Partial
-rankings must stay legal (`test_partial_ranking_leaves_unranked_entries_none`). Second half, same
-function: rankings are re-validated against the schema, which catches a non-numeric score but not
-`NaN`, `inf`, `7.5` or `-1.0` — `relevance_score` is a bare `float | None` — and `cli.discover`
-writes with `json.dumps`, which emits the non-RFC literals `NaN`/`Infinity`. The prompt asks for
-0.0–1.0; nothing enforces it. Rule on reject-vs-clamp before coding.
+**Measured Session 264, through the real console script:** `model-data-agent discover --db-url …
+--output f.json --request-context "$(printf 'claims \xff')"` exits **0** and writes
+`"request_context": "claims \udcff"`. On POSIX, Python decodes command-line bytes with
+`surrogateescape`, so the stray byte arrives as a lone surrogate. `json.dumps` escapes it on write,
+and `DataSourceInventory.model_validate_json` — the orchestrator's loader,
+`src/model_project_constructor/orchestrator/adapters.py:220` — then rejects the file. `notes` is
+`null`, so nothing on stderr says so. A library caller can pass the same thing.
 
-**Third half, same family — a file that exits 0 and then fails to reload.** Session 261 scrubs lone
-surrogates from the *note*; three other channels still carry one into the file untouched: an
-LLM-supplied `relevance_reason` (a reply that cuts an escaped emoji pair, `"…\ud83d"`, passes
-`_extract_json`, `TableRanking` and schema validation), a reflected table or column **name**, and the
-caller's `request_context`. Measured for the first: `notes=None`, exit 0, and
-`DataSourceInventory.model_validate_json` — the orchestrator's loader — rejects the file. Not a
-regression (HEAD behaved the same). Cheapest guard: `model_dump_json()` each rebuilt entry inside
-`_ranked`, so a serialization error becomes an ordinary labelled ranking failure.
+**Sketch:** have `cli.discover` reject a `--request-context` that does not encode as UTF-8 with a
+usage error (exit 2), before connecting. Or scrub it with `encode("utf-8", "replace")` as
+`discovery._safe_message` does for notes. Rejecting changes an exit status, so rule on
+reject-vs-scrub first. The library side is separate: `probe_information_schema` validates
+`request_context` only while the *result* is built, so a check there should run before stage 1.
+Note also that its docstring's *"a non-`str` `request_context` still raises"* is imprecise.
+UTF-8-valid `bytes` are coerced to `str` and accepted (measured by the Session 264 review, not
+introduced by it).
 
 ### No circuit breaker on a systematically-failing live sweep
 

@@ -221,14 +221,22 @@ inventory from a good one. The single `ProducerMetadata.notes` field says which;
 it is `null` on a healthy run.
 
 - **Reflection fails** (permission denied, unsupported dialect, one table or
-  view that cannot be reflected): `entries` is empty and `notes` begins
+  view that cannot be reflected, or reflected text — a name, a column type —
+  that cannot be written as UTF-8): `entries` is empty and `notes` begins
   `information_schema probe failed:` followed by the error's type and message,
   on one line, with any URL password masked (best-effort).
 - **`--rank-with-llm` was requested and ranking fails** (no credentials, a
-  malformed or truncated reply): the reflected tables are **kept, all unranked**,
-  and `notes` begins `LLM relevance ranking failed` and names the error's
-  **type only** — the message is never written to the file, which travels
-  downstream.
+  malformed or truncated reply, a reply that names none of the discovered
+  tables exactly, a score that is not a finite number from 0.0 to 1.0 on a
+  table it names, or a reason that cannot be written as UTF-8): the reflected
+  tables are **kept, all unranked**, and `notes` begins `LLM relevance ranking
+  failed` and names the error's **type only** — the message is never written
+  to the file, which travels downstream. The type says which: for the three
+  replies above it is `RankingMatchedNoEntryError`,
+  `InvalidRelevanceScoreError` or `UnwritableEntryError`. A score is rejected,
+  never clamped — a reply on a 0–10 scale would clamp to all 1.0 and lose its
+  order. A reply that ranks only some of the tables is **not** a failure: the
+  rest stay unranked.
 
 Both also log one WARNING, carrying the cause, on the
 `model_project_constructor_data_agent.discovery` logger — with no logging
@@ -437,8 +445,10 @@ curated-producer example.
   failure returns the reflected entries unranked, and `notes` labels each
   (Example 4). A non-`str` `request_context` still raises. `notes` being `null`
   does not mean every entry is ranked — a ranker that simply returns no ranking
-  for a table raises nothing. The library never exits; turning a degraded
-  inventory into exit 1 is the `discover` command's job.
+  for a table raises nothing — but when a ranker ran, it does mean at least one
+  entry is ranked and every score applied is a finite number from 0.0 to 1.0.
+  The library never exits; turning a degraded inventory into exit 1 is the
+  `discover` command's job.
 
 ## Decoupling guarantee
 
