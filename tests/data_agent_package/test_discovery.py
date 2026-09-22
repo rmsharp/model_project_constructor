@@ -817,6 +817,96 @@ class TestUnreflectableEntitiesAreSkipped:
             "information_schema probe failed: KeyError: "
         )
 
+    def test_a_skipped_table_is_named_as_a_table(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Every other test here skips a view, so a kind written as ``view``
+        regardless would pass them all (found by the review's mutation pass)."""
+        ghost = SkippedEntity("main", "ghost", "table", sa.exc.NoSuchTableError("main.ghost"))
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(_SkippingDB([GOOD_ROW], [ghost]))  # type: ignore[arg-type]
+        assert inv.producers[0].notes == _skip_note(2, "table 'main.ghost' (NoSuchTableError)")
+        assert "skipped table 'main.ghost'" in caplog.text
+
+    def test_a_long_name_is_written_in_full(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Measured by the review on MySQL: cut to 80 characters, two views whose
+        long names differ only in the middle printed identically."""
+        name = "v_2023_" + "subrogation_recovery_by_adjuster_region_" * 5
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _SkippingDB([GOOD_ROW], [_skipped_view(name)])  # type: ignore[arg-type]
+            )
+        assert f"'main.{name}'" in (inv.producers[0].notes or "")
+        assert f"'main.{name}'" in caplog.text
+
+    def test_a_skipped_entity_without_a_namespace_is_named_like_an_entry(self) -> None:
+        """One rule for both, ``_fqn``: an entry without a namespace is named by
+        its bare name, and so is a skipped one."""
+        inv = probe_information_schema(
+            _SkippingDB(  # type: ignore[arg-type]
+                [GOOD_ROW], [SkippedEntity("", "v_bare", "view", _db_error("x"))]
+            )
+        )
+        assert inv.producers[0].notes == _skip_note(2, "view 'v_bare' (OperationalError)")
+
+    def test_a_malformed_skip_report_is_a_probe_failure(self) -> None:
+        """What ``db`` reports as skipped is its output as much as the rows are, so
+        a malformed report must not escape the probe's "never raises"."""
+        inv = probe_information_schema(_SkippingDB([GOOD_ROW], [object()]))  # type: ignore[arg-type,list-item]
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: AttributeError: "
+        )
+
+    def test_a_probe_that_fails_after_a_skip_logs_only_the_failure(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The skip WARNINGs are logged only when reflection succeeds; a probe
+        failure logs its one WARNING, as it did before skipping existed."""
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _SkippingDB(  # type: ignore[arg-type]
+                    [GOOD_ROW, {"namespace": "main"}], [_skipped_view("v_stale")]
+                )
+            )
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: KeyError: "
+        )
+        messages = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert len(messages) == 1
+        assert "reflection failed" in messages[0]
+
+    @pytest.mark.parametrize("target", ["policies", "v_y_good"], ids=["at-a-table", "at-a-view"])
+    def test_a_database_lost_mid_walk_is_a_probe_failure_not_a_skip(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str
+    ) -> None:
+        """Measured by the review on PostgreSQL 17: an outage after the first view
+        turned every later view into a "skip", and ``--allow-skipped`` then
+        exited 0. At a table it already failed the probe, since the next listing
+        call is unguarded — so the old outcome depended on WHEN the database went
+        away, and ``at-a-view`` is the case that was wrong. Both now fail the
+        same way. The pool is emptied and the directory moved away, so every new
+        connection fails for real."""
+        directory = tmp_path / "warehouse"
+        directory.mkdir()
+        url = _stale_warehouse(directory / "w.db", "v_a_stale")
+        reflect = ReadOnlyDB._reflect_entity
+
+        def _reflect(inspector: Any, schema: str, name: str, entity_kind: str) -> dict[str, Any]:
+            if name == target:
+                inspector.bind.dispose()
+                directory.rename(tmp_path / "gone")
+            return reflect(inspector, schema, name, entity_kind)
+
+        monkeypatch.setattr(ReadOnlyDB, "_reflect_entity", staticmethod(_reflect))
+        inv = _probe_degraded(url)
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: OperationalError: (sqlite3.OperationalError) "
+            "unable to open database file"
+        )
+
 
 class TestRankingFailureKeepsEntries:
     """Stage 2 — ranking is an optional enrichment; its failure keeps the tables."""
@@ -851,8 +941,9 @@ class TestRankingFailureKeepsEntries:
         assert notes.startswith(
             f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all 3 entries are unranked."
         )
-        # The two degradations must stay distinguishable by text.
+        # The three degradations must stay distinguishable by text.
         assert "probe failed" not in notes
+        assert "probe skipped" not in notes
 
     @pytest.mark.parametrize(
         ("llm", "expected_note_start"),

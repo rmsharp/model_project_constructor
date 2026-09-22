@@ -243,14 +243,17 @@ def discover(
     # not reflect were skipped. It also exits 1, unless ``--allow-skipped``
     # accepts it and nothing else went wrong (operator rulings). Its part starts
     # the note and a ranking part can follow it, so that one is found with
-    # ``in`` — and a skipped name that happened to contain the ranking prefix
-    # would read as a ranking failure, which errs to exit 1, never to exit 0.
+    # ``in``. Only when ranking ran, though: a skipped view NAMED with the
+    # ranking prefix read as a ranking failure without ``--rank-with-llm``
+    # (measured by Session 265's review). With it, the same name still does —
+    # which errs to exit 1, never to exit 0.
     degraded = [p.notes for p in inventory.producers if p.notes]
     if degraded:
         note = degraded[0]
         skipped = note.startswith(SKIPPED_NOTE_PREFIX)
-        unranked = note.startswith(RANKING_FAILED_NOTE_PREFIX) or (
-            skipped and RANKING_FAILED_NOTE_PREFIX in note
+        unranked = rank_with_llm and (
+            note.startswith(RANKING_FAILED_NOTE_PREFIX)
+            or (skipped and RANKING_FAILED_NOTE_PREFIX in note)
         )
         what: list[str] = []
         if skipped:

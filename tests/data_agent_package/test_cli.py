@@ -295,7 +295,7 @@ def test_cli_discover_include_schemas_filter(
     assert inv_empty.entries == []
     assert len(inv_empty.producers) == 1
     # Without this, "the filter matched nothing" and "the probe blew up" are
-    # the same two assertions: a degraded inventory also has entries == [].
+    # the same two assertions: a failed probe also has entries == [].
     assert inv_empty.producers[0].notes is None
 
 
@@ -503,7 +503,8 @@ def test_cli_discover_failed_reflection_keeps_the_file_and_exits_nonzero(
     exc: Exception,
     type_name: str,
 ) -> None:
-    """Operator ruling, Session 261: ANY degraded inventory exits 1, file kept.
+    """Operator ruling, Session 261: ANY degraded inventory exits 1, file kept
+    (since Session 265, ``--allow-skipped`` excuses skipped tables, and only those).
 
     Both rows changed, in opposite directions, and the ruling makes them one
     rule. A type the old guard caught (first row) was exit 0 with an empty
@@ -572,10 +573,49 @@ def test_cli_discover_skipped_view_keeps_the_rest_and_exits_nonzero(
     assert "SKIPPED" not in result.stdout
     assert STALE_VIEW in result.stderr  # the note itself is echoed
     assert "--allow-skipped" in result.stderr  # and the way to accept it is named
+    # Neither of the other two degradations is claimed. Without these, an error
+    # line reading "...SKIPPED and reflection failed, so it is EMPTY" passed
+    # (the review's mutation pass) — on the default path, with no flag at all.
+    assert "EMPTY" not in result.stderr
+    assert "UNRANKED" not in result.stderr
 
     inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
     assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
     assert (inv.producers[0].notes or "").startswith(SKIPPED_NOTE_PREFIX)
+
+
+def test_cli_discover_a_view_named_like_a_ranking_failure_is_just_skipped(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """Measured by Session 265's review: a stale view whose NAME contains the
+    ranking-failure prefix made the command report a ranking failure it never
+    ran, and ``--allow-skipped`` could not accept that database. Without
+    ``--rank-with-llm`` there is no ranking part to find."""
+    db_path = tmp_path / "discover.db"
+    engine = sa.create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("CREATE TABLE claims (claim_id INTEGER PRIMARY KEY)"))
+            conn.execute(sa.text("CREATE TABLE doomed (x INTEGER)"))
+            conn.execute(
+                sa.text(
+                    'CREATE VIEW "v LLM relevance ranking failed (X)" AS SELECT x FROM doomed'
+                )
+            )
+            conn.execute(sa.text("DROP TABLE doomed"))
+    finally:
+        engine.dispose()
+
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", f"sqlite:///{db_path}", "--output", str(out), "--allow-skipped"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stderr.startswith("warning: ")
+    assert "UNRANKED" not in result.stderr
+    assert "view 'main.v LLM relevance ranking failed (X)' (OperationalError)" in result.stderr
 
 
 def test_cli_discover_allow_skipped_accepts_a_partial_inventory(

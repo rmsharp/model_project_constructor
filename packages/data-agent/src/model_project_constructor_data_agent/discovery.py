@@ -91,9 +91,7 @@ class UnwritableEntryError(ValueError):
 
 
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
-#: names come from the model's reply, and the message is logged whole. It also
-#: quotes a skipped entity's name, where ``repr`` has a second job: it escapes a
-#: lone surrogate, which would otherwise make the note itself unwritable.
+#: names come from the model's reply, and the message is logged whole.
 _BRIEF = reprlib.Repr()
 _BRIEF.maxlist = 3
 _BRIEF.maxstring = 80
@@ -170,8 +168,8 @@ def probe_information_schema(
 
     Returns a valid :class:`DataSourceInventory`. **No** ``Exception`` **raised
     by** ``db`` **or by** ``llm`` **escapes** — each stage degrades to a labelled
-    result and logs a WARNING on this module's logger: one per failed stage, and
-    one per skipped entity. Three limits, all
+    result and logs a WARNING on this module's logger: one per failed stage and,
+    when reflection succeeds, one per skipped entity. Three limits, all
     measured: only ``Exception`` is absorbed, never ``KeyboardInterrupt`` /
     ``SystemExit``; a non-``str`` ``request_context`` still raises, because it is
     validated while the *result* is built (a bad ``db`` or ``include_schemas``
@@ -183,11 +181,14 @@ def probe_information_schema(
       ``SQLAlchemyError`` from reflecting that one entity (Session 265). It is
       **skipped** and the rest are kept. ``notes`` begins
       :data:`SKIPPED_NOTE_PREFIX`, counts the skipped entities against every
-      entity found, and names up to ten of them with each one's exception type.
-      Each cause goes to its own WARNING, redacted best-effort, on one line, and
-      is never persisted. A partial inventory is never returned unlabelled.
+      entity found, and names up to ten of them in full, ``repr``-quoted, with
+      each one's exception type. Each cause goes to its own WARNING, redacted
+      best-effort, on one line, and is never persisted. A partial inventory is
+      never returned unlabelled. A lost connection is not a skip: it fails the
+      probe, as the next bullet says (``ReadOnlyDB.get_information_schema``).
     - **Reflection, or building an entry from it, fails** in any other way
-      (permission denied listing the tables, unsupported dialect, a non-database
+      (permission denied listing the tables, a connection lost during the walk,
+      unsupported dialect, a non-database
       error while reflecting, a reflection dict missing a key, a table that
       fails schema validation or has a name or other reflected text that cannot
       be written as UTF-8 — :class:`UnwritableEntryError`, naming the table):
@@ -258,9 +259,9 @@ def probe_information_schema(
 
     for s in skipped:
         _LOG.warning(
-            "probe_information_schema: skipped %s %s, which could not be reflected: %s: %s",
+            "probe_information_schema: skipped %s %r, which could not be reflected: %s: %s",
             s.entity_kind,
-            _BRIEF.repr(_fqn(s.namespace, s.name)),
+            _fqn(s.namespace, s.name),
             type(s.error).__name__,
             _safe_message(s.error),
         )
@@ -296,10 +297,13 @@ def _skipped_note(skipped: list[SkippedEntity], *, found: int) -> str:
 
     Names and types only. The cause is a driver's message, so it goes to the
     WARNING, where it is redacted, and never into the file, which travels
-    downstream.
+    downstream. Each name is ``repr``-quoted in full: ``repr`` escapes a lone
+    surrogate or a control character, which would otherwise make the note
+    unwritable or break its one line, and truncating would let two long names
+    print identically (measured on MySQL by Session 265's review).
     """
     named = ", ".join(
-        f"{s.entity_kind} {_BRIEF.repr(_fqn(s.namespace, s.name))} ({type(s.error).__name__})"
+        f"{s.entity_kind} {_fqn(s.namespace, s.name)!r} ({type(s.error).__name__})"
         for s in skipped[:_SKIPPED_NAMED]
     )
     rest = len(skipped) - _SKIPPED_NAMED
