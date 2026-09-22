@@ -20,28 +20,89 @@ _LOG = logging.getLogger(__name__)
 
 # A ``--db-url`` carries a secret in two places, and both reach the operator-
 # facing DataReport once EXECUTE_QC starts reporting the connect error
-# (``agent.py``'s ``data_quality_concerns``). Measured, not assumed:
+# (``agent.py``'s ``data_quality_concerns``), and a third place once a driver
+# echoes a secret-bearing DSN or header inside its own exception text
+# (``discovery.py``'s reflection note). Measured, not assumed:
 #
 #   postgresql://user:hunter2@host/claims          -> userinfo
 #   postgresql://host/claims?password=hunter2      -> query string, and
 #       SQLAlchemy passes it to the DBAPI as a real password
+#   PWD=hunter2;Database=claims                    -> a libpq/ODBC DSN a
+#       driver may echo back verbatim inside its own error text
 #
-# ``_SECRET_KV`` covers the query form and, because it keys on the word rather
-# than on ``?``/``&``, also the libpq ``key=value`` DSN a driver may echo back
-# inside its own error text. It does not cover a secret under a key not listed
-# here.
+# Session 261 shipped ``_SECRET_KV`` keyed on a bare word boundary before an
+# unquoted, unbroken value. Session 261's own item measured what that missed:
+# a PREFIXED key (``DB_PASSWORD=``, ``\b`` does not cross ``_``), a camel-cased
+# or hyphenated one (``AccessToken``, ``X-Amz-Signature``), a QUOTED or braced
+# value (the libpq/ODBC form a password containing a space or ``;`` requires),
+# a ``:`` or spaced ``=`` separator (JSON, YAML-ish log lines), a value whose
+# OWN tail leaks past a ``&``/``;`` that does not start a new ``key=`` pair,
+# a username containing ``@`` (Azure/email-login form — SQLAlchemy accepts it
+# unencoded, and it defeated a pattern that stops at the FIRST ``@``), and a
+# secret percent-encoded inside ``odbc_connect=``. ``_SECRET_KEY`` widens the
+# key list and drops the ``\b``/word-character assumption; ``_SECRET_KV`` adds
+# the quoted/braced/bare value alternation; ``_mask_kv`` percent-decodes a
+# COPY of the text to find matches (so ``PWD%3Dx%3B`` is seen as ``PWD=x;``)
+# while editing the original, so nothing outside a matched span is disturbed.
+# It still does not cover a secret under a key not in ``_SECRET_KEY``, nor a
+# bare-key, header, ``Bearer``, or SigV4-signature shape with no ``key=``/
+# ``key:`` form at all (`BACKLOG.md`, "the password masker misses common
+# shapes").
+_SECRET_KEY = (
+    r"(?:password|passwd|pwd|passphrase|passcode|sslpassword|secret[_-]?key"
+    r"|private[_-]?key|access[_-]?key|api[_-]?key|secret|token|credentials?|signature)"
+)
+_SECRET_VALUE = (
+    r'(?:"(?:[^"\\]|\\.)*(?:"|\Z)'  # double-quoted, backslash-escaped
+    r"|'(?:[^'\\]|\\.|'')*(?:'|\Z)"  # single- or doubled-single-quoted
+    r"|\{(?:[^{}]|\{[^{}]*\})*(?:\}|\Z)"  # one level of {...} (ODBC braces)
+    # bare: any run of non-space chars, but stop before a `;`/`&`/`,` that
+    # itself opens a fresh `key=` pair or ends the string -- otherwise a
+    # secret's own unescaped tail (`password=x&y`, `PWD={x y};`) survives.
+    r"|(?:(?![;&,](?:\s|\Z|[\w.\-]+\s*=))\S)+)"
+)
 _SECRET_KV = re.compile(
-    r"(?i)(\b(?:password|passwd|pwd|sslpassword|token|secret|api_?key"
-    r"|credential)=)[^&\s'\"]+"
+    rf"(?is)({_SECRET_KEY}[\"']?\s*(?:=>|=|:)\s*)({_SECRET_VALUE})"
 )
 
 # Two userinfo patterns, deliberately: a lone URL may be matched greedily to its
 # LAST ``@`` (a password that was never percent-encoded can contain ``@``, ``/``
-# or a space — the exact case that must not leak), while free-form text must be
-# matched conservatively so the pass cannot span from one URL to an unrelated
-# ``@`` later in the message.
-_USERINFO_URL = re.compile(r"(://[^:/@\s]*:).*(@)")
-_USERINFO_TEXT = re.compile(r"(://[^:/@\s]*:)[^\s]*(@)")
+# or a space — the exact case that must not leak, and so may the USERNAME, the
+# Azure/email-login form), while free-form text must be matched conservatively
+# — the value stops at the first whitespace — so the pass cannot span from one
+# URL to an unrelated ``@`` later in the message.
+_USERINFO_URL = re.compile(r"(://[^:/\s]*:).*(@)")
+_USERINFO_TEXT = re.compile(r"(://[^:/\s]*:)[^\s]*(@)")
+
+# One byte (or one percent-escape triple) at a time, for _mask_kv's decoded view.
+_BYTE_OR_PCT = re.compile(r"%[0-9A-Fa-f]{2}|.", re.DOTALL)
+
+
+def _mask_kv(text: str) -> str:
+    """Mask every ``_SECRET_KV`` match, matching against a percent-DECODED view
+    of ``text`` so ``PWD%3Dhunter2%3B`` (an ``odbc_connect=`` payload) is seen
+    as ``PWD=hunter2;``, while editing ``text`` itself byte-range-for-byte-range
+    so nothing outside a matched span — encoded or not — is disturbed.
+    """
+    units = _BYTE_OR_PCT.findall(text)
+    offsets, pos = [0], 0
+    decoded = []
+    for unit in units:
+        pos += len(unit)
+        offsets.append(pos)
+        if len(unit) == 3:  # a %XX triple
+            byte = int(unit[1:], 16)
+            decoded.append(chr(byte) if byte < 0x80 else "�")
+        else:
+            decoded.append(unit)
+    view = "".join(decoded)
+    out, last = [], 0
+    for m in _SECRET_KV.finditer(view):
+        out.append(text[last : offsets[m.end(1)]])
+        out.append("***")
+        last = offsets[m.end()]
+    out.append(text[last:])
+    return "".join(out)
 
 
 def redact_db_url(url: str) -> str:
@@ -57,17 +118,18 @@ def redact_db_url(url: str) -> str:
         rendered = sa.make_url(url).render_as_string(hide_password=True)
     except Exception:
         rendered = _USERINFO_URL.sub(r"\1***\2", url)
-    return _SECRET_KV.sub(r"\1***", rendered)
+    return _mask_kv(rendered)
 
 
 def redact_secrets(text: str) -> str:
-    """Return ``text`` with any embedded URL password or ``password=`` masked.
+    """Return ``text`` with any embedded URL password or ``key=value`` secret
+    masked — best-effort, per the module comment above.
 
     For arbitrary text — a driver's own exception message, which may echo the
     connection string back. :func:`redact_db_url` is the right call when the
     whole string IS a URL.
     """
-    return _SECRET_KV.sub(r"\1***", _USERINFO_TEXT.sub(r"\1***\2", text))
+    return _mask_kv(_USERINFO_TEXT.sub(r"\1***\2", text))
 
 
 class DBConnectionError(Exception):

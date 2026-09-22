@@ -262,6 +262,117 @@ def test_redact_secrets_preserves_a_message_with_no_secret() -> None:
     assert redact_secrets(msg) == msg
 
 
+# ---------------------------------------------------------------------------
+# Session 262: `redact_secrets` fails open on shapes inside its own claimed
+# coverage (BACKLOG.md, filed Session 261). Every case below leaked verbatim
+# under the Session 261 implementation -- measured before this session wrote
+# any code. Secret-ABSENCE only (learning #268): a `***`-present assertion
+# passes on a partial mask, which is exactly how the original regression here
+# was missed.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"DB_PASSWORD={SECRET}",
+        f"PGPASSWORD={SECRET}",
+        f"db_password={SECRET}",
+        f"access_token={SECRET}",
+        f"client_secret={SECRET}",
+        f"password='{SECRET}'",
+        f'password="{SECRET} tail"',
+        f"password = {SECRET}",
+        f"password: {SECRET}",
+        f"{{'password': '{SECRET}'}}",
+        f'{{"password": "{SECRET}"}}',
+    ],
+    ids=[
+        "prefixed-key-upper", "prefixed-key-pg", "prefixed-key-lower", "access_token",
+        "client_secret", "single-quoted", "double-quoted-with-space", "spaced-equals",
+        "colon-separator", "single-quoted-json", "double-quoted-json",
+    ],
+)
+def test_redact_secrets_masks_the_item_leak_table(text: str) -> None:
+    """`BACKLOG.md`'s leak table, one row per case."""
+    assert SECRET not in redact_secrets(text)
+
+
+@pytest.mark.parametrize(
+    ("fn", "text", "also_gone"),
+    [
+        # Class 1: a userinfo USERNAME containing '@' (Azure / email-login,
+        # which SQLAlchemy accepts unencoded) defeated a pattern that stops at
+        # the FIRST '@' rather than the last one before the host.
+        (redact_secrets, f"connect to postgresql://svc@myserver:{SECRET}@host/db failed", None),
+        # Class 2: a TAIL leak -- the secret's own unescaped tail past a
+        # separator that does not itself open a fresh key=value pair.
+        (redact_secrets, f"password={SECRET}&y2", "y2"),
+        (redact_secrets, f"Driver={{X}};PWD={{{SECRET};y2}};Database=d", "y2"),
+        # Class 3: percent-encoded inside an `odbc_connect=` payload.
+        (redact_db_url,
+         "mssql+pyodbc:///?odbc_connect=DRIVER%3D%7BODBC+Driver+17%7D%3BUID%3Dsa%3B"
+         f"PWD%3D{SECRET}%3B",
+         None),
+        # Class 4: camel-cased / hyphenated keys outside the original fixed list.
+        (redact_secrets, f"AccessToken={SECRET}", None),
+        (redact_secrets, f"X-Amz-Signature={SECRET}", None),
+        (redact_secrets, f"passcode={SECRET}", None),
+    ],
+    ids=["userinfo-at-in-username", "tail-after-ampersand", "tail-inside-odbc-brace",
+         "percent-encoded-odbc-connect", "camel-cased-key", "hyphenated-key", "passcode-key"],
+)
+def test_redact_secrets_masks_the_four_further_classes(
+    fn: object, text: str, also_gone: str | None
+) -> None:
+    """The item's second table: four classes a second reviewer measured, not
+    themselves in the leak table. `also_gone`, where given, is the secret's
+    own tail -- the shape that a mask stopping at the first separator leaves
+    published."""
+    out = fn(text)  # type: ignore[operator]
+    assert SECRET not in out
+    if also_gone is not None:
+        assert also_gone not in out
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f"?password={SECRET}&sslmode=require",
+        f"host=warehouse password={SECRET} dbname=claims",
+    ],
+    ids=["stops-before-a-real-kv-pair", "stops-at-whitespace"],
+)
+def test_redact_secrets_stops_at_the_next_real_field(text: str) -> None:
+    """A wider tail match (the fix for the class-2 leak above) must not eat an
+    ADJACENT, unrelated field. Without this, a mutant that always consumes to
+    end-of-string would pass every test above and still over-mask."""
+    out = redact_secrets(text)
+    assert SECRET not in out
+    assert "sslmode=require" in out or "dbname=claims" in out
+
+
+def test_redact_secrets_preserves_realistic_diagnostics_with_no_secret() -> None:
+    """Widening the key list must not start matching ordinary diagnostic
+    prose. Each of these was hand-picked because it is one edit distance from
+    a false positive: 'secretary' contains 'secret', 'tokenizer' contains
+    'token', 'passcode' is now itself a matched key."""
+    for msg in (
+        'FATAL:  password authentication failed for user "claims_ro"',
+        'connection to server at "warehouse.invalid" (10.0.0.5), port 5432 '
+        "failed: Connection refused",
+        "(sqlite3.OperationalError) no such table: main.claims",
+        "tokenizer=bert max_token_length: 5",
+        "password_policy=strict secretary: Jane",
+    ):
+        assert redact_secrets(msg) == msg
+
+
+def test_redact_secrets_is_idempotent() -> None:
+    once = redact_secrets(f"DB_PASSWORD={SECRET}")
+    assert redact_secrets(once) == once
+
+
 def test_connect_error_names_the_cause_without_the_password() -> None:
     """Both halves matter: no secret, and still diagnostic.
 
