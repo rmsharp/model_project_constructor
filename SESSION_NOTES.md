@@ -98,13 +98,185 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 262 Did
-**Deliverable:** **`redact_secrets` stops failing open on shapes inside its own claimed coverage**
-(IN PROGRESS) — the `BACKLOG.md` item filed in Session 261, picked by the operator from a four-option
-picker at Phase 1. One function-pair in `packages/data-agent/src/model_project_constructor_data_agent/db.py`
-plus parametrized secret-ABSENCE tests in `tests/data_agent_package/test_db.py`.
-**Started:** 2026-09-21.
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **`redact_secrets` stops failing open on shapes inside its own claimed coverage —
+COMPLETE**, closing the item filed in Session 261, picked by the operator from a four-option picker
+at Phase 1. **Started / completed:** 2026-09-21 (UTC). **Commits:** `0d76da2` (claim), `69c5aba` (an
+incidental fixture repair, below), `1e53c20` (the fix and its tests), `1fac1dd` (a test-quality
+repair mutation testing found), `3505ce9` (docs: item closed, cross-references, census) and this
+close-out. **Ledger:** one entry per commit — three of the five substantive commits omitted their own
+entry and were backfilled at this close-out (Self-Assessment, below).
+
+#### An incidental fixture repair, found at the claim commit
+
+Writing the Phase 1B stub turned `test_next_state[after-a-wide-close-out-then-claim]` red:
+`check_satisfiable is the sole catcher of no mutant`. Not caused by this session's content — the
+claim commit is the first state able to BUILD that model (a close-out commit has no stub to close),
+and the failure was in the read-budget guard's own `M08` mutant, not in the ledger. `M08` holds a
+ledger's byte length fixed by swapping its tail for a pad written at the ledger's *mean* line width;
+on the Session 261 ledger the tail ran 71 B/line against a mean of 81, so 396 removed lines came back
+as 347, the file lost 49 lines, the predicted page fell **457 → 448** against a K prefix ending at
+455, and `check_k_lines` co-fired. Fixed in `69c5aba`: the mutant now removes whole tail lines and
+pads with exactly that many lines summing to those same bytes, so length, line count and
+`page_estimate` are identical to the unmutated ledger's. Verified before and after on both the failing
+modelled state and the real working tree; 82/82 guard tests green afterward.
+
+#### The fix
+
+The item's own leak table and four further classes (filed Session 261, `BACKLOG.md`) were the
+acceptance list. Built a leak/keep corpus in scratch **before** touching `db.py` (28 leak shapes, 14
+keep shapes) and iterated a candidate against it, checked for catastrophic backtracking, then ported
+it in: `_SECRET_KEY` widens the key list and drops the `\b` word-boundary assumption (it does not
+cross `_`, so `DB_PASSWORD=` never matched); `_SECRET_VALUE` adds quoted, doubled-single-quoted,
+one-level-braced and a lookahead-guarded bare alternative (the bare form must not stop at a `&`/`;`
+that does not itself open a fresh `key=` pair, or a secret's own tail survives); `_mask_kv`
+percent-decodes a COPY of the text to find matches (so `PWD%3Dx%3B` inside `odbc_connect=` is seen as
+`PWD=x;`) while editing the original untouched outside a matched span; the userinfo patterns drop
+their own `@`-exclusion so a username containing `@` (Azure/email-login) no longer defeats the
+first-`@`-stop the old pattern required. `redact_db_url` and `redact_secrets` both route through the
+same `_mask_kv`. Still blind, by design and stated as such: a key outside `_SECRET_KEY`, and a
+bare-key/header/`Bearer`/SigV4 shape with no `key=`/`key:` form at all.
+
+**Mutation testing found a real gap in my own first test draft**, not just in the fix. A mutant that
+stripped the quoted/braced alternative back to bare-only passed every quoted-value test, because the
+tests all used `SECRET = "hunter2"` — no space — and a bare `\S+` class swallows the surrounding
+quotes/braces by accident when the secret itself has nothing for them to protect. Fixed by
+introducing `SPACED_SECRET = "hunter two"` for the rows that are supposed to need quoting, and
+re-running the mutant to confirm it now fails there (`1fac1dd`). Six hand-built mutants in total —
+narrow key list, bare-only value class, old tail-stop, no percent-decoding, `@`-excluding userinfo,
+bare-`=`-only separator — all caught after the repair.
+
+**Runtime verified against the real console script** (Phase 3E), not just fake-LLM mode (which
+routes through `FakeCLIClient.summarize`'s hardcoded `data_quality_concerns: []` and never reaches
+`redact_secrets` at all — checked and set aside as the wrong surface). `model-data-agent discover`
+against `postgresql://claims_ro:hunter two@warehouse.invalid:5432/claims` (unreachable host) and
+against the same with `$DB_PORT` unexpanded (unparseable) — both exit 1, both name the real cause
+(`No module named 'psycopg2'`, `invalid literal for int() with base 10`), and neither leaks "hunter",
+"two", or "hunter two" anywhere in stderr or any written file.
+
+#### What else changed
+
+`discovery.py`'s `_safe_message` docstring and `test_discovery.py`'s
+`test_ranking_note_never_persists_the_message` cited the OLD redactor's blind spots by example
+(`x-api-key`, `Bearer`, `ANTHROPIC_API_KEY=`); measured against the new one, two of the three are now
+masked (both contain a `key=`/`key:` form under a key the wider list matches) and only the header
+form remains genuinely blind. The test's assertions are unchanged and still pass — the ranking note
+is type-only by design, unconditionally, regardless of what the redactor can see — but the comment
+explaining why would have been half wrong had it been left alone. `BACKLOG.md`'s item is removed with
+its index row; its `sessionToken=` example (named in the item, already covered) is now pinned as its
+own test case. `README.md`'s census re-measured: `data_agent_package` 316 → 339 collected, headline
+1,458 → 1,481 passed, 98.01% → 98.02%.
+
+#### Verification
+
+Full suite **1,481 passed, 9 skipped, 98.02%** (1,458 before); `ruff check src/ tests/ packages/
+scripts/`, `uv run mypy` (68 files), the C4 decoupling test and the census and read-budget guards
+clean throughout. `.quality-gates.json` declares no gates.
+
+### Session 261 Handoff Evaluation (by Session 262)
+
+**Score: 8/10.** **+** The `BACKLOG.md` item Session 261 filed — not the generic handoff prose — did
+almost all the work of scoping this session: a measured leak/keep table, four further classes with
+concrete examples, and a sketch naming exactly which parts of the regex needed to change. It seeded
+the corpus directly; without it this session would have had to rediscover every shape by hand. **+**
+Gotcha 5 (*"redact_secrets is blind to 6 of 7 LLM-side secret shapes"*) pointed at
+`test_discovery.py`'s ranking-note test, which is exactly where this session found a now-stale
+cross-reference. **+** Key files `db.py:21`–`:70` were still the right anchor, even though the file
+more than doubled. **−** The item's own sketch called this *"small, one regex"* — the same
+optimism-about-scope Session 261's OWN evaluation of Session 260 flagged (*"'small, one file' fix
+took two operator rulings"*), now recurring one level down: the actual fix needed a widened key list,
+a three-way value alternation with a stop-lookahead, and a percent-decoding pass, plus two
+cross-reference corrections the sketch could not have anticipated. **−** The sketch's fourth item
+("percent-decoded pass") did not warn that the decode-and-edit-original split (needed so `PWD%3Dx%3B`
+inside a longer string is masked without disturbing anything around it) is the fiddliest part of the
+whole change; that was found by design, not by the handoff. **ROI: high** — the item's own text did
+the work a handoff normally has to, which is exactly what a well-written filed defect should do.
+
+### Session 262 Self-Assessment
+
+**Score: 8/10.**
+**+ Built and ran the corpus before writing the fix.** 28 leak shapes and 14 keep shapes, checked for
+catastrophic backtracking, iterated against a scratch candidate — the fix that shipped is the third
+candidate, not the first.
+**+ Mutation testing caught a real gap in my OWN tests, not just the fix.** The bare-only mutant
+passed every quoted-value test on the first draft because none of those tests used a secret
+containing the character the quoting exists to protect. Found and fixed before any commit shipped it
+as load-bearing.
+**+ Ran the real console script, not just `--fake-llm`.** Checked first that `--fake-llm` routes
+through a hardcoded `data_quality_concerns: []` and never reaches `redact_secrets` — the wrong
+surface — then used `discover` against a real unreachable host and a real unparseable URL, both with
+a spaced password, and grepped the output for every fragment of it.
+**+ Found and fixed an incidental fixture defect** (the `M08` read-budget mutant) rather than
+reporting it and moving on, and verified the fix on both the modelled state and the real tree.
+**+ Corrected two cross-references my own change made stale** (`discovery.py`'s docstring,
+`test_discovery.py`'s ranking-note test comment) rather than leaving them for a future session to
+find false.
+**− A real process mistake: ran `git checkout -- db.py` mid-mutation-testing before the fix was
+committed**, which silently discarded the uncommitted fix back to the pre-fix Session 261 version.
+Caught immediately (the next `git diff` was empty when it should not have been) and recovered from
+this conversation's own record of the edit — no data was actually lost — but a `mutate(); test();
+restore()` loop is exactly the shape that hides this class of mistake, because each iteration looks
+like it undid only what it just did. Learning #279. The fix now: commit real work FIRST, mutate a
+scratch copy or restore from a checksum-verified snapshot, never `git checkout` a tree with
+uncommitted work of its own.
+**− Three commits (`1e53c20`, `1fac1dd`, `3505ce9`) each omitted their own `CHANGELOG.md` entry** —
+the established convention (verified against Sessions 260 and 261) is that a commit carries its own
+entry, written in the same commit, not added retroactively. Caught only at this close-out's Phase 3F
+review, not at commit time. Backfilled above, cited by hash since a backfilled entry cannot say "this
+commit". No content was lost — the entries exist now — but three commits' worth of the ledger's own
+discipline (self-description at commit time) was skipped and had to be reconstructed from `git show`
+after the fact, which is worse evidence than writing it fresh would have been.
+**Decay term:** one `BACKLOG.md` item removed; nothing else could be reduced this session.
+`SESSION_NOTES.md` is under its trim trigger.
+
+**What's next.**
+1. **Pushing is the operator's call** — this session's commits plus the four inherited from Session
+   261 are unpushed through this close-out.
+2. **The two items Session 261 filed alongside this one are still open**, and both are cheap: `BACKLOG.md`
+   *"One broken view empties the whole table inventory"* (`db.py`'s reflection loop, needs a reporting
+   decision before code) and *"A ranking that matches nothing is silent"* (one function,
+   `discovery._ranked`).
+3. **The `--db-url` status-exit-0 item is still open**, an operator ruling, unrelated to this
+   session's work.
+4. **`redact_secrets` still has named gaps, left in the record rather than the item** (the item itself
+   is now closed): a bare-key/header/`Bearer`/SigV4 shape with no `key=`/`key:` form at all, and a key
+   outside `_SECRET_KEY`'s fixed list. Not filed as a new `BACKLOG.md` item because nothing currently
+   reaches those shapes with a secret in them (measured Session 261; the ranking note is type-only
+   regardless) — filing one without a live reach would be manufacturing work.
+5. **Unchanged operator calls:** `PROJECT_LEARNINGS.md` refused by a default `Read`; `CHANGELOG.md`'s
+   four July entries out of order; the `ruff`/sdist fallout from Session 259's sync (learning #264).
+6. **Carried:** the tenth trim past 196,608 B; the two collapse proofs guarded by nothing; the NO-OP
+   guard blind to a partially inert mutant; `tests/eval/README.md`'s three stale statements.
+
+**Key files** (measured at this close-out).
+`packages/data-agent/src/model_project_constructor_data_agent/db.py:21`–`:71` (the module comment and
+`_SECRET_KEY`/`_SECRET_VALUE`/`_SECRET_KV`), `:73`–`:97` (`_mask_kv`), `:99`–`:113` (`redact_db_url`,
+`redact_secrets`); `.../discovery.py:67`–`:72` (`_safe_message`'s redaction docstring, corrected);
+`tests/data_agent_package/test_db.py:265`–`:360` (the Session 262 test block: leak table, four
+classes, stops-at-the-next-field, false-positive guard, idempotence); `tests/data_agent_package/test_discovery.py:624`–`:634`
+(the corrected ranking-note comment); `tests/test_read_budget.py:684`–`:719` (`M08`'s exact-swap
+repair); `BACKLOG.md`'s plain-language index (the closed item's row removed).
+
+**Gotchas.**
+1. **`--fake-llm` never reaches `redact_secrets`.** `FakeCLIClient.summarize` returns a hardcoded
+   `data_quality_concerns: []` regardless of `db_executed`. To runtime-verify redaction in a
+   `data_quality_concerns` field, either use the real (Anthropic-backed) summarize path or verify at
+   `discover`, which calls `connect()` directly and is unguarded by any fake-LLM branch.
+2. **A redaction test needs a secret that CONTAINS the character its new support protects.** A test
+   built on a spaceless secret cannot tell a quote-aware value class from a bare one that happens to
+   swallow the quotes by accident. See `SPACED_SECRET` in `test_db.py`.
+3. **Never `git checkout --` a file mid-mutation-testing unless the real fix is already committed.**
+   Mutate a scratch copy, or restore from a snapshot taken AFTER committing, verified by checksum
+   after every restore.
+4. **A commit's own `CHANGELOG.md` entry goes in that SAME commit**, not a later one — verified
+   against how Sessions 260 and 261 actually did it (`git show <hash> --stat -- CHANGELOG.md`), not
+   assumed from the written rule.
+5. **The ranking note is type-only unconditionally, not because `redact_secrets` is blind** — do not
+   read "type only" as contingent on the redactor's current coverage; it is a defense-in-depth design
+   choice that would hold even if the redactor caught everything.
+6. **`_SECRET_KEY`'s widened list can now match inside an unrelated word** (`api-key` inside
+   `x-api-key`, `API_KEY` inside `ANTHROPIC_API_KEY`) — this is intentional widening, not a false
+   positive, but it means "is this shape covered" must be checked against the CURRENT key list, not
+   assumed from an old citation (as `test_discovery.py`'s comment was, until this session).
 
 ### What Session 261 Did
 **Deliverable:** **`probe_information_schema`'s "never raises" promise is true — COMPLETE**, closing
