@@ -11,20 +11,23 @@ Phase 1.
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
 import pytest
 import sqlalchemy as sa
+from anthropic.types import TextBlock
 from model_project_constructor_data_agent import (
     DataSourceInventory,
     ReadOnlyDB,
     TableRanking,
     probe_information_schema,
 )
-from model_project_constructor_data_agent.anthropic_client import LLMParseError
+from model_project_constructor_data_agent.anthropic_client import (
+    AnthropicLLMClient,
+    LLMParseError,
+)
 from model_project_constructor_data_agent.discovery import (
     PRODUCER_ID,
     PRODUCER_VERSION,
@@ -387,7 +390,9 @@ class TestProbeWithLLMRanking:
         assert len(unscored) == len(inv.entries) - 1
 
     def test_llm_ignored_when_entries_empty(self, tmp_path: Path) -> None:
-        """LLM ranking is skipped when there are no entries (saves an LLM call)."""
+        """LLM ranking is skipped when there are no entries. That saves an LLM
+        call, and since Session 264 it is also what keeps an empty database from
+        reading as a ranking that named no entry — a failure, and exit 1."""
         db_path = tmp_path / "empty.db"
         engine = sa.create_engine(f"sqlite:///{db_path}")
         try:
@@ -449,31 +454,44 @@ class TestProbeNeverRaises:
         )
 
     @pytest.mark.parametrize(
-        "row",
+        ("row", "fqn"),
         [
-            {**GOOD_ROW, "name": "bad\udc80name"},
-            {**GOOD_ROW, "namespace": "sch\udcffema"},
-            {**GOOD_ROW, "columns": [{"name": "c\ud83d", "data_type": "INTEGER"}]},
+            ({**GOOD_ROW, "name": "bad\udc80name"}, "main.bad\udc80name"),
+            ({**GOOD_ROW, "namespace": "sch\udcffema"}, "sch\udcffema.claims"),
+            (
+                {**GOOD_ROW, "columns": [{"name": "c\ud83d", "data_type": "INTEGER"}]},
+                "main.claims",
+            ),
+            (
+                {**GOOD_ROW, "columns": [{"name": "c", "data_type": "INT\udc80"}]},
+                "main.claims",
+            ),
         ],
-        ids=["table-name", "namespace", "column-name"],
+        ids=["table-name", "namespace", "column-name", "column-type"],
     )
-    def test_a_reflected_name_that_cannot_serialize_fails_the_probe(
-        self, row: dict[str, Any]
+    @pytest.mark.parametrize("first", [True, False], ids=["bad-row-first", "bad-row-last"])
+    @pytest.mark.parametrize("with_llm", [True, False], ids=["ranking-on", "ranking-off"])
+    def test_reflected_text_that_cannot_be_written_fails_the_probe(
+        self, row: dict[str, Any], fqn: str, first: bool, with_llm: bool
     ) -> None:
         """A lone surrogate validates as a ``str`` but cannot be written as UTF-8,
         so until Session 264 the inventory built, the file was written with exit
         0, and ``model_validate_json`` then refused to load it (measured). It is
         now a probe failure — blamed on reflection, where it came from, and
-        never on ranking, which a later stage would otherwise report."""
-        llm = _Ranker(lambda entries: [])
-        inv = probe_information_schema(
-            _RowsDB([GOOD_ROW, row]), llm=llm  # type: ignore[arg-type]
-        )
+        never on ranking, which a later stage would otherwise report. Plain
+        ``discover`` passes no LLM, hence ``ranking-off``; the bad row goes first
+        and last, so a check of only one end of the list cannot pass."""
+        llm = _Ranker(lambda entries: []) if with_llm else None
+        rows = [row, GOOD_ROW] if first else [GOOD_ROW, row]
+        inv = probe_information_schema(_RowsDB(rows), llm=llm)  # type: ignore[arg-type]
         assert inv.entries == []
+        # The note names the table: pydantic's own error gives only a position.
         assert (inv.producers[0].notes or "").startswith(
-            "information_schema probe failed: PydanticSerializationError: "
+            "information_schema probe failed: UnwritableEntryError: "
+            f"entry {fqn!r} cannot be written as UTF-8 JSON: PydanticSerializationError: "
         )
-        assert llm.calls == []  # stage 1 failed, so stage 2 never ran
+        if llm is not None:
+            assert llm.calls == []  # stage 1 failed, so stage 2 never ran
         assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
 
     def test_one_bad_table_fails_the_whole_probe(self) -> None:
@@ -783,13 +801,23 @@ class TestRankingFailureKeepsEntries:
         assert _discovery_warnings(caplog) == []
 
 
-def _last_one_scored(score: Any, reason: str = "r") -> Any:
-    """A ranking whose LAST entry carries ``score`` — the others are good — so an
-    implementation that applied rankings one at a time would show a partial."""
+AT = pytest.mark.parametrize("at", [0, 1, 2], ids=["bad-first", "bad-middle", "bad-last"])
+
+
+def _one_scored(score: Any, *, at: int, reason: str = "r") -> Any:
+    """A ranking of every entry in which only the entry at index ``at`` carries
+    ``score`` (and ``reason``); the rest are good. The tests put the bad value
+    in every position: last catches a ranking applied one entry at a time,
+    first catches a check that runs once, after the loop, on the last entry
+    only — a one-level dedent, which survived every test while the bad value
+    was always last (measured Session 264)."""
 
     def _behaviour(entries: list[DataSourceEntry]) -> Any:
-        return [TableRanking(e.fully_qualified_name, 0.5, "ok") for e in entries[:-1]] + [
-            TableRanking(entries[-1].fully_qualified_name, score, reason)
+        return [
+            TableRanking(e.fully_qualified_name, score, reason)
+            if i == at
+            else TableRanking(e.fully_qualified_name, 0.5, "ok")
+            for i, e in enumerate(entries)
         ]
 
     return _behaviour
@@ -808,13 +836,25 @@ def _assert_unranked_with(inv: DataSourceInventory, type_name: str) -> None:
     )
 
 
+def _warning_of(caplog: pytest.LogCaptureFixture, behaviour: Any) -> str:
+    with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+        probe_information_schema(
+            _RowsDB(_three_rows()), llm=_Ranker(behaviour)  # type: ignore[arg-type]
+        )
+    messages = [r.getMessage() for r in _discovery_warnings(caplog)]
+    assert len(messages) == 1
+    return messages[0]
+
+
 class TestRankingThatCannotBeApplied:
     """Stage 2 — a ranker that RETURNS, but with a ranking that cannot be applied.
 
-    Filed Session 261, closed Session 264. Every case here raised nothing at
-    HEAD, so the probe wrote ``notes=None`` and ``discover`` exited 0 (measured
-    Session 264). Each is now an ordinary ranking failure: all-or-nothing, the
+    Filed Session 261, closed Session 264. Each failure case here raised nothing
+    before Session 264, so the probe wrote ``notes=None`` and ``discover`` exited
+    0 (measured). Each is now an ordinary ranking failure: all-or-nothing, the
     entries kept unranked, the note naming a type that says what went wrong.
+    The tests named ``..._legal`` or ``..._never_checked`` pin what must NOT have
+    changed with it.
     """
 
     @pytest.mark.parametrize(
@@ -844,18 +884,25 @@ class TestRankingThatCannotBeApplied:
     ) -> None:
         """The note carries the type only; the WARNING is where the operator sees
         that ``claims`` came back for ``main.claims``."""
+        message = _warning_of(
+            caplog, lambda entries: [TableRanking(e.name, 0.9, "r") for e in entries]
+        )
+        assert "'claims'" in message
+        assert "'main.claims'" in message
 
-        def _behaviour(entries: list[DataSourceEntry]) -> Any:
-            return [TableRanking(e.name, 0.9, "r") for e in entries]
-
-        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
-            probe_information_schema(
-                _RowsDB(_three_rows()), llm=_Ranker(_behaviour)  # type: ignore[arg-type]
-            )
-        messages = [r.getMessage() for r in _discovery_warnings(caplog)]
-        assert len(messages) == 1
-        assert "'claims'" in messages[0]
-        assert "'main.claims'" in messages[0]
+    def test_the_no_match_warning_is_bounded_however_long_the_reply(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The quoted names come from the model and the WARNING is logged whole,
+        so both how many names and how long each one is are capped."""
+        invented = [f"main.invented_{i}_" + "x" * 5_000 for i in range(50)]
+        message = _warning_of(
+            caplog, lambda entries: [TableRanking(n, 0.9, "r") for n in invented]
+        )
+        assert "50 distinct name(s) returned" in message
+        assert "invented_2_" in message
+        assert "invented_3_" not in message
+        assert len(message) < 1_000
 
     def test_a_partial_ranking_with_invented_names_is_still_legal(self) -> None:
         """Partial rankings stay legal: matching ONE entry is enough, and a name
@@ -873,6 +920,7 @@ class TestRankingThatCannotBeApplied:
         assert inv.producers[0].notes is None
         assert [e.relevance_score for e in inv.entries] == [None, 0.7, None]
 
+    @AT
     @pytest.mark.parametrize(
         "score",
         [
@@ -899,24 +947,33 @@ class TestRankingThatCannotBeApplied:
         ],
     )
     def test_a_score_that_is_not_a_finite_number_in_0_1_is_a_failure(
-        self, score: Any
+        self, score: Any, at: int
     ) -> None:
         """Operator ruling, Session 264: reject, never clamp. A reply on the wrong
         scale (0-10) would clamp to all 1.0 and lose the order ranking exists
         for. ``NaN`` also defeated the prompt's sort outright — five entries
         scored ``[0.1, nan, 0.9, 0.5, 0.2]`` came back in input order (measured).
-        ``nan-as-text`` is what ``float("NaN")`` in the shipped client produces."""
+        The shipped client hands over a float, so its ``NaN`` is the ``nan``
+        case (see the end-to-end test below); ``nan-as-text`` is a duck-typed
+        ranker's string, which pydantic's lax float coercion turns into ``nan``
+        — checking the VALIDATED score is what catches it."""
         inv = probe_information_schema(
-            _RowsDB(_three_rows()), llm=_Ranker(_last_one_scored(score))  # type: ignore[arg-type]
+            _RowsDB(_three_rows()), llm=_Ranker(_one_scored(score, at=at))  # type: ignore[arg-type]
         )
         _assert_unranked_with(inv, "InvalidRelevanceScoreError")
-        # RFC 8259 has no NaN or Infinity; ``json.dumps`` writes them unless told not to.
-        json.dumps(inv.model_dump(mode="json"), allow_nan=False)
+
+    def test_the_bad_score_warning_names_the_value_and_the_table(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The note carries the type only, so this WARNING is the operator's one
+        record of which table was given which score."""
+        message = _warning_of(caplog, _one_scored(7.5, at=1))
+        assert "relevance_score 7.5 for 'main.outcomes'" in message
 
     @pytest.mark.parametrize("score", [0.0, 1.0], ids=["zero", "one"])
     def test_the_bounds_themselves_are_legal(self, score: float) -> None:
         inv = probe_information_schema(
-            _RowsDB(_three_rows()), llm=_Ranker(_last_one_scored(score))  # type: ignore[arg-type]
+            _RowsDB(_three_rows()), llm=_Ranker(_one_scored(score, at=2))  # type: ignore[arg-type]
         )
         assert inv.producers[0].notes is None
         assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, score]
@@ -938,15 +995,64 @@ class TestRankingThatCannotBeApplied:
         assert inv.producers[0].notes is None
         assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, 0.5]
 
-    def test_a_reason_that_cannot_serialize_is_a_failure_and_the_file_reloads(
-        self,
+    @AT
+    def test_a_reason_that_cannot_be_written_is_a_failure_and_the_file_reloads(
+        self, at: int
     ) -> None:
         """A reply cut inside an escaped emoji pair (``"…\\ud83d"``) passes
         ``_extract_json`` and schema validation. Until Session 264 the file was
         written with exit 0 and then refused to reload (measured)."""
         inv = probe_information_schema(
             _RowsDB(_three_rows()),  # type: ignore[arg-type]
-            llm=_Ranker(_last_one_scored(0.5, reason="cut mid-emoji \ud83d")),
+            llm=_Ranker(_one_scored(0.5, at=at, reason="cut mid-emoji \ud83d")),
         )
-        _assert_unranked_with(inv, "PydanticSerializationError")
+        _assert_unranked_with(inv, "UnwritableEntryError")
         assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    def test_the_unwritable_reason_warning_names_the_table(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        message = _warning_of(caplog, _one_scored(0.5, at=1, reason="cut \ud83d"))
+        assert "UnwritableEntryError: entry 'main.outcomes' cannot be written" in message
+
+
+class _CannedAnthropic:
+    """The Anthropic SDK's ``messages.create``, answering with one canned text."""
+
+    def __init__(self, text: str) -> None:
+        self.messages = self
+        self._text = text
+
+    def create(self, **kwargs: Any) -> Any:
+        return type("R", (), {"content": [TextBlock(text=self._text, type="text")]})()
+
+
+@pytest.mark.parametrize(
+    ("reply", "type_name"),
+    [
+        ('[{"fully_qualified_name": "main.claims", "relevance_score": NaN, '
+         '"relevance_reason": "r"}]', "InvalidRelevanceScoreError"),
+        ('[{"fully_qualified_name": "main.claims", "relevance_score": "Infinity", '
+         '"relevance_reason": "r"}]', "InvalidRelevanceScoreError"),
+        ('[{"fully_qualified_name": "main.claims", "relevance_score": 9, '
+         '"relevance_reason": "r"}]', "InvalidRelevanceScoreError"),
+        ('[{"fully_qualified_name": "claims", "relevance_score": 0.9, '
+         '"relevance_reason": "r"}]', "RankingMatchedNoEntryError"),
+        ('[{"fully_qualified_name": "main.claims", "relevance_score": 0.9, '
+         '"relevance_reason": "cut \\ud83d"}]', "UnwritableEntryError"),
+    ],
+    ids=["bare-NaN", "Infinity-as-text", "wrong-scale", "bare-name", "escaped-surrogate"],
+)
+def test_the_shipped_client_reply_reaches_the_same_failures(
+    reply: str, type_name: str
+) -> None:
+    """End to end through ``AnthropicLLMClient.rank_candidate_tables``: every
+    reply above is one the shipped client accepts — ``_extract_json`` parses a
+    bare ``NaN`` and ``float()`` parses ``"Infinity"`` — so the checks in
+    ``_ranked`` are what stand between it and the file."""
+    llm = AnthropicLLMClient(client=_CannedAnthropic(reply), model="fake-model")  # type: ignore[arg-type]
+    inv = probe_information_schema(_RowsDB([GOOD_ROW]), llm=llm)  # type: ignore[arg-type]
+    assert [e.relevance_score for e in inv.entries] == [None]
+    assert (inv.producers[0].notes or "").startswith(
+        f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all 1 entries are unranked."
+    )

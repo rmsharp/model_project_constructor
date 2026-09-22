@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import math
+import reprlib
 from datetime import UTC, datetime
 from typing import Any
 
@@ -67,6 +68,38 @@ class InvalidRelevanceScoreError(ValueError):
     Rejected, never clamped (operator ruling, Session 264): a reply on the
     wrong scale would clamp to all 1.0 and lose the order ranking exists for.
     """
+
+
+class UnwritableEntryError(ValueError):
+    """An entry validates but cannot be written as UTF-8 JSON (a lone surrogate).
+
+    Raised in stage 1 for reflected text and in :func:`_ranked` for a ranker's
+    reason. Its message names the entry, which pydantic's own error does not —
+    on a schema with thousands of tables that is the only way to find it.
+    """
+
+
+#: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
+#: names come from the model's reply, and the message is logged whole.
+_BRIEF = reprlib.Repr()
+_BRIEF.maxlist = 3
+_BRIEF.maxstring = 80
+_BRIEF.maxother = 80
+
+
+def _check_writable(entry: DataSourceEntry) -> None:
+    """Raise :class:`UnwritableEntryError` unless ``entry`` can be written as JSON.
+
+    A lone surrogate validates as a ``str``, so without this the file is written
+    and then refused by ``DataSourceInventory.model_validate_json`` (measured).
+    """
+    try:
+        entry.model_dump_json()
+    except Exception as e:
+        raise UnwritableEntryError(
+            f"entry {_BRIEF.repr(entry.fully_qualified_name)} cannot be written as "
+            f"UTF-8 JSON: {type(e).__name__}: {e}"
+        ) from e
 
 
 def _safe_message(e: Exception) -> str:
@@ -133,7 +166,8 @@ def probe_information_schema(
 
     - **Reflection, or building an entry from it, fails** (permission denied,
       unsupported dialect, a reflection dict missing a key, a table that fails
-      schema validation or has a name that cannot be written as UTF-8):
+      schema validation or has a name or other reflected text that cannot be
+      written as UTF-8 — :class:`UnwritableEntryError`, naming the table):
       ``entries=[]`` and ``notes`` begins
       :data:`PROBE_FAILED_NOTE_PREFIX`, then the exception's type and its
       message — redacted best-effort, on one line. One bad table fails the
@@ -182,10 +216,9 @@ def probe_information_schema(
         tables = db.get_information_schema(schemas=include_schemas)
         entries = [_entry_from_reflection(t) for t in tables]
         for entry in entries:
-            # A lone surrogate in a reflected name validates as a ``str`` but
-            # cannot be written as UTF-8: the file would be written and then fail
-            # to reload. Checked HERE so it is blamed on reflection, not ranking.
-            entry.model_dump_json()
+            # Checked HERE, so reflected text that cannot be written is blamed on
+            # reflection — not on ranking, whose own check would otherwise meet it.
+            _check_writable(entry)
     except Exception as e:
         cause = f"{type(e).__name__}: {_safe_message(e)}"
         _LOG.warning(
@@ -241,8 +274,8 @@ def _ranked(
     (:class:`RankingMatchedNoEntryError` — a partial ranking stays legal, and a
     name matching no entry is ignored); a score, on an entry it is applied to,
     that is not a finite number in [0.0, 1.0] (:class:`InvalidRelevanceScoreError`);
-    and a reason that cannot be written as UTF-8 (pydantic's serialization
-    error), which would otherwise write a file that fails to reload.
+    and a reason that cannot be written as UTF-8 (:class:`UnwritableEntryError`),
+    which would otherwise write a file that fails to reload.
     """
     rankings = ranker(
         entries=[e.model_copy(deep=True) for e in entries],
@@ -254,8 +287,8 @@ def _ranked(
     if not any(e.fully_qualified_name in ranking_map for e in entries):
         raise RankingMatchedNoEntryError(
             f"{len(ranking_map)} distinct name(s) returned and none is an entry's "
-            f"fully_qualified_name exactly; returned {list(ranking_map)[:3]!r}, "
-            f"expected names like {[e.fully_qualified_name for e in entries[:3]]!r}"
+            f"fully_qualified_name exactly; returned {_BRIEF.repr(list(ranking_map))}, "
+            f"expected names like {_BRIEF.repr([e.fully_qualified_name for e in entries])}"
         )
     ranked: list[DataSourceEntry] = []
     for entry in entries:
@@ -268,10 +301,11 @@ def _ranked(
             applied = rebuilt.relevance_score
             if applied is None or not (math.isfinite(applied) and 0.0 <= applied <= 1.0):
                 raise InvalidRelevanceScoreError(
-                    f"relevance_score {applied!r} for {entry.fully_qualified_name!r} "
+                    f"relevance_score {applied!r} for "
+                    f"{_BRIEF.repr(entry.fully_qualified_name)} "
                     "is not a finite number in [0.0, 1.0]"
                 )
-            rebuilt.model_dump_json()  # a lone surrogate in the reason raises here
+            _check_writable(rebuilt)  # a lone surrogate in the reason raises here
         ranked.append(rebuilt)
     return ranked
 
