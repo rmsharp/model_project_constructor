@@ -98,16 +98,140 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 264 Did
-**Deliverable:** **a ranking that matches no inventory entry becomes a reported ranking failure, and
-ranking scores are range-checked** — `BACKLOG.md` *"A ranking that matches no entry is silent, and
-scores are not range-checked"* (filed Session 261), chosen by the operator from a four-option picker
-at Phase 1. (IN PROGRESS)
-**Started:** 2026-09-22
-**Status:** Session claimed. Work beginning. The operator ruled *not* to push Session 263's two
-commits at this session's start.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a ranking that cannot be applied is a ranking failure — COMPLETE**, on the
+`BACKLOG.md` item *"A ranking that matches no entry is silent, and scores are not range-checked"*
+(filed Session 261). The operator chose it from a four-option picker at Phase 1 and gave two rulings
+before any code. The item is **narrowed, not closed**: ruling (2) left one channel open.
+**Started / completed:** 2026-09-22 (UTC). **Commits:** `5e17330` (claim), `959c452` (the fix and its
+tests), `faaf334` (what the adversarial review found, fixed), `31b46b6` (docs: item narrowed,
+`USAGE.md`, census) and this close-out. Each commit carries its own `CHANGELOG.md` entry. **Not
+pushed**: the operator ruled at the start that Session 263's two commits stay local, and nothing this
+session changed that.
+
+**Rulings (operator, by picker, after being shown the measurements):** (1) a score that is `NaN`,
+`±inf` or outside [0.0, 1.0] is **rejected** — the whole ranking fails — and never clamped. (2) Close
+the lone-surrogate **ranking and reflection** channels. `request_context` stays filed.
+
+#### What changed (`packages/data-agent/src/model_project_constructor_data_agent/discovery.py`)
+
+Measured at HEAD first (scratch script). A ranking of `[]`, bare names, a case difference or only
+invented names left every score `None` with `notes=None`, so the command exited 0. `NaN`, `inf`, `7.5`
+and `-1.0` were all written, `NaN`/`Infinity` as non-RFC literals. One `NaN` defeated the prompt's
+sort outright: `[0.1, nan, 0.9, 0.5, 0.2]` came back in input order. A lone surrogate in a reason, a
+reflected name or `request_context` gave a file that exits 0 and then fails to reload. Now
+`_ranked` raises `RankingMatchedNoEntryError` when no entry is named exactly, and
+`InvalidRelevanceScoreError` when a score **applied to an entry** is not a finite number in
+[0.0, 1.0]. The check runs on the *validated* score, so pydantic's lax `"nan"` → `nan` is caught.
+`UnwritableEntryError` (via `_check_writable`) fires on a reason that cannot be written. Stage 1 calls
+the same `_check_writable` on every built entry, so unwritable reflected text is a **probe** failure
+blamed on reflection. All three new classes are `ValueError`s. They exist because the ranking note
+persists only the type, so the class name *is* the note's explanation. `_BRIEF` (`reprlib`) bounds
+the names a warning quotes. Partial rankings stay legal, and a bad score on an invented name is never
+applied, so it is never checked.
+
+#### How it was verified
+
+- **Tests first:** 19 red at HEAD, and green after.
+- **Runtime (3E), at $0:** the real `model-data-agent discover`, real `AnthropicLLMClient`, real
+  HTTP to a local stand-in for the Messages API (scratch `fake_anthropic.py`, not committed).
+  - Parent `959c452^`: bare names, `[]`, `NaN`, a 0–10 scale and a surrogate reason all **exit 0**;
+    the surrogate file fails to reload.
+  - Fix: every one of them exits 1 with the right type; the good ranking and the partial ranking
+    still exit 0.
+- **Adversarial review:** workflow `wf_3680318a-548`, 10 agents, 0 failed. Five lenses, each
+  finding re-run by its own skeptic. 39 findings, all held, no blocker; every verdict was read,
+  refutations included. Three medium gaps, all in my own first-draft tests, fixed in `faaf334`:
+  - the bad value was always LAST, so a one-level dedent survived;
+  - the reflection test always passed an LLM, which plain `discover` never does;
+  - the bad row was always last.
+  Also fixed from the review: a stage-1 failure named no table; the no-match warning had no length
+  bound; the score warning was untested; three docstrings overreached. One end-to-end test through
+  the shipped client was added.
+- **Mutation, re-run on `faaf334`:** 18 of 18 non-equivalent mutants killed; only `math.isfinite`
+  survives, a proven equivalent. **The harness's first run was invalid**, and a control mutant caught
+  it: learning #281.
+- **Full suite:** 1,546 passed, 9 skipped, 98.04% (was 1,481). `ruff` and `mypy` (68 files) clean.
+  Census and read-budget guards green before every commit.
+
+### Session 263 Handoff Evaluation (by Session 264)
+
+**Score: 6/10.**
+- **+** What's-next #1 was exactly true: two unpushed commits. That let the push ruling be asked cleanly.
+- **+** What's-next #3 named *"A ranking that matches nothing is silent"* as one of two cheap
+  items, which seeded the picker. The item itself (Session 261's) did the scoping work.
+- **−** **Its close-out deleted Session 262's record heading.** `6360c2c` turned
+  `### What Session 262 Did` into `### What Session 263 Did` rather than adding one. Session 262's
+  body now sits headless inside Session 263's span (from line 382 at this close-out). The guards
+  count headings, so they cannot see it. That is structural damage to the file every session reads.
+- **−** Gotchas were all migration-specific; none applied to data-agent work. That is fair for its
+  task, but it meant zero carry-over value here.
+- **ROI:** moderate — one accurate line that mattered, one defect to report.
+
+### Session 264 Self-Assessment
+
+**Score: 8/10.**
+- **+** Measured every failure class at HEAD before asking for rulings. Both pickers carried the
+  measurements, and each ruling was taken before any code.
+- **+** Runtime-verified against the real client over real HTTP, parent against fix, at $0. That
+  proves the claim on the surface users run, not only through a duck-typed fake.
+- **+** Read every skeptic verdict before acting (Session 263's own lesson, #45/#167). Fixed all
+  three medium gaps, then re-ran the survivors to confirm they were killed rather than assuming it.
+- **+** A control mutant caught a broken harness before any mutation result was reported.
+- **−** **My first-draft tests had position and mode bias** (#282). The review found it, not me. I
+  had chosen "last" deliberately for one mutant and did not ask which other mutant it blinded.
+- **−** **Wrote an underived claim into a test docstring:** that `nan-as-text` is what the shipped
+  client produces. It was backwards, and recurs #257/#277.
+- **−** `959c452`'s ledger entry needed two corrections in the next one: "name" should have been any
+  reflected text, and one note type changed.
+- **Decay term:** the backlog item was rewritten in place, one row for one row. Nothing else could be
+  reduced.
+
+**What's next.**
+1. **Pushing is the operator's call.** Seven commits are local: Session 263's two plus this
+   session's five, this close-out included.
+2. **Restore Session 262's record heading** before the tenth trim. It is a one-line insert above
+   `SESSION_NOTES.md:382`. It was offered as a picker option this session and not chosen, so it
+   still needs the operator's go-ahead.
+3. **The narrowed item** (`BACKLOG.md:392`) needs a reject-vs-scrub ruling before code. So does
+   *"One unreflectable view empties the whole inventory"* (`BACKLOG.md:364`, a reporting decision).
+4. **Observed, not filed** (no live reach; filing would be manufacturing work):
+   - Duplicate names in a ranking: the last one wins, and only its score is checked.
+   - A `None` score on a named entry is now rejected. This extends ruling (1), and the ledger says so.
+   - Names the model returns can put a `Bearer` shape into the WARNING (stderr only, never
+     persisted). The same exposure already existed via `LLMParseError`.
+5. **Unchanged:** the `--db-url` exit-0 ruling; `PROJECT_LEARNINGS.md` refused by a default `Read`;
+   `SESSION_NOTES.md` is at 189,396 B at this close-out, against the
+   196,608 B trigger, so the tenth trim is likely due within a session or two (re-measure).
+
+**Key files** (read off `grep -n` at this close-out).
+- `discovery.py:56`, `:65`, `:73`: the three classes.
+- `discovery.py:84`: `_BRIEF`.
+- `discovery.py:90`: `_check_writable`.
+- `discovery.py:221`: the stage-1 call.
+- `discovery.py:256`: `_ranked`; `:288` is the no-match raise, `:301` the score check, `:308` the
+  reason check.
+- `test_discovery.py:474`: stage-1 test (4 texts × 2 positions × ranking on/off).
+- `test_discovery.py:804`/`:807`: `AT`, `_one_scored`.
+- `test_discovery.py:849`: `TestRankingThatCannotBeApplied`.
+- `test_discovery.py:1019`/`:1046`: `_CannedAnthropic` and the shipped-client test.
+- `test_cli.py:416`: the exit-1 CLI test.
+- `packages/data-agent/USAGE.md:235`, `:446`.
+- `BACKLOG.md:55`, `:392`.
+- `PROJECT_LEARNINGS.md:287`–`:289` (#281–#283).
+
+**Gotchas.**
+1. **Mutation harness here:** pytest's `pythonpath` ini setting beats `PYTHONPATH`. Pass
+   `-o pythonpath=<scratch> src`, plus a baseline and a must-die control (#281).
+2. **Isolated workflow worktrees start at `origin/master`, not HEAD.** Brief agents to check out
+   the SHA and run `uv sync --all-extras` (#283).
+3. **`--fake-llm` can reach none of these failures.** It ranks every table with valid scores. Use
+   `_CannedAnthropic` in tests; locally, a stand-in HTTP server with `ANTHROPIC_BASE_URL`.
+4. **`math.isfinite` in the score check is an equivalent mutant.** Keep it for intent; do not file
+   it as a test gap.
+5. **`if llm is not None and entries` is now load-bearing.** Drop `and entries`, and an empty
+   database under `--rank-with-llm` becomes `RankingMatchedNoEntryError`, exit 1.
+6. **A new ranking failure should get its own class.** The note shows only the type name, and
+   `PydanticSerializationError` no longer appears in notes: `UnwritableEntryError` wraps it.
 
 ### What Session 263 Did
 **Deliverable:** **a readiness verdict on migrating this repository into a private environment —
