@@ -28,10 +28,12 @@ from model_project_constructor_data_agent.anthropic_client import (
     AnthropicLLMClient,
     LLMParseError,
 )
+from model_project_constructor_data_agent.db import SkippedEntity
 from model_project_constructor_data_agent.discovery import (
     PRODUCER_ID,
     PRODUCER_VERSION,
     RANKING_FAILED_NOTE_PREFIX,
+    SKIPPED_NOTE_PREFIX,
 )
 from model_project_constructor_data_agent.schemas import DataSourceEntry
 
@@ -127,7 +129,9 @@ class _RowsDB:
     def __init__(self, rows: Any) -> None:
         self._rows = rows
 
-    def get_information_schema(self, schemas: list[str] | None = None) -> Any:
+    def get_information_schema(
+        self, schemas: list[str] | None = None, *, skipped: Any = None
+    ) -> Any:
         return self._rows
 
 
@@ -135,8 +139,87 @@ class _RaisingDB:
     def __init__(self, exc: BaseException) -> None:
         self._exc = exc
 
-    def get_information_schema(self, schemas: list[str] | None = None) -> Any:
+    def get_information_schema(
+        self, schemas: list[str] | None = None, *, skipped: Any = None
+    ) -> Any:
         raise self._exc
+
+
+class _SkippingDB:
+    """Duck-typed DB that reflects ``rows`` and reports ``skipped`` as skipped,
+    the way ``ReadOnlyDB.get_information_schema`` does when given a list."""
+
+    def __init__(self, rows: list[dict[str, Any]], skipped: list[SkippedEntity]) -> None:
+        self._rows = rows
+        self._skipped = skipped
+
+    def get_information_schema(
+        self, schemas: list[str] | None = None, *, skipped: Any = None
+    ) -> Any:
+        # No ``assert skipped is not None``: the probe absorbs an AssertionError
+        # into a note. A probe that passes no list fails here with an
+        # AttributeError instead, which the note assertions then catch.
+        skipped.extend(self._skipped)
+        return self._rows
+
+
+def _db_error(message: str) -> sa.exc.OperationalError:
+    return sa.exc.OperationalError(statement="", params={}, orig=Exception(message))
+
+
+def _skipped_view(name: str, message: str = "no such table: main.doomed") -> SkippedEntity:
+    return SkippedEntity("main", name, "view", _db_error(message))
+
+
+def _skip_note(total: int, *listed: str, more: int = 0) -> str:
+    """The skip note the probe must write, composed here so a format change is a
+    deliberate edit to the tests rather than something each test half-pins."""
+    tail = f", and {more} more" if more else ""
+    return (
+        f"{SKIPPED_NOTE_PREFIX} {len(listed) + more} of {total} tables and views, "
+        f"which could not be reflected: {', '.join(listed)}{tail}. Each cause was "
+        "logged as a WARNING when this inventory was produced."
+    )
+
+
+def _stale_warehouse(path: Path, *stale: str) -> str:
+    """Two tables and two good views, plus one view per ``stale`` name whose base
+    table was dropped — which SQLite allows and PostgreSQL refuses. Reflecting
+    such a view raises ``OperationalError`` (measured Session 265)."""
+    statements = [
+        "CREATE TABLE claims (claim_id INTEGER PRIMARY KEY)",
+        "CREATE TABLE policies (policy_id INTEGER PRIMARY KEY)",
+        "CREATE VIEW v_b_good AS SELECT claim_id FROM claims",
+        "CREATE VIEW v_y_good AS SELECT policy_id FROM policies",
+    ]
+    for name in stale:
+        statements += [
+            f"CREATE TABLE doomed_{name} (x INTEGER)",
+            f"CREATE VIEW {name} AS SELECT x FROM doomed_{name}",
+            f"DROP TABLE doomed_{name}",
+        ]
+    engine = sa.create_engine(f"sqlite:///{path}")
+    try:
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(sa.text(statement))
+    finally:
+        engine.dispose()
+    return f"sqlite:///{path}"
+
+
+def _probe_degraded(url: str, **kwargs: Any) -> DataSourceInventory:
+    """Connect, probe, close — for a test that EXPECTS a note (cf. ``_probe``)."""
+    db = ReadOnlyDB(url)
+    db.connect()
+    try:
+        return probe_information_schema(db, **kwargs)
+    finally:
+        db.close()
+
+
+#: What ``_stale_warehouse`` reflects, in order: tables, then views, alphabetical.
+GOOD_FQNS = ["main.claims", "main.policies", "main.v_b_good", "main.v_y_good"]
 
 
 class _Ranker:
@@ -281,7 +364,7 @@ class TestProbeDegradation:
 
         class FailingDB:
             def get_information_schema(
-                self, schemas: list[str] | None = None
+                self, schemas: list[str] | None = None, *, skipped: Any = None
             ) -> list[dict[str, Any]]:
                 raise sa.exc.OperationalError(
                     statement="", params={}, orig=Exception("permission denied")
@@ -297,7 +380,7 @@ class TestProbeDegradation:
     def test_not_implemented_error_caught(self) -> None:
         class UnsupportedDB:
             def get_information_schema(
-                self, schemas: list[str] | None = None
+                self, schemas: list[str] | None = None, *, skipped: Any = None
             ) -> list[dict[str, Any]]:
                 raise NotImplementedError("dialect 'fake_dialect' not supported")
 
@@ -494,12 +577,18 @@ class TestProbeNeverRaises:
             assert llm.calls == []  # stage 1 failed, so stage 2 never ran
         assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
 
-    def test_one_bad_table_fails_the_whole_probe(self) -> None:
-        """No per-table skipping: a partial inventory is never returned unlabelled."""
+    def test_one_row_that_cannot_be_built_still_fails_the_whole_probe(self) -> None:
+        """Since Session 265 a table the DATABASE cannot reflect is skipped
+        (``TestUnreflectableEntitiesAreSkipped``). A row that reflected but cannot
+        be built into an entry is a defect, not a database fault, and still
+        fails the whole probe."""
         inv = probe_information_schema(
             _RowsDB([GOOD_ROW, {"namespace": "main"}])  # type: ignore[arg-type]
         )
         assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: KeyError: "
+        )
 
     def test_probe_failure_logs_exactly_one_warning(
         self, caplog: pytest.LogCaptureFixture
@@ -572,6 +661,161 @@ class TestProbeNeverRaises:
     ) -> None:
         with pytest.raises(exc_type):
             probe_information_schema(_RaisingDB(exc_type()))  # type: ignore[arg-type]
+
+
+class TestUnreflectableEntitiesAreSkipped:
+    """Session 265: a table or view the database cannot reflect is skipped.
+
+    Before, the first one ended the walk. A warehouse with any number of good
+    tables and one view whose base table was dropped reported ZERO entries, and
+    the note named only that first view (measured). A read-only role can neither
+    repair nor drop the view, and ``--include-schemas`` cannot leave out one
+    view, so such a warehouse could not be discovered at all. Operator ruling:
+    the skips are reported in ``notes`` (no contract change), each cause on
+    stderr.
+    """
+
+    @pytest.mark.parametrize(
+        "stale", ["v_a_stale", "v_m_stale", "v_z_stale"], ids=["first", "middle", "last"]
+    )
+    def test_a_stale_view_is_skipped_and_the_rest_kept(
+        self, tmp_path: Path, stale: str
+    ) -> None:
+        inv = _probe_degraded(_stale_warehouse(tmp_path / "w.db", stale))
+        assert [e.fully_qualified_name for e in inv.entries] == GOOD_FQNS
+        assert inv.producers[0].notes == _skip_note(
+            5, f"view 'main.{stale}' (OperationalError)"
+        )
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    def test_every_skipped_entity_is_named_in_order(self, tmp_path: Path) -> None:
+        inv = _probe_degraded(_stale_warehouse(tmp_path / "w.db", "v_a_stale", "v_z_stale"))
+        assert [e.fully_qualified_name for e in inv.entries] == GOOD_FQNS
+        assert inv.producers[0].notes == _skip_note(
+            6,
+            "view 'main.v_a_stale' (OperationalError)",
+            "view 'main.v_z_stale' (OperationalError)",
+        )
+
+    @pytest.mark.parametrize("count", [10, 11, 12])
+    def test_the_note_names_ten_and_counts_the_rest(self, count: int) -> None:
+        """The note is persisted and echoed on one stderr line, so it is bounded;
+        every skip still gets its own WARNING."""
+        skipped = [_skipped_view(f"v{i:02d}") for i in range(count)]
+        inv = probe_information_schema(_SkippingDB([GOOD_ROW], skipped))  # type: ignore[arg-type]
+        listed = [f"view 'main.v{i:02d}' (OperationalError)" for i in range(min(count, 10))]
+        assert inv.producers[0].notes == _skip_note(
+            count + 1, *listed, more=max(count - 10, 0)
+        )
+        assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+
+    def test_each_skip_logs_one_warning_on_one_line_with_its_cause(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            _probe_degraded(_stale_warehouse(tmp_path / "w.db", "v_a_stale", "v_z_stale"))
+        messages = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert len(messages) == 2
+        for stale, message in zip(("v_a_stale", "v_z_stale"), messages, strict=True):
+            assert f"view 'main.{stale}'" in message
+            assert (
+                "OperationalError: (sqlite3.OperationalError) no such table: "
+                f"main.doomed_{stale}"
+            ) in message
+            assert "\n" not in message
+
+    def test_a_skipped_cause_is_redacted_and_never_persisted(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Assert the SECRET's absence, never a marker's presence (learning #268).
+        The note carries names and types only; the cause goes to stderr."""
+        skipped = [
+            _skipped_view(
+                "v_stale", f"could not read: postgresql://user:{SECRET}@host/db\nDETAIL: x"
+            )
+        ]
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(_SkippingDB([GOOD_ROW], skipped))  # type: ignore[arg-type]
+        notes = inv.producers[0].notes or ""
+        assert SECRET not in caplog.text
+        assert SECRET not in notes
+        assert "could not read" in caplog.text  # redaction must not eat the cause
+        assert "could not read" not in notes
+
+    def test_a_skipped_name_that_cannot_be_written_is_escaped(self) -> None:
+        """A lone surrogate in a name the database could not reflect must not make
+        the note itself unwritable — the defect Session 264 closed for entries."""
+        inv = probe_information_schema(
+            _SkippingDB([GOOD_ROW], [_skipped_view("bad\udcffview")])  # type: ignore[arg-type]
+        )
+        assert "view 'main.bad\\udcffview' (OperationalError)" in (inv.producers[0].notes or "")
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    def test_when_everything_is_skipped_the_inventory_is_empty_and_never_ranked(
+        self,
+    ) -> None:
+        llm = _Ranker(lambda entries: [])
+        inv = probe_information_schema(
+            _SkippingDB([], [_skipped_view("v_a"), _skipped_view("v_b")]),  # type: ignore[arg-type]
+            llm=llm,
+        )
+        assert inv.entries == []
+        assert llm.calls == []  # nothing to rank, so no ranking failure either
+        assert inv.producers[0].notes == _skip_note(
+            2, "view 'main.v_a' (OperationalError)", "view 'main.v_b' (OperationalError)"
+        )
+
+    def test_a_ranking_after_a_skip_ranks_only_what_was_reflected(self) -> None:
+        seen: list[list[str]] = []
+
+        def _rank_all(entries: list[DataSourceEntry]) -> list[TableRanking]:
+            seen.append([e.fully_qualified_name for e in entries])
+            return [TableRanking(e.fully_qualified_name, 0.5, "ok") for e in entries]
+
+        inv = probe_information_schema(
+            _SkippingDB(_three_rows(), [_skipped_view("v_stale")]),  # type: ignore[arg-type]
+            llm=_Ranker(_rank_all),
+        )
+        assert seen == [["main.claims", "main.outcomes", "main.policies"]]
+        assert [e.relevance_score for e in inv.entries] == [0.5, 0.5, 0.5]
+        assert inv.producers[0].notes == _skip_note(
+            4, "view 'main.v_stale' (OperationalError)"
+        )
+
+    def test_a_failed_ranking_after_a_skip_puts_both_in_the_note(self) -> None:
+        """The skip part comes first, so a note that begins with
+        ``SKIPPED_NOTE_PREFIX`` can still carry a ranking failure after it."""
+        inv = probe_information_schema(
+            _SkippingDB(_three_rows(), [_skipped_view("v_stale")]),  # type: ignore[arg-type]
+            llm=_Ranker(_raise(RuntimeError("model unavailable"))),
+        )
+        assert [e.relevance_score for e in inv.entries] == [None, None, None]
+        assert inv.producers[0].notes == (
+            _skip_note(4, "view 'main.v_stale' (OperationalError)")
+            + f" {RANKING_FAILED_NOTE_PREFIX} (RuntimeError); all 3 entries are unranked. "
+            "The cause was logged as a WARNING when this inventory was produced."
+        )
+
+    def test_a_non_database_error_on_one_entity_still_fails_the_whole_probe(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Only a database error is skipped. Anything else is a defect, and it
+        stays loud: an empty inventory whose note names it."""
+        reflect = ReadOnlyDB._reflect_entity
+
+        def _broken_for_policies(
+            inspector: Any, schema: str, name: str, entity_kind: str
+        ) -> dict[str, Any]:
+            if name == "policies":
+                raise KeyError("referred_table")
+            return reflect(inspector, schema, name, entity_kind)
+
+        monkeypatch.setattr(ReadOnlyDB, "_reflect_entity", staticmethod(_broken_for_policies))
+        inv = _probe_degraded(_stale_warehouse(tmp_path / "w.db", "v_stale"))
+        assert inv.entries == []
+        assert (inv.producers[0].notes or "").startswith(
+            "information_schema probe failed: KeyError: "
+        )
 
 
 class TestRankingFailureKeepsEntries:

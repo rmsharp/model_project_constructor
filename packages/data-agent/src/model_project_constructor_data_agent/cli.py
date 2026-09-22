@@ -36,6 +36,7 @@ from model_project_constructor_data_agent.anthropic_client import DEFAULT_MODEL
 from model_project_constructor_data_agent.db import ReadOnlyDB
 from model_project_constructor_data_agent.discovery import (
     RANKING_FAILED_NOTE_PREFIX,
+    SKIPPED_NOTE_PREFIX,
     probe_information_schema,
 )
 from model_project_constructor_data_agent.factory import (
@@ -166,6 +167,16 @@ def discover(
             "accessible schema except information_schema / pg_catalog."
         ),
     ),
+    allow_skipped: bool = typer.Option(
+        False,
+        "--allow-skipped",
+        help=(
+            "Exit 0 when the only fault is tables or views the database could "
+            "not reflect, which were skipped. They are still named in the "
+            "file's notes and on stderr. An inventory with nothing reflected, or "
+            "whose ranking failed, still exits 1."
+        ),
+    ),
     rank_with_llm: bool = typer.Option(
         False,
         "--rank-with-llm",
@@ -227,15 +238,47 @@ def discover(
     # from exit 1 into exit 0, and ``discover ... && next-step`` could not tell
     # an empty or unranked inventory from a good one. The probe sets ``notes``
     # only when it degraded; the note is safe to echo — it is in the file.
+    #
+    # Session 265 added a PARTIAL inventory: tables or views the database could
+    # not reflect were skipped. It also exits 1, unless ``--allow-skipped``
+    # accepts it and nothing else went wrong (operator rulings). Its part starts
+    # the note and a ranking part can follow it, so that one is found with
+    # ``in`` — and a skipped name that happened to contain the ranking prefix
+    # would read as a ranking failure, which errs to exit 1, never to exit 0.
     degraded = [p.notes for p in inventory.producers if p.notes]
     if degraded:
-        what = (
-            "ranking failed, so its entries are UNRANKED"
-            if degraded[0].startswith(RANKING_FAILED_NOTE_PREFIX)
-            else "reflection failed, so it is EMPTY"
+        note = degraded[0]
+        skipped = note.startswith(SKIPPED_NOTE_PREFIX)
+        unranked = note.startswith(RANKING_FAILED_NOTE_PREFIX) or (
+            skipped and RANKING_FAILED_NOTE_PREFIX in note
+        )
+        what: list[str] = []
+        if skipped:
+            what.append(
+                "some tables or views could not be reflected and were SKIPPED"
+                + ("" if inventory.entries else ", so it is EMPTY")
+            )
+        elif not unranked:
+            what.append("reflection failed, so it is EMPTY")
+        if unranked:
+            what.append("ranking failed, so its entries are UNRANKED")
+        acceptable = skipped and not unranked and bool(inventory.entries)
+        if acceptable and allow_skipped:
+            typer.echo(
+                f"warning: {output} is a partial inventory — {what[0]}, which "
+                f"--allow-skipped accepts. {note}",
+                err=True,
+            )
+            return
+        hint = (
+            " Pass --allow-skipped to accept an inventory whose only fault is "
+            "skipped tables or views."
+            if acceptable
+            else ""
         )
         typer.echo(
-            f"error: {output} is a degraded inventory — {what}. {degraded[0]}",
+            f"error: {output} is a degraded inventory — {' and '.join(what)}. "
+            f"{note}{hint}",
             err=True,
         )
         raise typer.Exit(code=1)

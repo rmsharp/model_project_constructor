@@ -512,7 +512,7 @@ def test_cli_discover_failed_reflection_keeps_the_file_and_exits_nonzero(
     """
     import model_project_constructor_data_agent.cli as cli_mod
 
-    def _boom(self: object, schemas: object = None) -> object:
+    def _boom(self: object, schemas: object = None, **kwargs: object) -> object:
         raise exc
 
     monkeypatch.setattr(cli_mod.ReadOnlyDB, "get_information_schema", _boom)
@@ -531,6 +531,159 @@ def test_cli_discover_failed_reflection_keeps_the_file_and_exits_nonzero(
     assert (inv.producers[0].notes or "").startswith(
         f"information_schema probe failed: {type_name}: "
     )
+
+
+def _seed_stale_view_db(db_path: Path, *, with_claims: bool = True) -> str:
+    """A ``claims`` table (optional) and a view whose base table was dropped —
+    which SQLite allows and PostgreSQL refuses. Reflecting the view raises."""
+    engine = sa.create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            if with_claims:
+                conn.execute(sa.text("CREATE TABLE claims (claim_id INTEGER PRIMARY KEY)"))
+            conn.execute(sa.text("CREATE TABLE doomed (x INTEGER)"))
+            conn.execute(sa.text("CREATE VIEW v_stale AS SELECT x FROM doomed"))
+            conn.execute(sa.text("DROP TABLE doomed"))
+    finally:
+        engine.dispose()
+    return f"sqlite:///{db_path}"
+
+
+STALE_VIEW = "view 'main.v_stale' (OperationalError)"
+
+
+def test_cli_discover_skipped_view_keeps_the_rest_and_exits_nonzero(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """Operator rulings, Session 265: a table or view the database cannot reflect
+    is skipped and named in the notes, and the command still exits 1 — a partial
+    inventory is a degraded one. Before, the same database gave 0 entries."""
+    from model_project_constructor_data_agent.discovery import SKIPPED_NOTE_PREFIX
+
+    db_url = _seed_stale_view_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(app, ["discover", "--db-url", db_url, "--output", str(out)])
+
+    assert result.exit_code == 1, result.output
+    assert isinstance(result.exception, SystemExit)
+    assert "1 entries" in result.stdout
+    assert result.stderr.startswith("error: ")
+    assert "SKIPPED" in result.stderr
+    assert "SKIPPED" not in result.stdout
+    assert STALE_VIEW in result.stderr  # the note itself is echoed
+    assert "--allow-skipped" in result.stderr  # and the way to accept it is named
+
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+    assert (inv.producers[0].notes or "").startswith(SKIPPED_NOTE_PREFIX)
+
+
+def test_cli_discover_allow_skipped_accepts_a_partial_inventory(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """The opt-out the operator ruled for: a read-only role cannot repair or drop
+    a stale view, so without it such a warehouse exits 1 on every run."""
+    db_url = _seed_stale_view_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(out), "--allow-skipped"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "1 entries" in result.stdout
+    # Still said, on stderr — accepted is not silent.
+    assert result.stderr.startswith("warning: ")
+    assert STALE_VIEW in result.stderr
+    assert "error:" not in result.stderr
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert [e.fully_qualified_name for e in inv.entries] == ["main.claims"]
+    assert STALE_VIEW in (inv.producers[0].notes or "")
+
+
+def test_cli_discover_allow_skipped_does_not_accept_an_empty_inventory(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """Every entity skipped leaves nothing to use, so the flag does not apply."""
+    db_url = _seed_stale_view_db(tmp_path / "discover.db", with_claims=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(out), "--allow-skipped"]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "0 entries" in result.stdout
+    assert result.stderr.startswith("error: ")
+    assert "EMPTY" in result.stderr
+    assert STALE_VIEW in result.stderr
+
+
+def test_cli_discover_allow_skipped_does_not_accept_a_failed_ranking(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The flag excuses skipped tables and nothing else. The note begins with the
+    skip part here, so a check on the note's start alone would pass this."""
+    import model_project_constructor_data_agent.cli as cli_mod
+    from model_project_constructor_data_agent.anthropic_client import LLMParseError
+
+    ranker = _FailingRanker(LLMParseError("expected JSON array, got dict"))
+    monkeypatch.setattr(cli_mod, "make_llm_client", lambda provider, **kw: ranker)
+
+    db_url = _seed_stale_view_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        [
+            "discover",
+            "--db-url",
+            db_url,
+            "--output",
+            str(out),
+            "--rank-with-llm",
+            "--allow-skipped",
+        ],
+    )
+
+    assert ranker.calls == 1
+    assert result.exit_code == 1, result.output
+    assert result.stderr.startswith("error: ")
+    assert "SKIPPED" in result.stderr
+    assert "UNRANKED" in result.stderr
+    assert "(LLMParseError)" in result.stderr
+
+
+def test_cli_discover_allow_skipped_does_not_accept_a_failed_probe(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import model_project_constructor_data_agent.cli as cli_mod
+
+    def _boom(self: object, schemas: object = None, **kwargs: object) -> object:
+        raise KeyError("referred_table")
+
+    monkeypatch.setattr(cli_mod.ReadOnlyDB, "get_information_schema", _boom)
+    db_url = _seed_discover_db(tmp_path / "discover.db", with_policies=False)
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(out), "--allow-skipped"]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert "EMPTY" in result.stderr
+    assert "--allow-skipped" not in result.stderr  # it would not help, so not offered
+
+
+def test_cli_discover_allow_skipped_on_a_healthy_database_says_nothing(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    db_url = _seed_discover_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(out), "--allow-skipped"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stderr == ""
+    inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
+    assert inv.producers[0].notes is None
 
 
 def test_cli_derives_sql_dialect_from_db_url(

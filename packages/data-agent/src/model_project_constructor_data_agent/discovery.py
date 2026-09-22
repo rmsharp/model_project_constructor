@@ -10,9 +10,10 @@ downstream consumer that accepts the contract.
 Phase 2 scope per ``docs/architecture-history/data-source-inventory-contract-plan.md``:
 
 - PostgreSQL + SQLite tested against fake DBs.
-- Other dialects: SQLAlchemy inspector handles most. Anything that raises
-  during reflection *or while an entry is built from it* surfaces as an empty
-  inventory with ``ProducerMetadata.notes`` naming the error.
+- Other dialects: SQLAlchemy inspector handles most. A table or view the
+  database cannot reflect is skipped, and ``ProducerMetadata.notes`` names it;
+  anything else that raises during reflection *or while an entry is built from
+  it* surfaces as an empty inventory with ``notes`` naming the error.
 - Optional LLM ranking via the caller-supplied ``llm`` (opt-in through the
   ``--rank-with-llm`` CLI flag). When the ``llm`` object exposes a
   ``rank_candidate_tables`` method, discovery invokes it and assigns
@@ -32,7 +33,7 @@ import reprlib
 from datetime import UTC, datetime
 from typing import Any
 
-from model_project_constructor_data_agent.db import ReadOnlyDB, redact_secrets
+from model_project_constructor_data_agent.db import ReadOnlyDB, SkippedEntity, redact_secrets
 from model_project_constructor_data_agent.schemas import (
     ColumnMetadata,
     DataSourceEntry,
@@ -45,12 +46,22 @@ _LOG = logging.getLogger(__name__)
 PRODUCER_ID = "information_schema_probe_v1"
 PRODUCER_VERSION = "1.0"
 
-#: How ``ProducerMetadata.notes`` begins for each degradation. The two must stay
-#: distinguishable by text: an empty inventory and an unranked one are different
-#: outcomes, and ``cli.discover`` — which exits non-zero on either (operator
-#: ruling, Session 261) — tells the operator which. Compare with ``startswith``.
+#: How each degradation's part of ``ProducerMetadata.notes`` begins. They must
+#: stay distinguishable by text: an empty, an unranked and a partial inventory
+#: are different outcomes, and ``cli.discover`` — which exits non-zero on each
+#: (operator rulings, Sessions 261 and 265) — tells the operator which. A note
+#: holds one part, except that a skip and a ranking failure can both happen:
+#: then the skip part comes first and the ranking part follows it (Session 265).
+#: So compare the note's START with ``startswith``; only the ranking prefix can
+#: also appear later.
 PROBE_FAILED_NOTE_PREFIX = "information_schema probe failed"
 RANKING_FAILED_NOTE_PREFIX = "LLM relevance ranking failed"
+SKIPPED_NOTE_PREFIX = "information_schema probe skipped"
+
+#: How many skipped entities the note names; it counts the rest. The note is
+#: persisted and echoed on one stderr line, so it is bounded; every skipped
+#: entity still gets a WARNING of its own.
+_SKIPPED_NAMED = 10
 
 
 class RankingMatchedNoEntryError(ValueError):
@@ -80,7 +91,9 @@ class UnwritableEntryError(ValueError):
 
 
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
-#: names come from the model's reply, and the message is logged whole.
+#: names come from the model's reply, and the message is logged whole. It also
+#: quotes a skipped entity's name, where ``repr`` has a second job: it escapes a
+#: lone surrogate, which would otherwise make the note itself unwritable.
 _BRIEF = reprlib.Repr()
 _BRIEF.maxlist = 3
 _BRIEF.maxstring = 80
@@ -157,21 +170,31 @@ def probe_information_schema(
 
     Returns a valid :class:`DataSourceInventory`. **No** ``Exception`` **raised
     by** ``db`` **or by** ``llm`` **escapes** — each stage degrades to a labelled
-    result and logs one WARNING on this module's logger. Three limits, all
+    result and logs a WARNING on this module's logger: one per failed stage, and
+    one per skipped entity. Three limits, all
     measured: only ``Exception`` is absorbed, never ``KeyboardInterrupt`` /
     ``SystemExit``; a non-``str`` ``request_context`` still raises, because it is
     validated while the *result* is built (a bad ``db`` or ``include_schemas``
     does not — it surfaces as a probe failure); and an exception class hostile
     enough that reading its ``__name__`` raises is out of scope.
 
-    - **Reflection, or building an entry from it, fails** (permission denied,
-      unsupported dialect, a reflection dict missing a key, a table that fails
-      schema validation or has a name or other reflected text that cannot be
-      written as UTF-8 — :class:`UnwritableEntryError`, naming the table):
+    - **The database cannot reflect a table or view** — a view whose base table
+      was dropped, or a table dropped while the probe ran: any
+      ``SQLAlchemyError`` from reflecting that one entity (Session 265). It is
+      **skipped** and the rest are kept. ``notes`` begins
+      :data:`SKIPPED_NOTE_PREFIX`, counts the skipped entities against every
+      entity found, and names up to ten of them with each one's exception type.
+      Each cause goes to its own WARNING, redacted best-effort, on one line, and
+      is never persisted. A partial inventory is never returned unlabelled.
+    - **Reflection, or building an entry from it, fails** in any other way
+      (permission denied listing the tables, unsupported dialect, a non-database
+      error while reflecting, a reflection dict missing a key, a table that
+      fails schema validation or has a name or other reflected text that cannot
+      be written as UTF-8 — :class:`UnwritableEntryError`, naming the table):
       ``entries=[]`` and ``notes`` begins
       :data:`PROBE_FAILED_NOTE_PREFIX`, then the exception's type and its
-      message — redacted best-effort, on one line. One bad table fails the
-      whole probe: a partial inventory is never returned unlabelled.
+      message — redacted best-effort, on one line. One such table fails the
+      whole probe.
     - **Ranking fails** (no credentials, a malformed or truncated reply, a
       ranking that fails schema validation, names no entry, applies a score that
       is not a finite number in [0.0, 1.0], or carries a reason that cannot be
@@ -183,7 +206,9 @@ def probe_information_schema(
       gateway's echo of a header or an environment variable in shapes no
       redactor here can see (measured Session 261).
 
-    ``notes`` is ``None`` exactly when neither happened. That is **not** the
+    A skip and a ranking failure can both happen, since ranking runs on the
+    entries that were reflected; ``notes`` then holds both, the skip part first.
+    ``notes`` is ``None`` exactly when none of the three happened. That is **not** the
     same as "every entry is ranked": a partial ranking is legal, so an entry the
     ranker returns no ranking for keeps ``relevance_score=None``. When a ranker
     ran, it does mean at least one entry is ranked (Session 264), and every
@@ -212,13 +237,17 @@ def probe_information_schema(
             request_context=request_context,
         )
 
+    skipped: list[SkippedEntity] = []
     try:
-        tables = db.get_information_schema(schemas=include_schemas)
+        tables = db.get_information_schema(schemas=include_schemas, skipped=skipped)
         entries = [_entry_from_reflection(t) for t in tables]
         for entry in entries:
             # Checked HERE, so reflected text that cannot be written is blamed on
             # reflection — not on ranking, whose own check would otherwise meet it.
             _check_writable(entry)
+        # Inside the ``try`` too: what ``db`` reported as skipped is its output as
+        # much as the rows are, so a malformed report is a probe failure.
+        notes = [_skipped_note(skipped, found=len(entries) + len(skipped))] if skipped else []
     except Exception as e:
         cause = f"{type(e).__name__}: {_safe_message(e)}"
         _LOG.warning(
@@ -227,7 +256,15 @@ def probe_information_schema(
         )
         return _inventory([], f"{PROBE_FAILED_NOTE_PREFIX}: {cause}")
 
-    notes: str | None = None
+    for s in skipped:
+        _LOG.warning(
+            "probe_information_schema: skipped %s %s, which could not be reflected: %s: %s",
+            s.entity_kind,
+            _BRIEF.repr(_fqn(s.namespace, s.name)),
+            type(s.error).__name__,
+            _safe_message(s.error),
+        )
+
     if llm is not None and entries:
         try:
             # Looked up INSIDE the try: ``hasattr`` swallows only AttributeError,
@@ -244,13 +281,34 @@ def probe_information_schema(
                 type_name,
                 _safe_message(e),
             )
-            notes = (
+            notes.append(
                 f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all {len(entries)} "
                 "entries are unranked. The cause was logged as a WARNING when "
                 "this inventory was produced."
             )
 
-    return _inventory(entries, notes)
+    return _inventory(entries, " ".join(notes) or None)
+
+
+def _skipped_note(skipped: list[SkippedEntity], *, found: int) -> str:
+    """The note's skip part: how many of the ``found`` entities were skipped, and
+    the first :data:`_SKIPPED_NAMED` of them by name and exception type.
+
+    Names and types only. The cause is a driver's message, so it goes to the
+    WARNING, where it is redacted, and never into the file, which travels
+    downstream.
+    """
+    named = ", ".join(
+        f"{s.entity_kind} {_BRIEF.repr(_fqn(s.namespace, s.name))} ({type(s.error).__name__})"
+        for s in skipped[:_SKIPPED_NAMED]
+    )
+    rest = len(skipped) - _SKIPPED_NAMED
+    more = f", and {rest} more" if rest > 0 else ""
+    return (
+        f"{SKIPPED_NOTE_PREFIX} {len(skipped)} of {found} tables and views, which "
+        f"could not be reflected: {named}{more}. Each cause was logged as a "
+        "WARNING when this inventory was produced."
+    )
 
 
 def _ranked(
@@ -310,10 +368,16 @@ def _ranked(
     return ranked
 
 
+def _fqn(namespace: str | None, name: str) -> str:
+    """An entity's ``fully_qualified_name`` — one rule, so a skipped entity is
+    named exactly as its entry would have been."""
+    return f"{namespace}.{name}" if namespace else name
+
+
 def _entry_from_reflection(table: dict[str, Any]) -> DataSourceEntry:
     namespace = table.get("namespace")
     name = table["name"]
-    fqn = f"{namespace}.{name}" if namespace else name
+    fqn = _fqn(namespace, name)
 
     columns = [
         ColumnMetadata(
