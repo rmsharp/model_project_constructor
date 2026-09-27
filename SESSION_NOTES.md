@@ -97,6 +97,18 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 266 Did
+**Deliverable:** **the tenth trim of `SESSION_NOTES.md`** — the handoff's first ask: the file passed
+the 196,608 B trigger at Session 265's close-out (198,514 B). Chosen by the operator at Phase 1 from
+a two-step picker (area: ledger; item: the trim). (IN PROGRESS)
+**Started:** 2026-09-26
+**Status:** Session claimed. Work beginning. The operator also gave the go-ahead to restore Session
+262's missing record heading first, as its own commit before the trim (the trim commit itself carries
+no record edit).
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 265 Did
 **Deliverable:** **one unreflectable view no longer empties the whole inventory — COMPLETE**, closing
 the `BACKLOG.md` item filed in Session 261. The operator chose it from a two-step picker (area, then

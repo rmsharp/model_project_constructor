@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S266
+date: 2026-09-26
+status: pending
+active_task: The tenth trim of SESSION_NOTES.md (198,514 B against the 196,608 B trigger), chosen by the operator at Phase 1 from a two-step picker. First, with the operator's go-ahead and as its own commit, restore Session 262's missing record heading (a one-line insert above the headless body, found with grep -n). The trim commit itself carries no record edit. Master is level with origin at the claim; pushing at close-out is not yet ruled.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S265
 date: 2026-09-22
 status: complete
