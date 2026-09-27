@@ -705,17 +705,30 @@ def _m08_the_retention_rule_has_no_compliant_cut(root: pathlib.Path) -> None:
     leaves length, line count and head untouched and hence page_estimate identical to the
     unmutated ledger's. A ledger with no tail beyond the FLOOR-th record to swap from (a freshly
     trimmed one) keeps the padded form above.
+
+    Session 266 found "head untouched" was true only while the pad landed beyond the PAGE, not
+    merely beyond the K prefix: in the wide state built on the Session 265 ledger the page ran
+    672 lines, well past the K prefix, so the pad's lines (wider than the lines they displaced)
+    entered the head, the head's bytes rose, and the predicted page fell into the reduced regime
+    -- 470 lines against a K prefix ending at 477 -- so check_k_lines co-fired. The swap's pad now
+    goes in at the first line boundary at or beyond BOTH, which leaves the head unchanged and so
+    the regime unchanged. A ledger whose page ends past the FLOOR-th record has no such place
+    and takes the padded form.
     """
     data, _front, records = _ledger(root)
     beyond_k = _must(nth_non_stub(records, K + 1)).end_byte
     floor_end = _must(nth_non_stub(records, FLOOR)).end_byte
+    estimate = page_estimate(data)
+    beyond_page = beyond_k
+    if estimate is not None:
+        beyond_page = max(beyond_k, sum(map(len, data.splitlines(keepends=True)[:estimate[0]])))
     need = STOP_BYTES - floor_end + 1_000
     cut = data.rfind(b"\n", 0, max(0, len(data) - need)) + 1
     lines = data[cut:].count(b"\n")
-    if cut >= floor_end and lines and (len(data) - cut) // lines >= 2:
+    if beyond_page <= floor_end <= cut and lines and (len(data) - cut) // lines >= 2:
         width, extra = divmod(len(data) - cut, lines)
         pad = b"".join(b"x" * (width + (i < extra) - 1) + b"\n" for i in range(lines))
-        out = data[:beyond_k] + pad + data[beyond_k:cut]
+        out = data[:beyond_page] + pad + data[beyond_page:cut]
     else:
         pad = _filler(need, width=_mean_width(data))
         out = (data[:beyond_k] + pad + data[beyond_k:])[:max(len(data), floor_end + len(pad))]

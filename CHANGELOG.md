@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-26 · [ad hoc] S266 — read-budget guard: M08's pad now lands beyond the page, so `satisfiable` is again the sole catcher of a mutant
+- **Change:** `tests/test_read_budget.py`, mutant `_m08_the_retention_rule_has_no_compliant_cut`. Its exact swap left the file's length, line count and head "untouched", which held only while the pad landed beyond the page and not merely beyond the K prefix. Measured in the wide successor state built on the Session 265 ledger: the page ran 672 lines against a K prefix ending at line 477, so the pad's lines entered the head, the head's bytes rose, the predicted page fell into the reduced regime (470 lines) and `check_k_lines` co-fired, which left `check_satisfiable` the sole catcher of no mutant (`test_next_state[after-a-wide-close-out-then-claim]` red at the Session 266 claim). The pad now goes in at the first line boundary at or beyond both the (K+1)th record's end and the page's last line; a ledger whose page ends past the FLOOR-th record takes the padded form. 15 lines added, 2 changed, no other test touched. The claim commit that first showed it carries the RED note in its own entry.
+- **Commit/PR:** this commit — `tests/test_read_budget.py`, `CHANGELOG.md`
+- **Session:** S266 · **Verified:** red at `fb3db59` (measured M08 → fired `k_lines`, `satisfiable`), green after: `tests/test_read_budget.py` 47 passed, `tests/test_session_notes_census.py` 35 passed, `ruff check` clean. `ruff format` was NOT applied: it rewrites 339 lines of this file's hand-aligned style (tried, reverted from HEAD, edit re-applied). The model is only built at a claim commit, so the state after the trim and its close-out is checked by the trim, not by this commit.
+- **Model:** Claude Sonnet 5
+
 ### 2026-09-26 · [ad hoc] S266 claim: the tenth trim of `SESSION_NOTES.md` *(in progress)*
 - **Change:** Session 266 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the tenth trim of `SESSION_NOTES.md`: the file is 198,514 B, past the 196,608 B trigger since Session 265's close-out, and the operator chose the trim at Phase 1 from a two-step picker. The operator also approved restoring Session 262's missing record heading as its own commit before the trim. Order of commits: this claim, the heading restore, any fix a next state of the guards needs, the trim (no record edit), the close-out.
 - **Commit/PR:** this commit
