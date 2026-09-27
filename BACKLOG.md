@@ -64,6 +64,7 @@ rows below it are the smaller residue that closing it exposed.
 
 | The NO-OP guard cannot see a partially inert mutant | Session 253 repaired the broken proof and added a guard: a mutant that corrupts nothing is now reported as a broken *fixture* rather than a missed *assertion*. The guard compares the whole argument list, so it catches a mutant that has gone completely inert — and misses one that mutates three things and loses one of them. Measured: 7 of 46 are exposed, all of them reading frozen inputs that cannot drift, so nothing is broken today. | **Small.** Compare slot-by-slot, or accept the seven and say so. |
 | Neither collapse proof is guarded by anything | `L10` enforces write-once over the ancestor *shard* proofs by a hand-declared list; `R4/GONE` covers every shard the table declares, and its proof. Nothing covers `SESSION_NOTES-pointer-collapse.verify.sh` or `SESSION_NOTES-pointer-collapse-S254.verify.sh` — and the second is the declared second custodian of the 276 deleted lines, the reason "nothing was lost" does not rest on git alone. Delete either file and the remaining proofs pass; CI errors only when *zero* proofs are found. | **Small.** Add both to a write-once list, or have each assert the other exists. |
+| A quotation can defeat the S254 collapse proof's self-test | Two of that proof's self-test mutations find the oldest live record by searching for the text `### What Session `, which matches the LAST place that text appears anywhere, not the last heading. A record that quotes it lands the search inside the quotation, the mutation edits nothing, and the proof reports a surviving mutant, which turns CI red. Session 266's trim would have hit it; rewording one quotation avoided it. Session 264's record holds another, so a later trim can hit it again. | **Operator call.** Small — anchor both searches at a line start — but it edits a custodian proof that nothing guards, in the session that needs it green. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB). Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
@@ -494,6 +495,30 @@ own banner both survive independently.)
 **Small.** Either add both files to a declared write-once list in the style of `L10`, or have each
 collapse proof assert the other exists and matches its add-commit blob. The second is symmetric and
 needs no new list to maintain.
+
+### A quotation can defeat the S254 collapse proof's self-test
+
+**Filed Session 266. Operator call — it changes a custodian proof.**
+
+`SESSION_NOTES-pointer-collapse-S254.verify.sh` builds its oldest-record mutations with
+`rfind("### What Session ")` (`:1091` and `:1158`). That is the LAST occurrence of the literal
+anywhere in the text, not the last record heading, so a record that quotes the literal after its own
+heading moves the anchor into the quotation. The mutation then changes nothing, the mutant survives
+and `--self-test` exits 2. Measured by Session 266's mapping analyst on a simulation of its trim:
+the cut retained Session 258's record, whose line 1149 quoted `### What Session N Did`, and M43
+survived (50 of 50 were caught at HEAD). Session 266 avoided it by rewording that one quotation to
+"everything above the first record heading", the operator's ruling at Phase 1, which left both
+proofs byte-identical.
+
+**It comes back.** Session 264's record quotes `### What Session 262 Did` in its handoff evaluation
+(`SESSION_NOTES.md:313` when this was filed). Whenever the oldest record a trim retains holds such a
+quotation after its heading, the same red returns, and the workaround is another reword.
+
+**Small.** Anchor both searches at a line start (`rfind("\n### What Session ") + 1`); the analyst
+verified that gives 50 of 50 caught. **Operator call** because it edits a custodian proof that
+nothing guards (the item above) in the session that needs it green, which reads as gate erosion
+(failure mode 17) even though the anchor is stricter, not looser. Best done together with the item
+above, since both are about what protects those two files.
 
 ### CI runs the proofs on push, and this repository pushes in bursts
 

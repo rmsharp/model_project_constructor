@@ -1146,7 +1146,7 @@ status is its LAST stage's.
 
 #### What the guard now reads
 
-The front matter — everything above the first `### What Session N Did`, sliced by the module's own
+The front matter — everything above the first record heading, sliced by the module's own
 declared grammar — joins `SURFACES`, so `check_composed`, `check_scan` and `check_filename_sets`
 reach it. **Records are excluded deliberately**: they discuss shards constantly and would bury the
 fail-closed net in prose nobody maintains as a census. Two checks are new: `check_rows` (one numbered
