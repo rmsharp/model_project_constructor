@@ -529,6 +529,7 @@ docs-only.
 4. **Readiness for this fork is readiness of `origin`** (#280). Run `git ls-remote origin` before any
    claim about what the clone will contain.
 
+### What Session 262 Did
 **Deliverable:** **`redact_secrets` stops failing open on shapes inside its own claimed coverage —
 COMPLETE**, closing the item filed in Session 261, picked by the operator from a four-option picker
 at Phase 1. **Started / completed:** 2026-09-21 (UTC). **Commits:** `0d76da2` (claim), `69c5aba` (an
