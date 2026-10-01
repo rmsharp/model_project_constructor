@@ -1034,7 +1034,7 @@ requires-dist = [
     { name = "sqlalchemy", marker = "extra == 'agents'", specifier = ">=2.0,<3" },
     { name = "sqlparse", marker = "extra == 'agents'", specifier = ">=0.5" },
     { name = "sse-starlette", marker = "extra == 'ui'", specifier = ">=2" },
-    { name = "typer", marker = "extra == 'agents'", specifier = ">=0.12" },
+    { name = "typer", marker = "extra == 'agents'", specifier = ">=0.16.0" },
     { name = "uvicorn", marker = "extra == 'ui'", specifier = ">=0.29" },
 ]
 provides-extras = ["agents", "ui", "dev", "docs"]
@@ -1059,7 +1059,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.6,<3" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "sqlparse", specifier = ">=0.5" },
-    { name = "typer", specifier = ">=0.12" },
+    { name = "typer", specifier = ">=0.16.0" },
 ]
 
 [[package]]

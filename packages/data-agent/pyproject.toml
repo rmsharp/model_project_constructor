@@ -14,7 +14,7 @@ dependencies = [
     "sqlparse>=0.5",
     "sqlalchemy>=2.0,<3",
     "anthropic[bedrock]>=0.94",  # >=0.94 ships AnthropicBedrockMantle (bedrock-mantle endpoint + API key); see bedrock_client.py
-    "typer>=0.12",
+    "typer>=0.16.0",  # first release whose CLI builds and renders --help under Click 8.2+; held by tests/test_dependency_floors.py
 ]
 
 [project.scripts]
