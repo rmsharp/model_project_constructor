@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 import sqlalchemy as sa
 from model_project_constructor_data_agent.cli import app
+from model_project_constructor_data_agent.db import DBConnectionError, ReadOnlyDB
 from model_project_constructor_data_agent.llm import TableRanking
 from model_project_constructor_data_agent.schemas import (
     DataReport,
@@ -27,6 +28,14 @@ from model_project_constructor_data_agent.schemas import (
     DataSourceInventory,
 )
 from typer.testing import CliRunner
+
+from tests.hostile_text import (
+    CONNECT_CAUSE,
+    ESCAPE_NAME_SCRUBBED,
+    ESCAPING_URL,
+    EVERY_CONTROL,
+    SECRET,
+)
 
 FIXTURE_REQUEST = (
     Path(__file__).resolve().parents[1] / "fixtures" / "sample_request.json"
@@ -978,6 +987,78 @@ def test_cli_discover_a_failure_cause_never_puts_control_codes_on_stderr_or_in_t
     notes = DataSourceInventory.model_validate(json.loads(out.read_text())).producers[0].notes
     assert _unsafe(notes or "") == []
     assert "permission denied for evil ]0;PWNED-TITLE [31mred" in (notes or "")
+
+
+def test_cli_discover_a_connect_failure_is_one_clean_line(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """Session 270 (``BACKLOG.md``, route 1). ``discover`` called ``db.connect()``
+    outside any ``try``, so a failed connect escaped as a Rich traceback: 6 ESC on
+    stderr, the chained driver exception printed unredacted (``hunter2`` among it)
+    and 418 lines (measured on the real Typer app, with a simulated driver whose
+    error carries what PostgreSQL echoes of a role name). Scrubbing the message
+    alone does not help: the chained ``__cause__`` is printed too. The command
+    catches the error and prints ONE line, and still exits 1 with no file."""
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app, ["discover", "--db-url", ESCAPING_URL, "--output", str(out)]
+    )
+
+    assert result.exit_code == 1, result.output
+    assert not out.exists()
+    # Not the DBConnectionError (which Typer would print as a traceback): a clean exit.
+    assert isinstance(result.exception, SystemExit)
+    assert result.stdout == ""
+    assert _unsafe(result.stderr) == []
+    assert "Traceback" not in result.stderr
+    assert SECRET not in result.stderr
+    (line,) = result.stderr.splitlines()
+    assert line.startswith("error: cannot connect to 'fakeesc:///claims': ")
+    # Still diagnostic: the cause is named, with the control characters flattened.
+    assert f'FATAL: role "{ESCAPE_NAME_SCRUBBED}" does not exist' in line
+    assert "PWD=***;Database=claims" in line
+
+
+def test_cli_discover_a_connect_failure_on_a_real_driver_is_one_clean_line(
+    runner: CliRunner, tmp_path: Path
+) -> None:
+    """The same, on a real SQLite file that cannot be opened: no simulation."""
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", "sqlite:////nonexistent/dir/x.db", "--output", str(out)],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert not out.exists()
+    (line,) = result.stderr.splitlines()
+    assert line.startswith("error: cannot connect to 'sqlite:////nonexistent/dir/x.db': ")
+    assert "unable to open database file" in line
+
+
+def test_cli_discover_cleans_a_connect_error_it_did_not_build(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``DBConnectionError`` is a public type, so what ``discover`` echoes is not only
+    what ``ReadOnlyDB.connect`` built: a subclass, a wrapper or a later change can raise
+    one carrying raw text. The echo is the last place before the terminal, so it cleans
+    the text itself rather than trusting the raiser."""
+
+    def _fail(self: ReadOnlyDB) -> None:
+        raise DBConnectionError(f"cannot connect: {CONNECT_CAUSE} {EVERY_CONTROL} end")
+
+    monkeypatch.setattr(ReadOnlyDB, "connect", _fail)
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", "sqlite:///x.db", "--output", str(tmp_path / "inv.json")],
+    )
+
+    assert result.exit_code == 1, result.output
+    assert _unsafe(result.stderr) == []
+    assert SECRET not in result.stderr
+    (line,) = result.stderr.splitlines()
+    assert line.startswith("error: cannot connect: FATAL: role ")
+    assert line.endswith(" end")
 
 
 def test_cli_derives_sql_dialect_from_db_url(

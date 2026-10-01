@@ -33,7 +33,7 @@ import typer
 
 from model_project_constructor_data_agent.agent import DataAgent
 from model_project_constructor_data_agent.anthropic_client import DEFAULT_MODEL
-from model_project_constructor_data_agent.db import ReadOnlyDB
+from model_project_constructor_data_agent.db import DBConnectionError, ReadOnlyDB, safe_message
 from model_project_constructor_data_agent.discovery import (
     RANKING_FAILED_NOTE_PREFIX,
     SKIPPED_NOTE_PREFIX,
@@ -235,7 +235,17 @@ def discover(
 ) -> None:
     """Probe a database's information_schema and write a DataSourceInventory JSON file."""
     db = ReadOnlyDB(db_url)
-    db.connect()
+    try:
+        db.connect()
+    except DBConnectionError as e:
+        # One line, not the traceback Typer prints for an exception that escapes: that
+        # prints the chained driver exception as well, which the message had cleaned
+        # and redacted and the chain had not (Session 270, measured: 6 ESC and a
+        # secret on stderr). ``safe_message`` again, because this is the last place
+        # before the terminal and ``DBConnectionError`` is a public type that anything
+        # may raise with text of its own.
+        typer.echo(f"error: {safe_message(e)}", err=True)
+        raise typer.Exit(code=1) from None
     try:
         llm = (
             _build_llm(fake_llm=fake_llm, provider=provider, model=model)
@@ -261,7 +271,7 @@ def discover(
     # from exit 1 into exit 0, and ``discover ... && next-step`` could not tell
     # an empty or unranked inventory from a good one. The probe sets ``notes``
     # only when it degraded. The note is safe to echo: echoing adds no
-    # disclosure beyond the file, and its only free text is ``_safe_message``'s
+    # disclosure beyond the file, and its only free text is ``safe_message``'s
     # output (secrets masked best-effort, control characters replaced by a
     # space — Session 269) and ``repr``-quoted names, so it cannot put a
     # terminal control code on the screen.
