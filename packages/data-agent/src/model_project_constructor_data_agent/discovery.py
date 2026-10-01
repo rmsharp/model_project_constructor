@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 import reprlib
 from datetime import UTC, datetime
 from typing import Any
@@ -101,6 +102,13 @@ class UnwritableRequestContextError(ValueError):
     either cannot be written or does not load back as the same text.
     """
 
+
+#: What a terminal acts on instead of printing: the C0 controls, DEL and the C1
+#: controls, which are Unicode's ``Cc`` category (65 characters; a test holds the
+#: range against the Unicode database). ``_safe_message`` replaces each with a
+#: space. ``str.split`` already treats ten of them as whitespace, so the range
+#: stays whole instead of naming only what the flatten still lets through.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
 #: names come from the model's reply, and the message is logged whole.
@@ -181,6 +189,18 @@ def _safe_message(e: Exception) -> str:
     An OS-raised ``OSError`` repr-escapes its filename, so it carries none; a
     message built by formatting an ``os.fsdecode``-d path into text does.
 
+    Control characters are replaced with a space (Session 269), because the
+    message is database text that reaches the operator's terminal twice: as the
+    WARNING, and — for a failed probe — as the note ``discover`` echoes to
+    stderr. A terminal acts on ESC, BEL, NUL, DEL and the C1 controls instead of
+    printing them (measured: the ESC and BEL of a title sequence and a colour code
+    in a table name reached stderr raw). A space, not nothing, so ``a<ESC>b``
+    does not read ``ab``; and AFTER redaction, never before:
+    :func:`db.redact_secrets` reads an unquoted secret as a run of non-whitespace
+    and these characters are not whitespace to it, so scrubbing first would end
+    the value at the control and print what follows (measured:
+    ``password=abc<ESC>def`` came out as ``password=*** def``).
+
     Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo,
     a wide `key=value`/`key: value`/quoted/braced key list (Session 262), and
     a secret percent-encoded inside `odbc_connect=`; it still does not see a
@@ -191,7 +211,7 @@ def _safe_message(e: Exception) -> str:
     """
     try:
         raw = str(e).encode("utf-8", "replace").decode("utf-8")
-        return " ".join(redact_secrets(raw).split())
+        return " ".join(_CONTROL_CHARACTERS.sub(" ", redact_secrets(raw)).split())
     except Exception:
         return "<unprintable>"
 

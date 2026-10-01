@@ -12,6 +12,8 @@ Phase 1.
 from __future__ import annotations
 
 import logging
+import sys
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,7 @@ from model_project_constructor_data_agent.anthropic_client import (
 )
 from model_project_constructor_data_agent.db import SkippedEntity
 from model_project_constructor_data_agent.discovery import (
+    PROBE_FAILED_NOTE_PREFIX,
     PRODUCER_ID,
     PRODUCER_VERSION,
     RANKING_FAILED_NOTE_PREFIX,
@@ -1089,6 +1092,152 @@ class TestUnreflectableEntitiesAreSkipped:
             "information_schema probe failed: OperationalError: (sqlite3.OperationalError) "
             "unable to open database file"
         )
+
+
+#: The 65 ``Cc`` characters: the C0 controls, DEL and the C1 controls. A terminal
+#: ACTS on these rather than printing them (ESC and BEL open a title or colour
+#: sequence; U+009B is a one-character CSI). ``test_controls_is_exactly_the_cc_
+#: category`` holds this list against the Unicode database, so it cannot drift.
+CONTROLS = [*map(chr, range(0x00, 0x20)), *map(chr, range(0x7F, 0xA0))]
+EVERY_CONTROL = "".join(CONTROLS)
+#: The controls ``redact_secrets`` reads as part of an unquoted secret's value.
+#: The ten that are whitespace (``\t \n \v \f \r``, U+001C to U+001F, U+0085)
+#: END the value there instead — a documented limit of that masker, which the
+#: scrub neither causes nor changes.
+NON_SPACE_CONTROLS = [c for c in CONTROLS if not c.isspace()]
+
+
+def _control_ids(chars: list[str]) -> list[str]:
+    return [f"U+{ord(c):04X}" for c in chars]
+
+
+def _unsafe(text: str) -> list[str]:
+    """The characters of ``text`` a terminal would act on, as code points.
+
+    Read from the Unicode database rather than from a range typed here, so these
+    tests and the code under test cannot share a typo. A newline is allowed: it is
+    the line break of a multi-line capture, and a message's own are flattened.
+    """
+    return sorted(
+        {f"U+{ord(c):04X}" for c in text if unicodedata.category(c) == "Cc" and c != "\n"}
+    )
+
+
+class TestMessagesCarryNoControlCharacters:
+    """Session 269 (``BACKLOG.md``: *Database text can put terminal control codes
+    on the operator's screen*). ``_safe_message`` used to remove only whitespace,
+    so ESC, BEL, NUL, DEL and the C1 controls reached the stderr WARNING and the
+    persisted note, where a terminal acts on them instead of printing them
+    (measured: the ESC and BEL of a terminal-title sequence and a colour code
+    inside a table name reached stderr raw). Each of the probe's three message
+    sites is its own call, so each is tested on its own: Session 261 swapped one
+    for a raw ``str(e)`` and every other test stayed green."""
+
+    def test_controls_is_exactly_the_cc_category(self) -> None:
+        scanned = [
+            chr(cp) for cp in range(sys.maxunicode + 1) if unicodedata.category(chr(cp)) == "Cc"
+        ]
+        assert scanned == CONTROLS
+        assert len(CONTROLS) == 65
+
+    @pytest.mark.parametrize("ch", CONTROLS, ids=_control_ids(CONTROLS))
+    def test_a_failure_replaces_each_control_with_a_space(
+        self, ch: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Stage 1: the cause goes to the WARNING AND into the persisted note.
+        A space, not nothing: ``a<ESC>b`` must not become ``ab``."""
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _RaisingDB(RuntimeError(f"no such table: main.a{ch}b"))  # type: ignore[arg-type]
+            )
+        assert inv.producers[0].notes == (
+            f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: no such table: main.a b"
+        )
+        # Loaded back, the note is what the file holds: a JSON escape of a control
+        # is a real control again once something prints the loaded text.
+        loaded = DataSourceInventory.model_validate_json(inv.model_dump_json())
+        assert _unsafe(loaded.producers[0].notes or "") == []
+        (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert message.endswith("RuntimeError: no such table: main.a b")
+        assert _unsafe(message) == []
+
+    def test_every_control_is_gone_from_the_failure_warning_and_note(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _RaisingDB(RuntimeError(f"boom{EVERY_CONTROL}done"))  # type: ignore[arg-type]
+            )
+        assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: boom done"
+        (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert message.endswith("RuntimeError: boom done")
+        assert _unsafe(message) == []
+
+    def test_every_control_is_gone_from_a_skipped_entitys_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Stage 1's per-entity WARNING — the route the measured reproduction took,
+        a view whose base table's NAME held the escape sequence. The note names
+        the view ``repr``-quoted and never carries the cause, so it is safe."""
+        view = _skipped_view("v_stale", f"no such table: main.evil{EVERY_CONTROL}tbl")
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _SkippingDB([GOOD_ROW], [view])  # type: ignore[arg-type]
+            )
+        assert inv.producers[0].notes == _skip_note(2, "view 'main.v_stale' (OperationalError)")
+        (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert "no such table: main.evil tbl" in message
+        assert _unsafe(message) == []
+
+    def test_every_control_is_gone_from_the_ranking_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Stage 2 has its OWN call site (a model's or a gateway's error text)."""
+        exc = RuntimeError(f"gateway said a{EVERY_CONTROL}b")
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            probe_information_schema(
+                _RowsDB(_three_rows()), llm=_Ranker(_raise(exc))  # type: ignore[arg-type]
+            )
+        (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
+        assert message.endswith("RuntimeError: gateway said a b")
+        assert _unsafe(message) == []
+
+    @pytest.mark.parametrize(
+        "ch", NON_SPACE_CONTROLS, ids=_control_ids(NON_SPACE_CONTROLS)
+    )
+    def test_a_control_inside_a_secret_does_not_cut_the_masking_short(
+        self, ch: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """The scrub runs AFTER redaction. ``redact_secrets`` reads an unquoted
+        value as a run of non-whitespace, and these controls are not whitespace to
+        it, so ``password=head<ESC>hunter2`` is one value and is masked whole.
+        Scrubbing first would turn the control into a space, end the value there,
+        and print ``hunter2`` (measured Session 269, before writing the fix)."""
+        exc = RuntimeError(f"driver said password=head{ch}{SECRET} tail")
+        with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
+            inv = probe_information_schema(
+                _RaisingDB(exc)  # type: ignore[arg-type]
+            )
+        notes = inv.producers[0].notes or ""
+        assert notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: driver said password=*** tail"
+        assert SECRET not in notes
+        assert SECRET not in caplog.text
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "no such table: main.sinistres_é_ÿ_Ā_日本語_🚗",
+            "".join(map(chr, range(0xA1, 0xC0))),
+            "".join(map(chr, range(0x21, 0x7F))),
+        ],
+        ids=["accents-cjk-emoji", "latin1-above-the-c1-block", "printable-ascii"],
+    )
+    def test_printable_text_is_left_alone(self, text: str) -> None:
+        """The scrub must not eat what an operator needs to read. U+00A0 is left out
+        of the second case on purpose: it is whitespace, which the flatten has
+        always collapsed."""
+        inv = probe_information_schema(_RaisingDB(RuntimeError(text)))  # type: ignore[arg-type]
+        assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: {text}"
 
 
 class TestRankingFailureKeepsEntries:

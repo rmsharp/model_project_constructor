@@ -9,10 +9,12 @@ flow; the output JSON is parsed as a DataReport and inspected.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 import pytest
@@ -898,6 +900,83 @@ def test_cli_discover_allow_skipped_on_a_healthy_database_says_nothing(
     assert result.stderr == ""
     inv = DataSourceInventory.model_validate(json.loads(out.read_text()))
     assert inv.producers[0].notes is None
+
+
+def _unsafe(text: str) -> list[str]:
+    """The characters of ``text`` a terminal would act on, as code points: every
+    ``Cc`` character but the newline, which is a line break in a capture."""
+    return sorted(
+        {f"U+{ord(c):04X}" for c in text if unicodedata.category(c) == "Cc" and c != "\n"}
+    )
+
+
+#: The text of the Session 267 reproduction: a terminal-title sequence and a
+#: colour code, each opened by ESC, inside an identifier.
+ESCAPE_NAME = "evil\x1b]0;PWNED-TITLE\x07\x1b[31mred"
+
+
+def test_cli_discover_a_cause_naming_an_escape_sequence_is_flattened_in_the_warning(
+    runner: CliRunner, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Session 269. The measured reproduction: a view whose base table's NAME holds
+    an escape sequence. Reflecting it fails with an error that quotes the name, and
+    the WARNING carrying that error is what reaches the operator's terminal — it
+    used to hold two ESC and one BEL (the filed measurement, repeated on the real
+    console script). The note names the view ``repr``-quoted, so the stderr the
+    command echoes itself was already safe; the log record is the route."""
+    db_path = tmp_path / "evil.db"
+    engine = sa.create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(sa.text("CREATE TABLE claims (claim_id INTEGER PRIMARY KEY)"))
+            conn.execute(sa.text(f'CREATE TABLE "{ESCAPE_NAME}" (x INTEGER)'))
+            conn.execute(sa.text(f'CREATE VIEW v_over AS SELECT x FROM "{ESCAPE_NAME}"'))
+            conn.execute(sa.text(f'DROP TABLE "{ESCAPE_NAME}"'))
+    finally:
+        engine.dispose()
+
+    out = tmp_path / "inv.json"
+    with caplog.at_level(logging.WARNING, logger="model_project_constructor_data_agent.discovery"):
+        result = runner.invoke(
+            app, ["discover", "--db-url", f"sqlite:///{db_path}", "--output", str(out)]
+        )
+
+    assert result.exit_code == 1, result.output
+    assert _unsafe(result.stderr) == []
+    (message,) = [
+        r.getMessage()
+        for r in caplog.records
+        if r.name == "model_project_constructor_data_agent.discovery"
+    ]
+    assert _unsafe(message) == []
+    assert "no such table: main.evil ]0;PWNED-TITLE [31mred" in message  # still says which
+
+
+def test_cli_discover_a_failure_cause_never_puts_control_codes_on_stderr_or_in_the_file(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Session 269. The other route: when reflection fails outright, the cause is
+    written into the note, and ``discover`` echoes the note to stderr — and the
+    file carries it, JSON-escaped, to be a real control again wherever it is
+    printed after loading."""
+    from model_project_constructor_data_agent.db import ReadOnlyDB
+
+    def _fail(self: ReadOnlyDB, *args: object, **kwargs: object) -> list[dict[str, object]]:
+        raise RuntimeError(f"permission denied for {ESCAPE_NAME}")
+
+    monkeypatch.setattr(ReadOnlyDB, "get_information_schema", _fail)
+    db_url = _seed_discover_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(app, ["discover", "--db-url", db_url, "--output", str(out)])
+
+    assert result.exit_code == 1, result.output
+    # Click strips a colour code (ESC ``[`` ... a letter) from a stream that is not a
+    # terminal, but not a title sequence (ESC ``]`` ... BEL): that one reached stderr.
+    assert _unsafe(result.stderr) == []
+    assert "permission denied for evil ]0;PWNED-TITLE [31mred" in result.stderr
+    notes = DataSourceInventory.model_validate(json.loads(out.read_text())).producers[0].notes
+    assert _unsafe(notes or "") == []
+    assert "permission denied for evil ]0;PWNED-TITLE [31mred" in (notes or "")
 
 
 def test_cli_derives_sql_dialect_from_db_url(
