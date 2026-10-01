@@ -34,8 +34,11 @@ from model_project_constructor_data_agent.discovery import (
     PRODUCER_VERSION,
     RANKING_FAILED_NOTE_PREFIX,
     SKIPPED_NOTE_PREFIX,
+    UnwritableRequestContextError,
+    validate_request_context,
 )
 from model_project_constructor_data_agent.schemas import DataSourceEntry
+from pydantic import ValidationError
 
 
 @pytest.fixture
@@ -491,6 +494,137 @@ class TestProbeWithLLMRanking:
         inv = _probe(f"sqlite:///{db_path}", llm=llm, request_context="anything")
         assert llm.calls == []
         assert inv.entries == []
+
+
+class _SpyDB:
+    """Duck-typed DB that counts every reflection call.
+
+    Counting, never raising: the probe absorbs any ``Exception`` a ``db`` raises
+    (cf. ``_Ranker``), so a fake that raised to say "you must not reach me" would
+    be swallowed and the test would pass for the wrong reason.
+    """
+
+    def __init__(self) -> None:
+        self.reflections = 0
+
+    def get_information_schema(
+        self, schemas: list[str] | None = None, *, skipped: Any = None
+    ) -> Any:
+        self.reflections += 1
+        return []
+
+
+#: ``(request_context, index of its first lone surrogate, that surrogate)``. The
+#: first is what a stray ``0xFF`` byte on a POSIX command line becomes — Python
+#: decodes ``argv`` with ``surrogateescape``, so a byte 0xXY that is not valid
+#: UTF-8 arrives as U+DCXY. The last is half of an emoji: not a CLI artefact, a
+#: caller's own truncation. Position varies, so a check of one end cannot pass.
+UNWRITABLE_REQUEST_CONTEXTS = [
+    pytest.param("claims \udcff", 7, "U+DCFF", id="stray-0xFF-byte"),
+    pytest.param("\udc80 leading", 0, "U+DC80", id="first-character"),
+    pytest.param("cut mid-emoji \ud83d", 14, "U+D83D", id="lone-high-surrogate-last"),
+    pytest.param("ok \udcff and \udcfe", 3, "U+DCFF", id="two-names-the-first"),
+]
+
+#: Text that IS writable and must be left alone, including everything a naive
+#: "reject odd characters" check would trip on.
+WRITABLE_REQUEST_CONTEXTS = [
+    pytest.param("", id="empty"),
+    pytest.param("subrogation recovery", id="ascii"),
+    pytest.param("sinistres déclarés — 日本語", id="non-ascii-bmp"),
+    pytest.param("astral 😀 plane", id="astral"),
+    pytest.param("é combining", id="combining"),
+    pytest.param("replacement � char", id="replacement-character"),
+    pytest.param("non-character ￿", id="noncharacter"),
+]
+
+
+class TestRequestContextMustBeWritable:
+    """A ``request_context`` that is a ``str`` but cannot be written as UTF-8
+    is REJECTED, before the database or the ranker is touched (operator ruling,
+    Session 267; the CLI half is ``test_cli.py``).
+
+    Measured at ``2808473``: ``discover --request-context "$(printf 'claims \\xff')"``
+    exited 0 and wrote ``"claims \\udcff"``, which ``DataSourceInventory.
+    model_validate_json`` — the orchestrator's loader — then refused, with nothing
+    on stderr. A lone surrogate validates as a ``str``, so the schema never said so.
+    Rejected, never scrubbed: the text is the caller's, and ``"replace"`` would
+    store something they did not type.
+    """
+
+    @pytest.mark.parametrize(("text", "index", "codepoint"), UNWRITABLE_REQUEST_CONTEXTS)
+    @pytest.mark.parametrize("with_llm", [True, False], ids=["ranking-on", "ranking-off"])
+    def test_raises_before_anything_is_touched(
+        self, text: str, index: int, codepoint: str, with_llm: bool
+    ) -> None:
+        db = _SpyDB()
+        llm = _Ranker(lambda entries: [])
+        with pytest.raises(UnwritableRequestContextError) as caught:
+            probe_information_schema(
+                db,  # type: ignore[arg-type]
+                llm=llm if with_llm else None,
+                request_context=text,
+            )
+        assert f"index {index} ({codepoint})" in str(caught.value)
+        assert db.reflections == 0, "the database was reflected before the check"
+        assert llm.calls == [], "the ranker was called before the check"
+
+    def test_it_is_a_value_error_and_names_the_argument(self) -> None:
+        """A ``ValueError``, like the probe's other ``Unwritable*``/``Invalid*``
+        errors, so a caller can catch one family; and it says WHICH argument."""
+        with pytest.raises(ValueError, match="^request_context cannot be written as UTF-8"):
+            probe_information_schema(_SpyDB(), request_context="x\udcff")  # type: ignore[arg-type]
+
+    @pytest.mark.parametrize(("text", "index", "codepoint"), UNWRITABLE_REQUEST_CONTEXTS)
+    def test_the_message_never_carries_the_bad_text(
+        self, text: str, index: int, codepoint: str
+    ) -> None:
+        """The message is logged, echoed to stderr and shown by the CLI. Quoting
+        the offending ``str`` would put a lone surrogate into all three — which
+        raises on a strict stream. It names the position and code point instead."""
+        with pytest.raises(UnwritableRequestContextError) as caught:
+            probe_information_schema(_SpyDB(), request_context=text)  # type: ignore[arg-type]
+        message = str(caught.value)
+        message.encode("utf-8")  # raises if it quotes the surrogate
+        assert not any(0xD800 <= ord(c) <= 0xDFFF for c in message)
+
+    @pytest.mark.parametrize("text", WRITABLE_REQUEST_CONTEXTS)
+    def test_writable_text_is_kept_exactly_and_reloads(
+        self, text: str, seeded_sqlite: str
+    ) -> None:
+        """No over-rejection, and the property the check protects: whatever the
+        probe accepts, the loader accepts. (``_probe`` also asserts ``notes``
+        is ``None``.)"""
+        inv = _probe(seeded_sqlite, request_context=text)
+        assert inv.request_context == text
+        assert DataSourceInventory.model_validate_json(inv.model_dump_json()) == inv
+
+    def test_none_is_not_a_request_context_to_judge(self, seeded_sqlite: str) -> None:
+        assert _probe(seeded_sqlite).request_context is None
+
+    @pytest.mark.parametrize("value", [5, b"claims \xff"], ids=["int", "invalid-utf8-bytes"])
+    def test_a_non_str_is_still_judged_by_pydantic_not_by_this_check(
+        self, value: Any, seeded_sqlite: str
+    ) -> None:
+        """What the docstring says about a non-``str`` ``request_context``, pinned
+        (it said only "still raises", which Session 264's review measured as
+        imprecise). This check looks at ``str`` alone; anything else is for the
+        schema, and only when the *result* is built — AFTER the probe has run."""
+        with pytest.raises(ValidationError):
+            _probe_degraded(seeded_sqlite, request_context=value)
+
+    def test_bytes_that_are_valid_utf8_are_coerced_to_str(self, seeded_sqlite: str) -> None:
+        """The other half of that imprecision: pydantic's lax mode accepts them."""
+        inv = _probe(seeded_sqlite, request_context=b"claims")
+        assert inv.request_context == "claims"
+
+    def test_validate_request_context_is_the_shared_entry_point(self) -> None:
+        """The CLI calls this same function, so the two surfaces cannot disagree
+        about what is writable. Returns ``None`` for what it accepts."""
+        assert validate_request_context(None) is None
+        assert validate_request_context("fine") is None
+        with pytest.raises(UnwritableRequestContextError):
+            validate_request_context("x\ud800")
 
 
 class TestProbeNeverRaises:

@@ -90,6 +90,18 @@ class UnwritableEntryError(ValueError):
     """
 
 
+class UnwritableRequestContextError(ValueError):
+    """A ``request_context`` that is a ``str`` but cannot be written as UTF-8.
+
+    Raised by :func:`validate_request_context`, which :func:`probe_information_schema`
+    runs before it touches the database and ``discover`` runs as a usage check.
+    Unlike :class:`UnwritableEntryError` it is never absorbed into a note: the
+    text is the caller's own argument, not something the database or the ranker
+    produced, and there is nothing to degrade to — an inventory carrying it
+    could not be loaded back.
+    """
+
+
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
 #: names come from the model's reply, and the message is logged whole.
 _BRIEF = reprlib.Repr()
@@ -110,6 +122,42 @@ def _check_writable(entry: DataSourceEntry) -> None:
         raise UnwritableEntryError(
             f"entry {_BRIEF.repr(entry.fully_qualified_name)} cannot be written as "
             f"UTF-8 JSON: {type(e).__name__}: {e}"
+        ) from e
+
+
+def validate_request_context(request_context: str | None) -> None:
+    """Raise :class:`UnwritableRequestContextError` unless it can be written as UTF-8.
+
+    The one check both surfaces share, so they cannot disagree about what is
+    writable: ``discover`` calls it as an option callback, and
+    :func:`probe_information_schema` calls it before stage 1. Operator ruling,
+    Session 267: **reject, never scrub** — ``encode("utf-8", "replace")`` would
+    store text the caller did not write.
+
+    Only a ``str`` is judged, and only for a lone surrogate, which is the one
+    thing a ``str`` can hold that UTF-8 cannot encode. On POSIX that is how a
+    command-line byte that is not valid UTF-8 arrives: Python decodes ``argv``
+    with ``surrogateescape``, so a stray ``0xFF`` becomes U+DCFF. It validates as
+    a ``str``, so without this the inventory is built, the file is written and
+    the command exits 0 — and ``DataSourceInventory.model_validate_json``, the
+    orchestrator's loader, then refuses the file (measured Session 264).
+
+    ``None`` and any non-``str`` return normally: what pydantic does with those
+    is not this function's to decide (see :func:`probe_information_schema`).
+
+    The message names the first offending character by index and code point and
+    never quotes the text: it is logged, echoed to stderr and shown by the CLI,
+    and a lone surrogate on any of those can raise.
+    """
+    if not isinstance(request_context, str):
+        return
+    try:
+        request_context.encode("utf-8")
+    except UnicodeEncodeError as e:
+        raise UnwritableRequestContextError(
+            "request_context cannot be written as UTF-8: the character at index "
+            f"{e.start} (U+{ord(request_context[e.start]):04X}) is a lone surrogate. "
+            "A byte that is not valid UTF-8, passed on a command line, arrives as one."
         ) from e
 
 
@@ -164,17 +212,25 @@ def probe_information_schema(
             ignored here (no error).
         request_context: Free-text description of what the request is about,
             fed to the LLM for relevance ranking. Unused when ``llm`` is
-            ``None`` or does not support ranking.
+            ``None`` or does not support ranking. It is stored in the inventory
+            either way, so it must be writable as UTF-8 — a lone surrogate
+            raises :class:`UnwritableRequestContextError`.
 
     Returns a valid :class:`DataSourceInventory`. **No** ``Exception`` **raised
     by** ``db`` **or by** ``llm`` **escapes** — each stage degrades to a labelled
     result and logs a WARNING on this module's logger: one per failed stage and,
     when reflection succeeds, one per skipped entity. Three limits, all
     measured: only ``Exception`` is absorbed, never ``KeyboardInterrupt`` /
-    ``SystemExit``; a non-``str`` ``request_context`` still raises, because it is
-    validated while the *result* is built (a bad ``db`` or ``include_schemas``
-    does not — it surfaces as a probe failure); and an exception class hostile
-    enough that reading its ``__name__`` raises is out of scope.
+    ``SystemExit``; a bad ``request_context`` raises instead of degrading, in one
+    of two ways (a bad ``db`` or ``include_schemas`` does not — it surfaces as a
+    probe failure); and an exception class hostile enough that reading its
+    ``__name__`` raises is out of scope. A ``str`` that cannot be written as UTF-8
+    (a lone surrogate) raises :class:`UnwritableRequestContextError` **first**,
+    before ``db`` or ``llm`` is touched (:func:`validate_request_context`; Session
+    267). Anything else that is neither ``str`` nor ``None`` is left to pydantic,
+    which judges it only when the *result* is built, after the probe has run: an
+    ``int``, or ``bytes`` that are not valid UTF-8, raise ``ValidationError``,
+    while ``bytes`` that are valid UTF-8 are coerced to ``str`` and accepted.
 
     - **The database cannot reflect a table or view** — a view whose base table
       was dropped, or a table dropped while the probe ran: any
@@ -220,6 +276,9 @@ def probe_information_schema(
     a bare ``None``, so an unexpected error must stay loud; this one's degraded
     result says what happened, in the artifact and on stderr.
     """
+    # First, before ``produced_at`` and before any stage: a caller's own argument
+    # that could never be written is not something to probe a database for.
+    validate_request_context(request_context)
     produced_at = datetime.now(UTC)
 
     def _inventory(entries: list[DataSourceEntry], notes: str | None) -> DataSourceInventory:
