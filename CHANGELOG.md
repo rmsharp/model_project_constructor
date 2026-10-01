@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S271 claim: a password in a database address stops reaching the connect error, the report and a warning *(in progress)*
+- **Change:** Session 271 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is `BACKLOG.md`'s item *"A password can still reach the connect error, the report and a warning"* (`:486`): the two filed shapes, a password with an unencoded `@` and an address whose `://` is mistyped. Chosen by the operator at Phase 1 from a two-step picker (area: passwords in database text; item: the password-leak item only). The other item in that area, the slow masker and unbounded input (`:518`), stays open: it needs the operator's ruling on a length cap. Each shape is measured before it is fixed.
+- **Commit/PR:** this commit
+- **Session:** S271 · **Verified:** ledger-only; both ledger guards are run before this commit lands.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-01 · [ad hoc] S270 — close out: database and driver text goes through one function; the residue is filed; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 270 record: the deliverable and the operator's three picks (area, item, push at close-out), what changed (1,995 to 2,432 tests), what was measured before it was built (the real Typer app, a real SQLite file and a simulated driver, on the unmodified and the final code), the two mutation passes (30 of 30, then 41 of 41), the review (86 agents; 39 findings re-checked: 11 confirmed, 28 partly, 0 refuted; none above minor) and what it changed, the Session 269 handoff evaluation (8/10) and this session's self-assessment (7/10, with the five-file-cap breach, the design the review fixed and the SQLite-version dependency named). `HANDOFFS.md`'s receipt is `status: complete`. No `BACKLOG.md` change in this commit (the previous one made them).
 - **Non-commit actions:** the two scratch worktrees this session made (`scratchpad/before`, the `.claude/worktrees` one the test-adequacy lens left, clean) were removed with `git worktree remove`; Session 269's clean review worktree, `.claude/worktrees/wf_5f96c807-d00-3`, was **left**, as not this session's, and is named in the handoff. The operator ruled **push at close-out** (a picker answer); the push is `git push origin master` after this commit.

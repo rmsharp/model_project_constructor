@@ -93,6 +93,22 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 271 Did
+**Deliverable:** **a password in a database address no longer reaches the connect error, the report or a
+warning** — `BACKLOG.md`'s item *"A password can still reach the connect error, the report and a warning"*
+(`:486`): the two filed shapes, a password with an unencoded `@` (SQLAlchemy ends the password at the first
+`@` and the driver quotes the rest back as the host) and an address whose `://` is mistyped (`make_url`
+fails and the whole address, password included, is echoed). Each shape is measured before it is fixed, and
+URL-borne-password cases are added to the route tests, none of which has one. The item's other half, the slow
+masker and the unbounded input (`:518`), stays open: it needs the operator's ruling on a length cap. Chosen by
+the operator at Phase 1 from a two-step picker (area: passwords in database text; item: the password-leak item
+only). (IN PROGRESS)
+**Started:** 2026-10-01
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 270 Did
 **Deliverable:** **database and driver text reaches the operator's terminal and the report only through one
 redact-and-scrub function — COMPLETE** for routes 1 to 3 of `BACKLOG.md`'s item *"Seven more routes put

@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S271
+date: 2026-10-01
+status: pending
+active_task: A password in a database address no longer reaches the connect error, the report or a warning (BACKLOG.md:486, "A password can still reach the connect error, the report and a warning"): the two filed shapes, a password with an unencoded @ (SQLAlchemy ends it at the first @ and the driver quotes the rest back as the host) and an address whose :// is mistyped (make_url fails and the whole address, password included, is echoed); each measured before it is fixed, with URL-borne-password cases added to the route tests, none of which has one.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S270
 date: 2026-10-01
 status: complete
