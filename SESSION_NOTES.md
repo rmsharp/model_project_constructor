@@ -94,17 +94,135 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 267 Did
-**Deliverable:** **a `--request-context` that cannot be encoded as UTF-8 is rejected, not written** —
-`BACKLOG.md`'s item *"A `--request-context` that cannot be written as UTF-8 writes a file that will
-not reload"*, one of the two rulings Session 266's handoff said were owed. Chosen by the operator at
-Phase 1 from a two-step picker (area: pipeline CLI; item: this one). (IN PROGRESS)
-**Started:** 2026-09-30
-**Status:** Session claimed. Work beginning. **Rulings (operator, by picker, 2026-09-30):** (1) REJECT,
-never scrub — a usage error (exit 2) before connecting, and no file written; (2) the check lives in
-BOTH surfaces, `cli.discover` and `probe_information_schema`, via one shared validator.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a `--request-context` that cannot be written as UTF-8 is rejected, not written —
+COMPLETE**, closing `BACKLOG.md`'s item of that name, one of the two rulings Session 266's handoff said
+were owed. Chosen by the operator at Phase 1 from a two-step picker (area: pipeline CLI; item: this one).
+**Rulings (operator, by picker):** (1) REJECT, never scrub: a usage error, exit 2, before connecting,
+no file written; (2) the check lives in BOTH surfaces, `cli.discover` and `probe_information_schema`,
+through one shared validator.
+**Started / completed:** 2026-09-30. **Commits: six** — `ad21a08` (claim, alone), `341622c` (library
+layer), `e764c3c` (CLI layer), `540d56c` (what the review found), `339c496` (docs: the item closed, four
+findings filed, learnings #291-294) and this close-out. Each carries its own `CHANGELOG.md` entry.
+**Pushed at close-out on the operator's ruling** (Phase 3 picker); the push is recorded in the
+close-out's own ledger entry.
+
+#### What changed
+- **Library** (`discovery.py:93,128,288`). `UnwritableRequestContextError(ValueError)` and
+  `validate_request_context`; the probe calls it first, before `produced_at` and before the database or
+  the ranker is touched. Only a `str` is judged (`None` and any other type reach pydantic exactly as
+  before), through `str.encode` and `str.__getitem__` so a subclass cannot change the verdict. The
+  message names the first bad character by index and code point and never quotes the text.
+- **CLI** (`cli.py:80,213`). An option callback calls it and raises `typer.BadParameter`; Click runs a
+  callback while parsing, so the usage error (exit 2) lands before `discover`'s body can connect.
+- **Docs.** `USAGE.md`'s discover section and Error contract; the `BACKLOG.md` item and index row removed.
+
+#### How it was verified
+- **Tests first.** The CLI reject tests were red against `2808473`'s behaviour (exit 0, a file the
+  orchestrator's loader refuses), measured before the library change landed. Final: **1,655 passed, 9
+  skipped** (1,587 at the start: +52 in `TestRequestContextMustBeWritable`, +16 CLI), coverage 98.08%,
+  `discovery.py` 100%; CI-scope `ruff` and `uv run mypy` (68 files) clean. **The same suite under
+  `GITHUB_ACTIONS=true`: 1,655 passed.**
+- **24 mutants, all caught**: 13 of my own across the two layers, then 14 new shapes the review showed
+  surviving (prefix check, last surrogate of a run, hand-rolled ranges, the subclass's `encode`, control
+  characters rejected, the call moved to before ranking and to the end, constant CLI message,
+  first-line-only, strip, truncate, a CLI message that quotes the text). Listed in the CHANGELOG entry.
+- **Runtime (3E), $0, the real `model-data-agent` script**, old code (a worktree at `2808473`, since
+  removed) against new: a stray `0xFF` byte gave old **exit 0 and a file `load_curated_inventory`
+  refused**, new **exit 2, no file**; a stray `0xC3` against an unreachable PostgreSQL URL gave exit 2,
+  not a connection error; non-ASCII, emoji and empty contexts exit 0 and load with the text intact.
+
+#### The review found a blocker nobody could see locally
+A five-lens review (correctness, callers, test adequacy by mutation in an isolated worktree, truth of the
+written claims, hostile input) ran on the committed `e764c3c`: 32 agents, **27 findings, every one
+verified by a skeptic (12 confirmed, 15 partly, 0 refuted), 1 blocker, 7 minor, 19 nit; 20 in scope, 7
+adjacent; 71 clean checks.** Zero refutations from skeptics told to default to refuting means the
+findings were real, and 15 "partly" means many were overstated.
+- **The blocker (mine):** Typer forces a coloured error panel whenever `GITHUB_ACTIONS` is set, so the five
+  new reject tests, which asserted on that panel, passed locally and would have failed on the first push
+  (reproduced: 5 failed, 31 passed). `_flat` now strips colour (`test_cli.py:359`). Learning #291.
+- **Also fixed:** two vacuous assertions of mine (`llm.calls == []` could not fail because the spy
+  reflected no rows; the CLI no-quote check could not see a quoted surrogate), the input shapes that let
+  14 mutants survive, wording that said "lone surrogate" for an adjacent pair, a `str` subclass bypass,
+  two comments naming the wrong list entry, and raw U+FFFF/U+FFFD/U+E000 in test sources.
+- **Corrected by a new ledger entry** (entries are never edited): my claim that the tests were "red at
+  HEAD: exit 0" (it was `2808473`, not the `HEAD` at writing; learning #294), and a ruff aside naming
+  three files where four carry the 294 errors.
+- **Filed, not fixed** (`BACKLOG.md:372,402,416,430`): three more channels that can still write a file
+  that will not reload (`run --request`, a model reply, the intake ids), `run` crashing after the whole
+  run on a non-UTF-8 BLOB, terminal control codes reaching stderr through `_safe_message`, and a wrong
+  `typer>=0.12` floor (0.12.0-0.12.3 cannot build the CLI at all).
+
+### Session 266 Handoff Evaluation (by Session 267)
+
+**Score: 9/10.**
+- **+** What's-next #3 pointed at the exact item (`BACKLOG.md:369`) and the item carried its own sketch,
+  so Phase 1 needed one ruling pair and no rediscovery. Gotcha 1, run the read-budget guard at the claim
+  commit, was followed and the claim was green. Its sizing advice for this record was usable.
+- **+** The "observed, not filed" list was accurate: `cli.py`'s module docstring still says only
+  `anthropic` exists, and an empty `nonexistent.db`, the kind of file SQLite creates for a URL naming a
+  missing database, appeared in the repo root during this session's review (which command made it is
+  not known).
+- **−** It framed the item as "reject or scrub" only. The library half, and the docstring's imprecise
+  "a non-`str` still raises" sentence, were in the item but not the handoff; harmless because the item
+  was the first thing read. Its key files were nearly all trim-related and none was a file this
+  deliverable touched.
+- **ROI: high.**
+
+### Session 267 Self-Assessment
+
+**Score: 7/10.**
+- **+** Read the code before writing, wrote the tests first, committed each layer on its own with its own
+  ledger entry, and checked the result against the real binary old-versus-new rather than the test runner
+  alone. Mutation-tested my own tests, then had a review and skeptics do it again.
+- **+** Everything the review confirmed was fixed or filed, and each fix was re-verified (14 new mutants,
+  and the suite under `GITHUB_ACTIONS=true`, which I could not have run before the review named it).
+- **−** I shipped a CI-red blocker: I wrote assertions on Typer's rendered error and never ran them the way
+  CI does. The check is one environment variable.
+- **−** I wrote two false statements into committed ledger entries (the "red at HEAD" measurement and a
+  three-file list that was four) and needed a correction entry for each.
+- **−** A tool layer silently decoded my `\uXXXX` literals (learning #292): noncharacters became raw
+  characters in two test files, and an escaped surrogate pair collapsed into one emoji, which cost a
+  debugging round. Two of the review's in-scope findings were vacuous assertions of mine that my own
+  mutants had not exposed.
+- **Decay term:** none removed. This record is the growth; `BACKLOG.md` lost one item and its row and
+  gained four (net +4 KB, 98,284 B to 102,379 B).
+
+**What's next.**
+1. **Two of the four filed items are small and need no ruling:** the `typer` floor (`BACKLOG.md:430`, two
+   lines plus `uv lock`) and `_safe_message` control characters (`:416`, one regex and a test). Either is
+   a complete session.
+2. **Rulings still owed to the operator:** `--db-url` option (c) (`BACKLOG.md:333`), and now one per
+   channel for *three more channels* (`:372`): reject or degrade, and what `run` should exit with.
+3. **Unchanged from Session 266:** two guard-design operator calls (the later-rows hash item and the
+   wide-close-out item in `BACKLOG.md`).
+4. **Observed, not filed, still open:** a duck-typed `db` can put an unescaped `entity_kind` in a skip
+   note; `discover --db-url sqlite:///<typo>` creates an empty file and exits 0; `cli.py`'s module
+   docstring says only `anthropic` exists. (The control-character one is now filed.)
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `packages/data-agent/src/model_project_constructor_data_agent/discovery.py:93` the error class, `:128`
+  `validate_request_context`, `:288` its call; `cli.py:80` `_check_request_context`, `:213` the callback.
+- `tests/data_agent_package/test_discovery.py:499` `_SpyDB`, `:530` the two parameter lists, `:562`
+  `TestRequestContextMustBeWritable`; `tests/data_agent_package/test_cli.py:359` `_flat`, `:430`
+  `REJECTED_CONTEXTS`, `:485` the `python -m` test.
+- `BACKLOG.md:372,402,416,430` the four filed items; `PROJECT_LEARNINGS.md` #291-#294.
+
+**Gotchas.**
+1. **Before pushing a CLI test, run `GITHUB_ACTIONS=true uv run pytest <file> --no-cov -q`.** Typer's
+   colour and box only appear then; `_flat` is the only safe way to assert on its text.
+2. **Write surrogate and noncharacter literals with `chr()`** and count the raw characters afterwards;
+   the Edit tool and a Bash heredoc both decode `\uXXXX` (learning #292).
+3. **The option callback guards the command, not the function.** Calling `cli.discover(...)` as plain
+   Python skips it, connects first, and then the library raises `UnwritableRequestContextError`; the
+   library check is what protects a direct caller.
+4. **`uv run ruff check .` prints 294 errors in four synced root tools** (`methodology_trim.py`,
+   `methodology_dashboard.py`, `quality_ratchet.py`, `context_budget.py`). CI lints `src/ tests/
+   packages/ scripts/` only, which is clean. Not a finding.
+5. **A review workflow can leave files in the repo.** An empty `nonexistent.db` appeared at the root
+   during the review and I deleted it (untracked, 0 bytes, no test or source names it); check
+   `git status` after one.
+6. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every
+   commit that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`.
 
 ### What Session 266 Did
 **Deliverable:** **the tenth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 257 → 249 (nine
