@@ -54,10 +54,11 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw. | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
-| A password can still reach the connect error, the report and a warning | Two spellings of a database address slip past the code that hides passwords: a password containing an unencoded `@` (the part after it is read as the host, and a driver quotes the host back), and a mistyped `://` (the whole address is printed with the password in it). Both print a password or most of one in the `error:` line `discover` now shows, in the report, and in a warning. Neither is new (the old code printed them in a traceback), and no test puts a password in the address. | **Small**, no ruling: stop printing an address that does not parse, and treat an `@` in the parsed host as a password. **A secrets matter, so worth doing before the rest.** |
+| Two more places print the raw database address | The argument parser's own error (an address typed without `--db-url` is echoed back as "unexpected extra argument", password and all) and Typer 0.16 to 0.22, which print the address in a traceback's local variables on any uncaught error. The lock's Typer is 0.24.1, which does not, so only an environment outside the lock sees the second. | **Small; a secrets matter.** The second is one argument; the first needs a choice (catch the error, or take the address from an environment variable). |
+| Smaller follow-ups from the password fix | Five items the review of Session 271's fix left: the error does not tell the operator that an `@` in a password must be written `%40` (the usage guide now does); a much smaller design that withholds the driver's text exists and was declined; a reliably parsed password with a space is masked only up to the space; a non-string address raises; and SQLAlchemy 2.1 fails one test that CI never meets. | Each small. **The first two are the operator's call.** |
 | `redact_secrets` is slow on some text, and nothing limits how much text `safe_message` reads | A message made of thousands of `://x:` runs with no spaces takes seconds to minutes (4x longer each time the text doubles), and a 10-million-character message uses 1 to 2 GB. No database driver normally produces either. | **Small**, but a choice: a cap on the length shortens a very long `[SQL: ...]` that is now shown whole. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
-| The tests need Click 8.2 and nothing says so | Under Click 8.1, 26 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
+| The tests need Click 8.2 and nothing says so | Under Click 8.1, 31 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -426,9 +427,9 @@ route allows it, otherwise a **simulated** driver (a fake SQLAlchemy dialect who
 PostgreSQL echoes of a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
 Oracle or SQL Server.
 
-1. **An unparseable `--db-url`** (`db.py:311`, in `sql_dialect_from_url`'s WARNING). `redact_db_url(url)`
-   goes through `%s` and its regex fallback replaces nothing: 1 ESC and 1 BEL on stderr from the operator's
-   own argument, exit 0. **Nit** for the control codes. **Its secrets half is its own item below.**
+1. **An unparseable `--db-url`** (`db.py:538`, in `sql_dialect_from_url`'s WARNING). `redact_db_url(url)`
+   goes through `%s` and nothing in it replaces a control character: 1 ESC and 1 BEL on stderr from the
+   operator's own argument, exit 0. **Nit** for the control codes. **Its secrets half closed in Session 271.**
 2. **SQLAlchemy's own emissions.** (a) The reflection warnings ("Did not recognize type '%s' of column
    '%s'" in the PostgreSQL, MySQL, Oracle and SQL Server dialects; SQLite's foreign-key-signature
    warning) go through Python's `warnings`, not the logger, so nothing in this package touches them.
@@ -483,49 +484,59 @@ given terminal reorders text on them was not measured.
 **Cost:** routes 5 and 2(b) are small and need no ruling; 6 is one decision then one function; 3 is an
 operator call; 1, 4 and 7 are nits.
 
-### A password can still reach the connect error, the report and a warning
+### Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals
 
-**Found by Session 270's critic and a lens; reproduced; pre-existing, and not fixed.** `ReadOnlyDB.connect`
-redacts the URL with `redact_db_url`, and two shapes get past it. **A secrets matter.** (1) **A password
-with an unencoded `@`** (`bob:P@ssw0rdXYZ@host`): SQLAlchemy ends the password at the first `@`, parses
-`P` as the password and `ssw0rdXYZ@host` as the host, the driver echoes that host in its error, and neither
-redaction path sees it: `redact_db_url` takes the `make_url` branch, so its regex that matches to the
-LAST `@` (the comment at `db.py:69-74` says this exact case must not leak) never runs, and the driver's
-text has no `://` and no `key=`. Measured with psycopg 3 against a refused port: `discover --db-url
-'postgresql+psycopg://bob:P@ssw0rdXYZ@127.0.0.1:1/claims'` printed `failed to resolve host
-'ssw0rdXYZ@127.0.0.1'`, and `run --fake-llm` left `ssw0rdXYZ` in the report's `data_quality_concerns`. Before
-Session 270 it reached the traceback, the concern and the warning, and it still reaches the `error:` line and
-the concern **through the driver's own text, which no version of the sinks masks** (the URL half measured
-at the Session 270 close with the `fakeesc` dialect: `fakeesc://bob:P@ssw0rdXYZ@127.0.0.1:1/claims` keeps
-`ssw0rdXYZ` in `str(DBConnectionError)` and in `discover`'s line; the driver's echo of the host measured by
-the review with psycopg 3). `test_redact_db_url_masks_every_secret_shape`
-covers `p@ss@host:$DB_PORT` (the unparseable path) and not the parseable `p@ss@host:5432`
-(`redact_db_url` returns `user:***@ss@host:5432/claims`). (2) **A mistyped scheme separator**
-(`postgresql//bob:hunter2@h/db`, `postgresql:/bob:...`, `bob:hunter2@h/db`): `make_url` fails, the fallback
-regex needs `://`, and the whole URL, password included, is echoed in the `error:` line, the concern and
-route 1's warning above. SQLAlchemy 2.0.49's own `ArgumentError` does not echo the URL. **Fix:** when
-`make_url` fails, do not echo the URL at all (a fixed `<unparseable URL>`: the operator knows what they
-typed), and for the first shape treat an `@` in the parsed host or username as an unencoded password, or
-scrub the parsed password's known fragments from the cause by exact match, which is stronger than
-patterns. Add a URL-borne-password case to the route tests: none of them has one. **Two limits of the
-masker belong with this** (`db.safe_message`'s docstring states both): a control between the separator
-and an opening quote or brace leaves the rest of a multi-word secret, and a quoted value glued to
-following text is read as the whole value. And one consequence of Session 270's own choice, stated so it is
-not rediscovered: the sinks no longer run the masker over the composed message (it ate the `':` after a
-URL ending in `password=***` and the exception type after a path ending in a key word), which had
-accidentally masked this first shape's tail in the URL half; the cause half leaked it either way.
+**Found by Session 271's completeness critic and sinks lens; reproduced on the locked versions;
+pre-existing; a secrets matter.** Neither goes through `redact_db_url` or `safe_message`, and no test can see
+either, because `CliRunner` tests pass the option correctly. (1) **A password-bearing address given without
+the flag name.** `uv run model-data-agent run -r request.json -o o.json --fake-llm
+'postgresql://bob:Zq7Lm9Xt@db.internal/claims'` prints `Got unexpected extra argument
+(postgresql://bob:Zq7Lm9Xt@db.internal/claims)` (Typer 0.24.1, Click 8.3.2, the lock), and
+`scripts/run_pipeline.py`'s argparse prints `unrecognized arguments: <the address>`. **Fix:** catch
+`click.UsageError` around `app()` (`standalone_mode=False`) and print `redact_secrets(str(e))`, and override
+`argparse.ArgumentParser.error` the same way; or take the address from an environment variable so it is
+never on the command line (an added option: an operator ruling). `USAGE.md` now says to pass the flag
+name. Test it through a real subprocess. (2) **Typer 0.16 to 0.22**, which `typer>=0.16.0` admits, print
+`db_url = 'postgresql://bob:<password>@...'` in the *locals* box of any uncaught exception in `run` or
+`discover` (a malformed request file, an unwritable `--output`): `pretty_exceptions_show_locals` defaults to
+True before 0.23.0 and False in the lock's 0.24.1 (measured from 0.12.0 to 0.24.1; reproduced under 0.20.0 and
+0.21.0). **Fix:** `typer.Typer(..., pretty_exceptions_show_locals=False)` plus a test that asserts it, or
+raise the floor to `typer>=0.23.0` (`tests/test_dependency_floors.py` holds the floor). **Small**; (2)
+needs no ruling.
+
+### Smaller follow-ups from Session 271's review of the password fix
+
+**None is a leak the fix introduced; each was reproduced.** (a) **The connect error does not say what is
+wrong** when the cause is an unencoded `@` (`USAGE.md` now does). A fixed sentence appended whenever
+`_untrusted_userinfo` fires (constant text, so it carries no password) would; it changes a message a test or
+a script may match. (b) **A smaller design exists:** withhold the driver text whenever the parse is untrusted
+(the simplicity lens's variant: db.py 622 lines against 711, 19 tests fewer, none of the scrub's documented
+limits, and a better place for (a)). Session 271 declined it because Session 260's contract needs the
+dialect warning to name `invalid literal for int()`, because it hides the real cause when the trigger
+over-fires on a legitimate address, and because the scrub has a measured result (59 of 59 mutants, 0 of
+1,242 real-driver rows). Revisit if the scrub's limits become a burden. (c) **A reliably parsed password
+holding whitespace, `;`, `&` or `,`** that a driver echoes as a URL or `password=x y` is masked only up to
+the whitespace (`redact_secrets`' patterns): simulated, no real driver echoes one; pre-existing. (d)
+**`redact_db_url(None)`, bytes or an int** raise `TypeError` from the `except` blocks that deliver "never
+raises": pre-existing, unreachable from the shipped CLI. (e) **SQLAlchemy 2.1:** `sqlalchemy>=2.0,<3` admits
+it, `render_as_string` there percent-encodes a `:` in a SQLite path, and
+`test_db.py::test_redact_db_url_leaves_a_secretless_url_alone[sqlite:///:memory:]` fails on 2.1.1
+(pre-existing; the three of Session 271's own tests that did are fixed). The lock pins 2.0.49, so CI never
+meets it (learning #303). **Small each; (a) and (b) are the operator's call.**
 
 ### `redact_secrets` is quadratic on some text and `safe_message` has no input bound
 
 **Found by Session 270's review; reproduced; pre-existing, and not fixed.** `_USERINFO_TEXT`
-(`db.py:76`, `(://[^:/\s]*:)[^\s]*(@)`) is tried at every `://x:` and scans to the end of the
+(`db.py:75`, `(://[^:/\s]*:)[^\s]*(@)`) is tried at every `://x:` and scans to the end of the
 whitespace-free run: `safe_message('://a:' * n)` takes 0.15 s at 10,000 characters, 2.3 s at 40,000, 37 s at
 160,000 (x4 per doubling, so about 25 minutes extrapolated for 1 MB), and it runs twice per call. A
 comma-joined list of 4,000 URLs with no whitespace (71 KB) takes about 2 s; with a space after each it is
 linear. No driver normally emits that, which is why it is a nit. Separately `safe_message` has no bound on
 its input: about 85 to 230 bytes of memory per character (a 10 MB message peaked at 0.8 to 2.3 GB, 1 to 4
-s), linear in time. `redact_db_url`'s `_USERINFO_URL` fallback (`.*(@)`) has the same shape on the
-operator's own argument. **Fix:** make the userinfo pass linear (within a whitespace-free token only the
+s), linear in time. (`redact_db_url`'s own `.*(@)` fallback had the same shape on the operator's argument;
+Session 271 replaced it with `find` and `rfind`, which its review measured at 0.003 s on a 300 KB address.
+The new password scrub is linear and has its own size tests, but `safe_message` still has no input bound.)
+**Fix:** make the userinfo pass linear (within a whitespace-free token only the
 first `://x:` matters and it pairs with the last `@` in that token: a per-token `rfind('@')`, or skip
 tokens with no `@`); and a cap on the text `safe_message` processes (8 to 64 KB with a visible
 `...[truncated]`) before it redacts, which also bounds the quadratic case. A cap changes what a long
@@ -567,9 +578,9 @@ with `nohup setsid` and print each environment's resolved versions before readin
 ### The test suite needs Click 8.2 or later, and nothing declares it
 
 **Found by Session 268's matrix and review; reproduced by a skeptic; pre-existing.** (1) Under Click
-8.1.8, 26 of the 77 CLI tests fail (**measured at the close of Session 270 with Typer 0.17.0**; it was
-18 of 69 at Session 268, and every test that reads `result.stderr` adds one: Session 269 added two and
-Session 270 six) for every Typer from 0.12.4 to 0.17.0, all
+8.1.8, 31 of the 87 CLI tests fail (**measured by Session 271's review with Typer 0.17.0**; it was 26 of 77
+at the close of Session 270 and 18 of 69 at Session 268, and every test that reads `result.stderr` adds
+one: Session 269 added two, Session 270 six and Session 271 five) for every Typer from 0.12.4 to 0.17.0, all
 `ValueError: stderr not separately captured`: they read `result.stderr`, and Click 8.1's `CliRunner`
 mixes stderr into stdout unless told otherwise. The CLIs themselves build and render `--help` there.
 (2) `tests/agents/intake/test_cli.py:10` does `import click` (used at `:21`, `click.unstyle`) while no

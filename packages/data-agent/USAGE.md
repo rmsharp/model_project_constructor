@@ -72,6 +72,31 @@ The CLI exits 0 on success and writes the `DataReport` as indented JSON to the
 path given by `--output`. The terminal prints a single confirmation line with
 the report's `status`.
 
+### Writing a password in the address
+
+`--db-url` is a URL, so a password with a special character must be
+percent-encoded: `@` is `%40`, `:` is `%3A`, `/` is `%2F`, `?` is `%3F`, `#` is
+`%23`, `%` is `%25` and a space is `%20`. Python does it for you:
+`urllib.parse.quote(password, safe="")`. Pass the address with the flag name:
+an address typed without `--db-url` is not recognised as one and the argument
+parser prints it back.
+
+Left unencoded, an `@` ends the password early: SQLAlchemy reads what follows it as
+the host, so the connection fails on a host that does not exist. The tool does not
+print the password to tell you so. It masks everything from the user's colon to
+the last `@` (`postgresql://bob:***@db.internal/claims`) and removes the password's
+pieces from the driver's own message, which is why a driver's *failed to resolve
+host* can read `'***@db.internal'`: a host never holds an `@`, so that is the
+sign. This is best-effort, and the limits are in the docstrings of `db.py`
+(a password under four alphanumeric characters is not covered, and a password made
+of ordinary words, such as `Server@123`, removes those words from the message).
+
+**Reports from earlier versions.** Before Session 271 an address with an unencoded
+`@`, or a mistyped `://`, could put the password, or most of it, in the error
+line, in the report's `data_quality_concerns`, in the `--checkpoint-dir` envelope
+and in a generated project's `reports/data_report.json` and `.md`. Treat any
+such file as exposing it, and rotate the password.
+
 ## Example 2 — Python in a script
 
 ```python
@@ -214,7 +239,8 @@ exits 0 with a one-line confirmation (`wrote inventory.json (N entries)`).
 (When the database cannot be connected to it prints one line on stderr,
 `error: cannot connect to '<url, password masked>': <cause>`, with no traceback,
 exits 1 and writes nothing; the cause is on one line, with any secret in it masked
-(best-effort) and every control character replaced by a space. It exits non-zero
+(best-effort), a password SQLAlchemy read wrongly removed by value (see *Writing a
+password in the address*) and every control character replaced by a space. It exits non-zero
 and writes nothing when the LLM client cannot be constructed. It exits 2 and writes
 nothing, without
 connecting, when `--request-context` cannot be written as UTF-8 — on POSIX that is
