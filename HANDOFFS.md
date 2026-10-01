@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S268
+date: 2026-09-30
+status: pending
+active_task: The typer floor is made true (BACKLOG.md's item "The typer>=0.12 floor is wrong"): pyproject.toml:24 and packages/data-agent/pyproject.toml:17 declare a minimum that cannot build the CLIs; the filed fix is >=0.12.4 and this session measures the real minimum across every shipped CLI first. Chosen by the operator at Phase 1 from a two-step picker.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S267
 date: 2026-09-30
 status: complete

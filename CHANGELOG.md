@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-30 · [ad hoc] S268 claim: make the `typer` floor true *(in progress)*
+- **Change:** Session 268 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is `BACKLOG.md`'s item *"The `typer>=0.12` floor is wrong"*: both declared floors (`pyproject.toml:24`, `packages/data-agent/pyproject.toml:17`) name a release that cannot build the CLIs, and `uv.lock` hides it by resolving a far newer one. The filed fix is `>=0.12.4` plus a lock refresh; the session measures the real minimum across every shipped CLI before writing it. Chosen by the operator at Phase 1 from a two-step picker.
+- **Commit/PR:** this commit
+- **Session:** S268 · **Verified:** ledger-only. `tests/test_read_budget.py` and `tests/test_session_notes_census.py` are green at this claim state (82 passed), so the claim does not repeat Session 266's claim-state red.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-09-30 · [ad hoc] S267 — close out: `--request-context` that cannot be written as UTF-8 is rejected; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 267 record: the two operator rulings, what changed in the library and the CLI, the verification (tests first, 24 mutants, the same suite under `GITHUB_ACTIONS=true`, the real console script old versus new), the review (32 agents, 27 findings all verified, the CI-only blocker, what was fixed, corrected and filed), the Session 266 handoff evaluation (9/10) and this session's self-assessment (7/10). `HANDOFFS.md`'s receipt is `status: complete`. The `(in progress)` markers on the S267 claim entry and on the library-layer entry are resolved by this entry: the deliverable is complete across `341622c`, `e764c3c` and `540d56c`. **Non-commit action: `master` pushed to `origin`**, on the operator's ruling at Phase 3, carrying all six of this session's commits.
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `CHANGELOG.md`; then `git push origin master`

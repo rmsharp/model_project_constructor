@@ -93,6 +93,19 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 268 Did
+**Deliverable:** **the `typer` floor is made true** — `BACKLOG.md`'s item *"The `typer>=0.12` floor is
+wrong"*: `pyproject.toml:24` and `packages/data-agent/pyproject.toml:17` declare a minimum that cannot
+build this project's CLIs, and `uv.lock` (which resolves a far newer release) hides it. The filed fix is
+`>=0.12.4`; this session measures the real minimum across every shipped CLI before writing it. Chosen by
+the operator at Phase 1 from a two-step picker (area: small pipeline-CLI fixes; item: this one).
+(IN PROGRESS)
+**Started:** 2026-09-30
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 267 Did
 **Deliverable:** **a `--request-context` that cannot be written as UTF-8 is rejected, not written —
 COMPLETE**, closing `BACKLOG.md`'s item of that name, one of the two rulings Session 266's handoff said
