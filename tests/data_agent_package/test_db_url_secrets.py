@@ -27,6 +27,7 @@ driver echo was measured on a real psycopg 3 and is not reproduced here: no driv
 from __future__ import annotations
 
 import logging
+import time
 from typing import NoReturn
 
 import pytest
@@ -93,6 +94,17 @@ SHAPES = [
     # One slash too many PARSES: the user part becomes the database, there is one ``@``, and an
     # address with one ``@`` looks sound. The real CLI printed it (Session 271 sinks lens).
     ("three-slashes", "fakeecho:///bob:Hn4rT8qPz@127.0.0.1:1/claims", "Hn4rT8qPz"),
+    # One slash too many, and a ``?`` in the password: the parse finds a database and a query whose
+    # value holds the ``@``, and a query's ``@`` is only accounted for after a HOST.
+    ("three-slashes-and-a-query-mark", "fakeecho:///bob:Zq7xK9?=@127.0.0.1:1/claims", "Zq7xK9?="),
+    # The password whole reaches the cause when every token is short and it ends in a delimiter.
+    ("a-short-password-ending-in-a-colon", "fakeecho//bob:aaa7:@127.0.0.1:1/claims", "aaa7:"),
+    # An alternation takes the FIRST pattern that matches, so a chain must not outrank the whole.
+    (
+        "a-password-the-chains-would-cut-short",
+        "fakeecho//bob:N_b:P&e@K/*9%uzX,@127.0.0.1/db",
+        "N_b:P&e@K/*9%uzX,",
+    ),
     # An ``@`` then a ``?`` inside the password: SQLAlchemy sees a query that follows the userinfo
     # with no host or database before it, so the ``@`` in its value is not a legitimate one.
     ("at-then-query", "fakeecho://bob:Zq7xK9@?Vb5nY=mWpL3@127.0.0.1:1/db", "Zq7xK9@?Vb5nY=mWpL3"),
@@ -158,6 +170,8 @@ UNPARSEABLE_IDS = {
     "a-question-mark-in-the-user",
     "a-backslash-in-the-port-error",
     "a-tab-in-the-port-error",
+    "a-short-password-ending-in-a-colon",
+    "a-password-the-chains-would-cut-short",
 }
 UNPARSEABLE = [shape for shape in SHAPES if shape[0] in UNPARSEABLE_IDS]
 
@@ -394,8 +408,6 @@ def test_the_scrub_is_linear_in_the_password() -> None:
     """The first design enumerated every run of segments between delimiters: cubic, 4 s at 160
     delimiters and a hang at 100,000 (Session 271 over-masking lens). It runs inside the
     ``except`` block that must not raise."""
-    import time
-
     password = "@".join(["ab:cdefgh"] * 3000)
     url = f"postgresql://bob:{password}@h/db"
     start = time.perf_counter()
@@ -422,3 +434,114 @@ def test_a_scrub_that_cannot_finish_fails_closed(monkeypatch: pytest.MonkeyPatch
     url = "postgresql://bob:P@ssw0rdXYZ@127.0.0.1:1/db"
     assert safe_message("failed to resolve host 'ssw0rdXYZ@127.0.0.1'", url=url) == "<unprintable>"
     assert redact_secrets("ssw0rdXYZ", url=url) == "<unprintable>"
+
+
+# ---------------------------------------------------------------------------
+# The decisions inside the redaction, each held by a case that fails when it is removed. Found by
+# a mutation pass over the code (Session 271): 23 of 46 one-line changes survived the tests above.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("url", "text"),
+    [
+        # An ``@`` in the user name: the parse accounts for it, so the address is trusted.
+        ("postgresql://bob@corp.example:hunter2xyz@h/db", "rejected hunter2xyz for the role"),
+        # A percent-encoded ``@`` in the password: SQLAlchemy decodes it, so it is trusted too.
+        ("postgresql://bob:hunter2%40wxyzq@h/db", "rejected wxyzq for the role"),
+        ("postgresql://bob:hunter2xyz@h/db?application_name=etl@nightly", "rejected hunter2xyz"),
+    ],
+    ids=["an-at-in-the-user", "an-encoded-at-in-the-password", "an-at-in-a-query-value"],
+)
+def test_a_trusted_parse_leaves_the_driver_text_alone(url: str, text: str) -> None:
+    """The scrub removes a password BY VALUE, which costs the words it shares with the message.
+    It is paid only where SQLAlchemy cannot be trusted, and a correctly parsed address is trusted:
+    no measured driver echoes a password that parsed, and ``_mask_kv`` still handles ``key=``."""
+    assert safe_message(text, url=url) == text
+
+
+def test_a_sqlalchemy_url_object_is_a_valid_address() -> None:
+    """``ReadOnlyDB`` has always accepted whatever ``make_url`` does."""
+    url = sa.make_url("postgresql://bob:hunter2@h/db")
+    assert redact_db_url(url) == "postgresql://bob:***@h/db"  # type: ignore[arg-type]
+    assert safe_message("x hunter2", url=url) == "x hunter2"  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("postgresql://bob:pw@h/db", ("postgresql://bob:", "pw", "@h/db")),
+        ("postgresql://bob:p@ss@h/db", ("postgresql://bob:", "p@ss", "@h/db")),
+        ("bob:pw@h/db", ("bob:", "pw", "@h/db")),
+        ("postgresql//bob:pw@h/db", ("postgresql//bob:", "pw", "@h/db")),
+        # A ``://`` after a ``:``, ``/`` or ``@`` belongs to the password, not to the scheme.
+        ("postgresql//bob:a://b@h/db", ("postgresql//bob:", "a://b", "@h/db")),
+        # Not a scheme separator, so the first colon in the address is the user's: the one in it.
+        ("u@x://p:q@h/db", ("u@x:", "//p:q", "@h/db")),
+        ("a/b://p:q@h/db", ("a/b:", "//p:q", "@h/db")),
+        ("postgresql://host/db", None),
+        ("postgresql://bob@h/db", None),
+    ],
+)
+def test_the_userinfo_is_split_the_way_an_operator_means_it(
+    url: str, expected: tuple[str, str, str] | None
+) -> None:
+    assert db_module._split_userinfo(url) == expected
+
+
+@pytest.mark.parametrize("gap", ["", ":", "\\\\", "[\\\\]", "\\\\'.", "\\\\ \\\\ "])
+def test_a_driver_that_puts_up_to_six_characters_between_tokens_still_loses_the_password(
+    gap: str,
+) -> None:
+    """Every token is short, so only a CHAIN can remove them: a driver that doubles a backslash,
+    brackets a host or strips a space leaves the tokens and rewrites what is between them."""
+    url = "postgresql://bob:Zq@qx:zv@h/db"
+    assert safe_message(f"no route to qx{gap}zv now", url=url) == "no route to *** now"
+
+
+def test_the_longest_chain_wins() -> None:
+    """Four short tokens joined by anything are one chain, not two: an alternation takes the first
+    pattern that matches, so the chains are tried most tokens first."""
+    url = "postgresql://bob:ab@cd@ef@gh@h/db"
+    assert safe_message("x ab:cd:ef:gh y", url=url) == "x *** y"
+
+
+def test_a_gap_of_seven_characters_is_the_limit_of_a_chain() -> None:
+    url = "postgresql://bob:Zq@qx:zv@h/db"
+    assert "qx" in safe_message("no route to qx.......zv now", url=url)
+
+
+def test_a_short_token_is_removed_only_beside_the_at_that_follows_it() -> None:
+    """The word ``abc`` is not removed from a message because a password contains it."""
+    url = "postgresql://bob:abc@xyz@h/db"
+    assert safe_message("the abc table", url=url) == "the abc table"
+    assert safe_message("host 'abc@h'", url=url) == "host '***@h'"
+
+
+def test_a_short_token_beside_an_at_is_removed_whatever_its_case() -> None:
+    """A resolver lower-cases a host name before it echoes it (clickhouse, hdbcli: measured)."""
+    url = "postgresql://bob:Zq7xK9mWpL3@Ab@127.0.0.1:1/db"
+    assert safe_message("failed to resolve host 'ab@127.0.0.1'", url=url) == (
+        "failed to resolve host '***@127.0.0.1'"
+    )
+
+
+def test_the_tail_after_the_first_at_is_removed_even_when_every_token_is_short() -> None:
+    """``aaa#`` holds three alphanumeric characters, so no token or chain of it qualifies. The tail
+    does: it is what SQLAlchemy hands the driver as a host."""
+    url = "postgresql://bob:@aaa#@127.0.0.1:1/db"
+    assert safe_message("failed to resolve host 'aaa#@127.0.0.1'", url=url) == (
+        "failed to resolve host '***@127.0.0.1'"
+    )
+
+
+def test_the_pieces_are_bounded_however_long_the_password_is() -> None:
+    """The scrub runs inside an ``except`` block that must not stall. Distinct tokens defeat the
+    de-duplication that kept the repeated-token test above fast."""
+    password = "@".join(f"t{i:05d}x" for i in range(3000))
+    patterns, short = db_module._password_patterns(password)
+    assert len(patterns) <= db_module._MAX_PATTERNS
+    assert short == []
+    start = time.perf_counter()
+    safe_message("x " * 5000, url=f"postgresql://bob:{password}@h/db")
+    assert time.perf_counter() - start < 2.0

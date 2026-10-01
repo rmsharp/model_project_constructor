@@ -112,33 +112,28 @@ _ALNUM_RUN = re.compile(r"[A-Za-z0-9]+")
 #: more.
 _MIN_TOKEN_ANYWHERE = 4
 #: Bounds, because the scrub runs inside an ``except`` block that must not stall and a password this
-#: long is the operator's own argument gone wrong: tokens read from each end of the password, tokens
-#: in one chain, and patterns in all. A chain's gap is up to six characters that are not
+#: long is the operator's own argument gone wrong: tokens in one chain, tails of the password taken
+#: after an ``@``, and patterns in all. A chain's gap is up to six characters that are not
 #: alphanumeric.
-_MAX_TOKENS = 128
 _MAX_CHAIN = 6
-_MAX_PATTERNS = 256
 _MAX_TAILS = 4
-_MAX_EXACT = 1024
+_MAX_PATTERNS = 256
 _GAP = r"[^A-Za-z0-9]{0,6}"
 
 
-def _split_userinfo(url: str, *, guarded: bool) -> tuple[str, str, str] | None:
+def _split_userinfo(url: str) -> tuple[str, str, str] | None:
     """Split an address at its userinfo the way an operator means it: ``(text through the user's
     colon, the password, the text from the last '@' on)``, or ``None`` when no password is there.
 
     The password ends at the LAST ``@``, because a password may contain one and a host may not.
-    With no ``://`` the first colon is the user's, so the scheme's own colon is read as one in a
-    mistyped ``postgresql:/bob:pw@h`` and the user name is masked with the password: a password that
-    begins with a slash reads the same way, and an echoed password costs more than a masked user
-    name. ``guarded`` refuses a colon that follows a ``/`` after the scheme separator: that is a
-    path, not a user name. A ``://`` after a ``:``, ``/`` or ``@`` is not the scheme's. An address
-    that does not parse is split with the guard (a bad port or a mistyped scheme separator); one
-    that parses wrongly is split without it (the three-slash typo puts the user name in the path).
+    The user's colon is the first one after the scheme separator. With no ``://`` that is the first
+    colon in the address, so the scheme's own colon is read as the user's in a mistyped
+    ``postgresql:/bob:pw@h`` and the user name is masked with the password: a password that begins
+    with a slash reads the same way, and an echoed password costs more than a masked user name. A
+    ``://`` after a ``:``, ``/`` or ``@`` is not the scheme's but part of a password.
     """
     scheme_end = url.find("://")
     if scheme_end >= 0 and re.search(r"[:/@]", url[:scheme_end]):
-        # Not a scheme separator: a ``://`` inside a password, under a mistyped or missing scheme.
         scheme_end = -1
     start = scheme_end + 3 if scheme_end >= 0 else 0
     at = url.rfind("@", start)
@@ -146,8 +141,6 @@ def _split_userinfo(url: str, *, guarded: bool) -> tuple[str, str, str] | None:
         return None
     colon = url.find(":", start, at)
     if colon < 0:
-        return None
-    if guarded and scheme_end >= 0 and "/" in url[start:colon]:
         return None
     return url[: colon + 1], url[colon + 1 : at], url[at:]
 
@@ -187,10 +180,10 @@ def _misparsed_userinfo(url: str) -> tuple[str, str, str] | None:
     try:
         parsed = sa.make_url(url)
     except Exception:
-        return _split_userinfo(url, guarded=True)
+        return _split_userinfo(url)
     if parsed.get_backend_name() == "sqlite" or not _unaccounted_at(url, parsed):
         return None
-    return _split_userinfo(url, guarded=False)
+    return _split_userinfo(url)
 
 
 def redact_db_url(url: str) -> str:
@@ -240,11 +233,9 @@ def _password_patterns(password: str) -> tuple[list[str], list[str]]:
         exact.add(form)
         # SQLAlchemy ends a password at the FIRST ``@`` and the host takes what follows, so the
         # tails that matter are the first few; every tail would be quadratic in a password of many.
-        at_positions = [i for i, ch in enumerate(form[:_MAX_EXACT]) if ch == "@"]
+        at_positions = [i for i, ch in enumerate(form) if ch == "@"]
         exact.update(form[i + 1 :] for i in at_positions[:_MAX_TAILS])
         tokens = _ALNUM_RUN.findall(form)
-        if len(tokens) > 2 * _MAX_TOKENS:
-            tokens = tokens[:_MAX_TOKENS] + tokens[-_MAX_TOKENS:]
         for first in range(len(tokens)):
             total = 0
             for last in range(first, min(first + _MAX_CHAIN, len(tokens))):
@@ -256,7 +247,7 @@ def _password_patterns(password: str) -> tuple[list[str], list[str]]:
     # exact pieces go first, longest first, and then the chains, the ones of most tokens first. (By
     # the length of the pattern a chain outranks the password whole, because its gaps are long.)
     exact_patterns = sorted(
-        (e for e in exact if _MIN_TOKEN_ANYWHERE <= len(e) <= _MAX_EXACT), key=len, reverse=True
+        (e for e in exact if len(e) >= _MIN_TOKEN_ANYWHERE), key=len, reverse=True
     )
     chain_patterns = sorted(chains, key=lambda c: (-c.count(_GAP), c))
     patterns = [re.escape(e) for e in exact_patterns] + chain_patterns
@@ -285,8 +276,10 @@ def _scrub_address_password(text: str, url: str) -> str:
     toward the secret. Not covered: a password of fewer than four alphanumeric characters in all,
     and a delimiter-free run over 63 bytes that a server truncates in echoing a database name.
 
-    Runs on RAW driver text. After ``safe_message`` flattens whitespace the typed password no
-    longer appears in it (a tab after the ``@``: measured on psycopg2, pg8000, mysql-connector).
+    Runs on the RAW driver text, before ``safe_message`` flattens it. The exact pieces match the
+    password as typed, and a tab after the ``@`` that is a space once flattened (measured on
+    psycopg2, pg8000, mysql-connector) no longer matches them; a chain's gap still bridges it, so
+    the order is held by a test and not required by the chains.
     """
     try:
         parts = _misparsed_userinfo(url)
