@@ -21,7 +21,7 @@ agents = [
     "sqlparse>=0.5",
     "sqlalchemy>=2.0,<3",
     "httpx>=0.27,<1",  # GitLab + GitHub adapters (direct REST calls; see agents/website/*_adapter.py)
-    "typer>=0.16.0",  # first release whose CLIs build and render --help under Click 8.2+; held by tests/test_dependency_floors.py
+    "typer>=0.16.0",  # first release whose CLIs build and render --help beside Click 8.2 or later (8.2.0-8.5.0 measured); held by tests/test_dependency_floors.py
 ]
 ui = [
     "fastapi>=0.110",
