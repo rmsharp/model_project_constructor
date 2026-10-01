@@ -241,10 +241,13 @@ def discover(
         # One line, not the traceback Typer prints for an exception that escapes: that
         # prints the chained driver exception as well, which the message had cleaned
         # and redacted and the chain had not (Session 270, measured: 6 ESC and a
-        # secret on stderr). ``safe_message`` again, because this is the last place
-        # before the terminal and ``DBConnectionError`` is a public type that anything
-        # may raise with text of its own.
-        typer.echo(f"error: {safe_message(e)}", err=True)
+        # secret on stderr). ``redact=False``: ``ReadOnlyDB.connect`` redacted this
+        # text where it built it, and running the masker over the composed message
+        # again eats the ``':`` after a URL that ends in ``password=***`` and the
+        # exception type after a path that ends in a key word. What is left to do here
+        # is what the terminal needs, and ``DBConnectionError`` is a public type that
+        # anything may raise with text of its own: replace the control characters.
+        typer.echo(f"error: {safe_message(e, redact=False)}", err=True)
         raise typer.Exit(code=1) from None
     try:
         llm = (

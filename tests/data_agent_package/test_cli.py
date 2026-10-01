@@ -1012,6 +1012,7 @@ def test_cli_discover_a_connect_failure_is_one_clean_line(
     assert _unsafe(result.stderr) == []
     assert "Traceback" not in result.stderr
     assert SECRET not in result.stderr
+    assert result.stderr.endswith("\n")
     (line,) = result.stderr.splitlines()
     assert line.startswith("error: cannot connect to 'fakeesc:///claims': ")
     # Still diagnostic: the cause is named, with the control characters flattened.
@@ -1041,8 +1042,10 @@ def test_cli_discover_cleans_a_connect_error_it_did_not_build(
 ) -> None:
     """``DBConnectionError`` is a public type, so what ``discover`` echoes is not only
     what ``ReadOnlyDB.connect`` built: a subclass, a wrapper or a later change can raise
-    one carrying raw text. The echo is the last place before the terminal, so it cleans
-    the text itself rather than trusting the raiser."""
+    one carrying raw text. The echo is the last place before the terminal, so it replaces
+    the control characters itself rather than trusting the raiser. It does NOT mask
+    secrets again (``redact=False``): ``connect`` redacted where it built the text, and
+    the masker mangles a message composed from text it already cleaned."""
 
     def _fail(self: ReadOnlyDB) -> None:
         raise DBConnectionError(f"cannot connect: {CONNECT_CAUSE} {EVERY_CONTROL} end")
@@ -1055,10 +1058,63 @@ def test_cli_discover_cleans_a_connect_error_it_did_not_build(
 
     assert result.exit_code == 1, result.output
     assert _unsafe(result.stderr) == []
-    assert SECRET not in result.stderr
     (line,) = result.stderr.splitlines()
     assert line.startswith("error: cannot connect: FATAL: role ")
     assert line.endswith(" end")
+
+
+@pytest.mark.parametrize(
+    ("db_url", "expected"),
+    [
+        (
+            "fakeesc:///x?password=hunter2",
+            "error: cannot connect to 'fakeesc:///x?password=***': "
+            "(sqlite3.OperationalError) FATAL:",
+        ),
+        (
+            "sqlite:////nonexistent_dir/secret",
+            "error: cannot connect to 'sqlite:////nonexistent_dir/secret': "
+            "(sqlite3.OperationalError) unable to open database file",
+        ),
+    ],
+    ids=["url-ends-in-a-password-parameter", "path-ends-in-a-key-word"],
+)
+def test_cli_discover_leaves_the_connect_message_whole(
+    runner: CliRunner, tmp_path: Path, db_url: str, expected: str
+) -> None:
+    """Session 270 review: the echo first ran the full ``safe_message`` over the composed
+    message, and the masker ate the ``':`` after a URL ending in ``password=***`` and the
+    exception type after a path ending in a key word (``...secret': *** unable to open
+    database file``). The text is one line and the diagnostic is intact."""
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(tmp_path / "inv.json")]
+    )
+
+    assert result.exit_code == 1, result.output
+    (line,) = result.stderr.splitlines()
+    assert line.startswith(expected)
+    assert "hunter2" not in line
+
+
+def test_cli_discover_does_not_swallow_an_unexpected_error(
+    runner: CliRunner, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only ``DBConnectionError`` is the connect failure ``discover`` reports as one line.
+    Anything else is a defect, and stays the traceback it was: a clean ``error:`` line
+    would hide it. (``except Exception`` here survived every other test.)"""
+
+    def _crash(self: ReadOnlyDB) -> None:
+        raise RuntimeError("a bug, not a connect failure")
+
+    monkeypatch.setattr(ReadOnlyDB, "connect", _crash)
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", "sqlite:///x.db", "--output", str(tmp_path / "inv.json")],
+    )
+
+    assert result.exit_code == 1
+    assert isinstance(result.exception, RuntimeError)
+    assert "error:" not in result.stderr
 
 
 def test_cli_derives_sql_dialect_from_db_url(

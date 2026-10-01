@@ -930,9 +930,11 @@ def test_the_unreachable_database_concern_cleans_text_it_was_handed_raw(
     summary_response: SummaryResult,
     datasheet_response: Datasheet,
 ) -> None:
-    """The report is where the text is written, so it is cleaned there too, not only
-    where ``ReadOnlyDB.connect`` builds it: swapping ``agent.py``'s call for the old
-    flatten survives the test above, because the connect error is already clean."""
+    """The report is where the text is written, so its control characters are replaced
+    there too, not only where ``ReadOnlyDB.connect`` builds it: swapping ``agent.py``'s
+    call for the old flatten survives the test above, because the connect error is
+    already clean. It does not mask secrets again (``redact=False``): ``connect`` did,
+    and the masker mangles a message composed from text it already cleaned."""
     report = _run_with(
         _RawConnectErrorDB("sqlite:///unused.db"),
         sample_request,
@@ -944,12 +946,50 @@ def test_the_unreachable_database_concern_cleans_text_it_was_handed_raw(
 
     (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
     assert unsafe(concern) == []
-    assert SECRET not in concern
     assert concern.startswith(
         "database unreachable at QC execution time; quality checks not executed: "
         "cannot connect: FATAL: role "
     )
     assert concern.endswith(" end")
+
+
+@pytest.mark.parametrize(
+    ("url", "kept"),
+    [
+        ("fakeesc:///x?password=hunter2", "password=***': (sqlite3.OperationalError) FATAL:"),
+        (
+            "sqlite:////nonexistent_dir/secret",
+            "secret': (sqlite3.OperationalError) unable to open database file",
+        ),
+    ],
+    ids=["url-ends-in-a-password-parameter", "path-ends-in-a-key-word"],
+)
+def test_the_unreachable_database_concern_keeps_the_diagnostic_whole(
+    url: str,
+    kept: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Session 270 review: running the full ``safe_message`` over the composed connect
+    message made the masker eat the ``':`` after a URL ending in ``password=***`` and the
+    exception type after a path ending in a key word, where the old plain flatten kept the
+    text intact. ``agent.py`` replaces control characters and flattens, and leaves the
+    redaction to ``connect``."""
+    report = _run_with(
+        ReadOnlyDB(url),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
+    assert kept in concern
+    assert SECRET not in concern
 
 
 def test_a_quality_check_error_carries_no_control_character_or_secret(

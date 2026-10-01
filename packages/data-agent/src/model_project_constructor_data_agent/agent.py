@@ -145,10 +145,11 @@ def _assemble_complete_report(
             # Driver text. SQLAlchemy appends a help URL after a newline on every
             # DBAPIError and a concern is rendered as one markdown bullet, and the
             # report is written into a committed project, so a terminal control code
-            # in it would be live wherever it is printed: one line, controls replaced
-            # (``safe_message``). Cleaned here as well as where ``connect`` builds it,
-            # because this is where it is written.
-            concern = f"{concern}: {safe_message(db_error)}"
+            # in it would be live wherever it is printed: one line, controls replaced.
+            # ``redact=False``, because ``ReadOnlyDB.connect`` redacted the text where
+            # it built it and the masker is not safe to run over the composed message
+            # again (``safe_message``'s docstring says how it mangles one).
+            concern = f"{concern}: {safe_message(db_error, redact=False)}"
         data_quality_concerns.append(concern)
 
     baseline_snapshot: BaselineSnapshot | None = final_state.get("baseline_snapshot")
