@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S269 claim: terminal control codes in database text *(in progress)*
+- **Change:** Session 269 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is `BACKLOG.md`'s item *"Database text can put terminal control codes on the operator's screen"* (`:417`): `_safe_message` (`discovery.py:171-194`) removes only whitespace, so ESC, BEL, NUL, DEL and the C1 controls reach the probe's WARNING on stderr and the persisted `notes`. The filed sketch is a C0/C1 scrub before the whitespace flatten plus a regression test; the session measures it before writing it. Chosen by the operator at Phase 1 from a two-step picker.
+- **Commit/PR:** this commit
+- **Session:** S269 · **Verified:** ledger-only; both ledger guards are run before this commit lands.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-01 · [ad hoc] S268 — close out: the `typer` floor is `>=0.16.0`; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 268 record: the two operator rulings, what changed, the measurement that refuted the filed `>=0.12.4` (153 isolated environments), the four-lens review (22 agents, 18 findings, none refuted, no blocker, what was fixed, corrected and filed), the Session 267 handoff evaluation (8/10) and this session's self-assessment (7/10). `HANDOFFS.md`'s receipt is `status: complete`. `BACKLOG.md`'s `langgraph` item gains the recipe for rebuilding the measurement harness, because the harness itself was session-local and the item had pointed at it. The `(in progress)` markers on the S268 claim entry and on the `c398fc4` fix entry are resolved by this entry: the deliverable is complete across `c398fc4` and `ff74220`. **Non-commit action: `master` pushed to `origin`**, on the operator's ruling at the Session 268 picker, carrying all six of this session's commits.
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `BACKLOG.md`, `CHANGELOG.md`; then `git push origin master`

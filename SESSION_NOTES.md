@@ -93,6 +93,20 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 269 Did
+**Deliverable:** **database text can no longer put terminal control codes on the operator's screen** —
+`BACKLOG.md`'s item of that name (`:417`): `_safe_message` (`discovery.py:171-194`) flattens whitespace
+with `str.split()`, which removes only whitespace, so ESC, BEL, NUL, DEL and the C1 controls survive into
+the probe's WARNING and into the persisted `notes`. The filed sketch is a C0/C1 scrub before the
+whitespace flatten plus a regression test; this session measures it before writing it. Chosen by the
+operator at Phase 1 from a two-step picker (area: small CLI fixes, no ruling needed; item: this one).
+(IN PROGRESS)
+**Started:** 2026-10-01
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 268 Did
 **Deliverable:** **the `typer` floor is made true — COMPLETE**, closing `BACKLOG.md`'s item *"The
 `typer>=0.12` floor is wrong"*. The value the item filed, `>=0.12.4`, was **refuted by measurement**:

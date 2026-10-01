@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S269
+date: 2026-10-01
+status: pending
+active_task: Database text can no longer put terminal control codes on the operator's screen (BACKLOG.md:417): _safe_message (discovery.py:171-194) removes only whitespace, so ESC, BEL, NUL, DEL and the C1 controls reach the probe's WARNING on stderr and the persisted notes; the filed sketch is a C0/C1 scrub before the whitespace flatten plus a regression test, and this session measures it before writing it.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S268
 date: 2026-09-30 to 2026-10-01
 status: complete
