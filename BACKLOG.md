@@ -51,7 +51,10 @@ rows below it are the smaller residue that closing it exposed.
 | A clean `git merge` still publishes nothing | Closing the two items above (Session 241) showed the filed diagnosis was incomplete. `post-commit` now reads merge commits correctly, but git only runs `post-commit` for a merge **you** finish with `git commit` after a conflict. For a clean `git merge` or `git pull` git runs **`post-merge`**, and this repository installs no such hook — so a merge or pull that carries a wiki change still publishes nothing, silently. | Small: a `post-merge` hook using `ORIG_HEAD..HEAD` (a fast-forward pull moves many commits, so inspecting `HEAD` alone is not enough). Verified, and pinned red-if-git-changes by `test_a_clean_merge_never_reaches_this_hook`. |
 | Two finished plans still sit in the active-plans folder | `httpx-adapter-migration.md` was fully executed but never archived — and `repository-rename.md` went EXECUTED in the very commit that filed this item, which is the identical case and the heavier one. | Small, but moving either re-points every citation of its path — sweep first, and rule on both together. |
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
-| A `--request-context` with a stray byte writes a file that will not reload | What is left of Session 261's *"a ranking that matches nothing is silent"*, which Session 264 closed: a ranking that names no table, a score outside 0.0–1.0 and a model reason that cannot be written now each fail the ranking and exit 1. One channel was left open by operator ruling: if the text passed as `--request-context` holds a byte that is not valid UTF-8, the command exits 0 and writes a file the pipeline then refuses to load. | Small — reject it in `discover` before probing — but it changes an exit status, so it needs a ruling. |
+| Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
+| `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
+| Database text can put terminal control codes on the operator's screen | An error from the database, with escape characters in an object's name, is printed to stderr raw, so it can change a terminal's title or colours. The skipped-table note is safe (it is quoted); the failed-probe note, which is also saved in the file, is not. | **Small** — scrub control characters in `_safe_message`. |
+| The `typer` minimum version is too low | Both package files say `typer>=0.12`, but 0.12.0 to 0.12.3 cannot start this CLI at all. Nobody hits it, because the lock file pins 0.24.1. | **Small** — raise to `>=0.12.4` and refresh the lock. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -366,32 +369,74 @@ inventory (tables the database could not reflect were skipped) exits 1 too, but 
 `--allow-skipped`, accepts it with exit 0. That is "fail by default, let the operator accept a known
 degradation", a shape option (c) could borrow.
 
-### A `--request-context` that cannot be written as UTF-8 writes a file that will not reload
+### Three more channels can still write a file that will not reload
 
-**What remains of an item filed in Session 261** (*"A ranking that matches no entry is silent, and
-scores are not range-checked"*). **Session 264 closed the rest of it**, on two operator rulings.
-A ranking that names no entry, a score applied to an entry that is not a finite number in
-[0.0, 1.0] (rejected, never clamped), and an LLM reason carrying a lone surrogate are each now an
-ordinary ranking failure (`RankingMatchedNoEntryError`, `InvalidRelevanceScoreError`,
-`UnwritableEntryError`) with exit 1. Reflected text carrying one is now a probe failure. The
-second ruling closed the ranking and reflection channels **and deliberately left this one open**.
+**Found by Session 267's adversarial review while it closed the `--request-context` item; each was
+reproduced through the real command, and none is a defect of that change.** The operator's rulings so
+far (Sessions 261 to 267) cover `discover`'s own channels: ranking, reflected text and
+`--request-context`. Three siblings have the same shape: a `str` holding a surrogate code point
+validates, is written with exit 0, and then fails to load.
 
-**Measured Session 264, through the real console script:** `model-data-agent discover --db-url …
---output f.json --request-context "$(printf 'claims \xff')"` exits **0** and writes
-`"request_context": "claims \udcff"`. On POSIX, Python decodes command-line bytes with
-`surrogateescape`, so the stray byte arrives as a lone surrogate. `json.dumps` escapes it on write,
-and `DataSourceInventory.model_validate_json` — the orchestrator's loader,
-`src/model_project_constructor/orchestrator/adapters.py:220` — then rejects the file. `notes` is
-`null`, so nothing on stderr says so. A library caller can pass the same thing.
+1. **`model-data-agent run --request`** (`cli.py:313-314`). `_load_request` uses `json.loads` and then
+   `DataRequest.model_validate`, so a JSON escape for half an emoji anywhere in the request — the
+   target description, a feature name, an embedded inventory's `request_context` — passes. `run`
+   exits 0 and writes a `DataReport` that `DataReport.model_validate_json` and the website agent
+   refuse (`ValidationError: Invalid JSON`). Reproduced with `--fake-llm`.
+2. **A model reply** carrying the same escape is written into the `DataReport` unchecked
+   (`cli.py:164`, `json.dumps(report.model_dump(mode="json"), indent=2)`): exit 0 and an unloadable
+   file. Reproduced by making the fake client's `summarize` return one.
+3. **`intake_qa_pairs_to_inventory`** (`orchestrator/adapters.py:197-199`) builds `request_context`
+   from `IntakeReport.stakeholder_id` and `session_id`, which accept the same text, and
+   `model_dump_json` then raises. `merge_inventories` embeds only counts, so it is not affected.
 
-**Sketch:** have `cli.discover` reject a `--request-context` that does not encode as UTF-8 with a
-usage error (exit 2), before connecting. Or scrub it with `encode("utf-8", "replace")` as
-`discovery._safe_message` does for notes. Rejecting changes an exit status, so rule on
-reject-vs-scrub first. The library side is separate: `probe_information_schema` validates
-`request_context` only while the *result* is built, so a check there should run before stage 1.
-Note also that its docstring's *"a non-`str` `request_context` still raises"* is imprecise.
-UTF-8-valid `bytes` are coerced to `str` and accepted (measured by the Session 264 review, not
-introduced by it).
+**Sketch, once ruled.** For 1, `DataRequest.model_validate_json(path.read_text())` rejects it before
+any work runs (it changes the exception type for malformed JSON); a usage error, exit 2, is
+`discover`'s shape. For 2, serialise with `report.model_dump_json(indent=2)` inside a `try` and exit 1
+without writing, or check each model-returned string at the `DataAgent` boundary. For 3, a field
+validator on the two ids, or `validate_request_context` on the f-string. **Needs an operator ruling
+per channel** (reject or degrade; the exit status for `run`), which is why none was done inside
+Session 267's one deliverable. The library check that exists now is
+`discovery.validate_request_context`, and the CLI wires it as an option callback (`cli.py`,
+`_check_request_context`).
+
+### `run` crashes at the very end when a quality check returns a binary value that is not valid UTF-8
+
+**Found by Session 267's review; reproduced; not fixed.** `ReadOnlyDB.execute` rows go into
+`QualityCheck.raw_result["sample_rows"]` unsanitised (`nodes.py:153`). A BLOB that is not valid UTF-8
+(`SELECT x'ff'` on SQLite) makes `report.model_dump(mode="json")` raise `UnicodeDecodeError` at
+`cli.py:164`, after every LLM call has been made and billed: exit 1, no report written. A
+`memoryview`, which is what psycopg2 returns for a PostgreSQL `bytea`, fails the same dump with
+`PydanticSerializationError` even when its bytes are valid UTF-8 (that second case was reproduced
+against the model, not against a live PostgreSQL). `bytes` that are valid UTF-8, and `inf`, dump
+fine. **Sketch:** make the sample rows JSON-safe in `make_execute_qc` before the `QualityCheck` is
+built (hex for `bytes` and `memoryview`), or build it, try the dump, and on failure record the check
+as `ERROR` with the reason, the way the existing `db.execute` failure path does. **Small, but a
+choice between the two, so an operator call.**
+
+### Database text can put terminal control codes on the operator's screen
+
+**Found by Session 267's review; reproduced; not fixed.** `_safe_message`
+(`discovery.py:171-194`) flattens whitespace with `str.split()`, which removes only whitespace, so
+ESC, BEL, NUL, DEL and the C1 controls (U+0080 to U+009F, except U+0085) survive into the probe's
+WARNING. Measured: a SQLite view over a table whose name held an ESC-introduced terminal-title
+sequence and a colour code made `discover` print both to stderr raw (two ESC and one BEL in the
+captured bytes), exit 1. For the probe-failed note the raw ESC is also in the persisted `notes`
+(JSON-escaped in the file, a real ESC again once loaded), so any consumer that prints it inherits the
+problem; the skipped-entity note is `repr`-quoted and is safe. **Sketch:** replace C0 and C1 controls
+with a space before the whitespace flatten (`[\x00-\x1f\x7f-\x9f]`), and add a regression test that
+neither the WARNING nor the note carries one. **Small**; `_safe_message` already scrubs rather than
+rejects.
+
+### The `typer>=0.12` floor is wrong
+
+**Found by Session 267's review; reproduced; pre-existing.** `pyproject.toml:24` and
+`packages/data-agent/pyproject.toml:17` both declare `typer>=0.12`, but typer 0.12.0 and 0.12.3 cannot
+build this CLI at all: `RuntimeError: Type not yet supported: str | None` from `typer/main.py`,
+because `run` has had a `str | None` option since long before Session 267 (reproduced at `2808473`
+too). 0.12.4 works, including the new `--request-context` callback. `uv.lock` resolves 0.24.1, so CI
+and ordinary installs never see it; only a user who pins `typer` to 0.12.0 to 0.12.3 does.
+**Fix:** raise both floors to `typer>=0.12.4` and refresh `uv.lock`. **Small**, and it tightens a
+floor that was never true, so it needs no ruling.
 
 ### No circuit breaker on a systematically-failing live sweep
 

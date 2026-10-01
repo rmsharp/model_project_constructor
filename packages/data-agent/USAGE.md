@@ -212,7 +212,10 @@ model-data-agent discover \
 The command writes a JSON file conforming to `DataSourceInventory` and
 exits 0 with a one-line confirmation (`wrote inventory.json (N entries)`).
 (It exits non-zero and writes nothing when the database cannot be connected to
-or the LLM client cannot be constructed.)
+or the LLM client cannot be constructed. It exits 2 and writes nothing, without
+connecting, when `--request-context` cannot be written as UTF-8 — on POSIX that is
+a stray byte that is not valid UTF-8 in the shell, which arrives as a surrogate
+code point; rejected, never scrubbed.)
 
 Three outcomes are **degraded**: the file is still written — it conforms to the
 contract and keeps whatever was reflected — and the command **exits 1**, with
@@ -479,13 +482,20 @@ curated-producer example.
   `llm` escape: a table or view the database cannot reflect is skipped and the
   rest are returned, any other reflection failure returns an empty inventory, a
   ranking failure returns the reflected entries unranked, and `notes` labels
-  each (Example 4). A non-`str` `request_context` still raises. `notes` being `null`
+  each (Example 4). A bad `request_context` still raises instead: a `str` holding a
+  surrogate code point raises `UnwritableRequestContextError` (a `ValueError`;
+  `from model_project_constructor_data_agent.discovery import
+  UnwritableRequestContextError`) before the database or the ranker is touched,
+  and an `int`, or `bytes` that are not valid UTF-8, raise `ValidationError` after
+  the probe has run (`bytes` that are valid UTF-8 are coerced to `str`). `notes` being `null`
   does not mean every entry is ranked — a ranker that simply returns no ranking
   for a table raises nothing — but when a ranker ran, it does mean at least one
   entry is ranked and every score applied is a finite number from 0.0 to 1.0.
   The library never exits; turning a degraded inventory into exit 1 is the
   `discover` command's job, and `--allow-skipped` is its one opt-out, for
-  skipped tables and views only.
+  skipped tables and views only. Turning an unwritable `request_context` into
+  exit 2 is the command's job too, and it uses the library's own
+  `validate_request_context`, so the two cannot disagree.
 - `ReadOnlyDB.get_information_schema()` raises on the first table or view it
   cannot reflect, as it always has. Pass `skipped=[]` to have each database
   error from reflecting one entity collected there as a `SkippedEntity` instead;
