@@ -39,7 +39,20 @@ from model_project_constructor_data_agent.db import (
     SkippedEntity,
     redact_db_url,
     redact_secrets,
+    safe_message,
     sql_dialect_from_url,
+)
+
+from tests.hostile_text import (
+    CONNECT_CAUSE,
+    CONTROLS,
+    ESCAPE_NAME,
+    ESCAPE_NAME_SCRUBBED,
+    ESCAPING_URL,
+    EVERY_CONTROL,
+    NON_SPACE_CONTROLS,
+    control_ids,
+    unsafe,
 )
 
 DB_LOGGER_NAME = "model_project_constructor_data_agent.db"
@@ -704,3 +717,211 @@ def test_a_skipped_entity_repr_hides_the_error() -> None:
     )
     assert SECRET not in repr(entity)
     assert "v_stale" in repr(entity)
+
+
+# --- Session 270: ``safe_message`` is the one place database text is made safe ---
+#
+# Session 269 wrote this logic as ``discovery._safe_message`` for the schema probe's three
+# messages. Its review found the same text reaching a terminal or a report from three more
+# places (``BACKLOG.md``, *Seven more routes ...*, routes 1 to 3), each of which flattened or
+# printed ``str(e)`` itself. The function moved here, beside ``redact_secrets``, so every one
+# of them can call it. These tests hold the function; each call site has its own test where
+# it lives, because a site that swaps it for a raw ``str(e)`` leaves every other test green.
+
+
+class TestSafeMessage:
+    @pytest.mark.parametrize("ch", CONTROLS, ids=control_ids(CONTROLS))
+    def test_each_control_becomes_a_space(self, ch: str) -> None:
+        """A space, not nothing: ``a<ESC>b`` must not read ``ab``."""
+        assert safe_message(f"a{ch}b") == "a b"
+
+    def test_every_control_at_once(self) -> None:
+        assert safe_message(f"boom{EVERY_CONTROL}done") == "boom done"
+
+    @pytest.mark.parametrize("ch", NON_SPACE_CONTROLS, ids=control_ids(NON_SPACE_CONTROLS))
+    def test_a_control_inside_a_secret_does_not_cut_the_masking_short(self, ch: str) -> None:
+        """Redaction runs BEFORE the scrub. ``redact_secrets`` reads an unquoted value as
+        a run of non-whitespace, and these controls are not whitespace to it, so
+        ``password=head<ESC>hunter2`` is one value and is masked whole. Scrubbing first
+        would turn the control into a space, end the value there and print ``hunter2``
+        (measured Session 269)."""
+        assert (
+            safe_message(f"driver said password=head{ch}{SECRET} tail")
+            == "driver said password=*** tail"
+        )
+
+    @pytest.mark.parametrize("ch", CONTROLS, ids=control_ids(CONTROLS))
+    @pytest.mark.parametrize(
+        ("shape", "masked"),
+        [
+            ("password{ch}={s}", "password =***"),
+            ("DB_PASSWORD{ch}: {s}", "DB_PASSWORD : ***"),
+            ('token"{ch}={s}', 'token" =***'),
+        ],
+        ids=["equals", "colon-after-a-prefixed-key", "quoted-key"],
+    )
+    def test_a_control_between_a_secret_key_and_its_separator_hides_nothing(
+        self, ch: str, shape: str, masked: str
+    ) -> None:
+        """Redaction also runs AFTER the scrub. A control between a key and its separator
+        is not whitespace to ``redact_secrets`` (for the 55 that are not), so it hides the
+        key and the secret is printed; only the scrub's space lets the masker see
+        ``password =hunter2`` (measured Session 269: 55 of 65 leaked with a single pass)."""
+        assert (
+            safe_message(f"driver said {shape.format(ch=ch, s=SECRET)} tail")
+            == f"driver said {masked} tail"
+        )
+
+    @pytest.mark.parametrize(
+        ("message", "cleaned"),
+        [
+            ("\x1b[2Jfoo", "[2Jfoo"),
+            ("foo\x1b", "foo"),
+            ("\x1b", ""),
+            ("\x1b\x07\x9b", ""),
+            ("x" * 5000 + "\x1b" + "y", "x" * 5000 + " y"),
+            ("a\n\x1bb", "a b"),
+        ],
+        ids=[
+            "first",
+            "last",
+            "only-one",
+            "only-controls",
+            "after-a-long-prefix",
+            "after-a-newline",
+        ],
+    )
+    def test_a_control_is_replaced_wherever_it_sits(self, message: str, cleaned: str) -> None:
+        """A scrub keyed to a position or a length (a ``strip``, a cut-off, a
+        ``translate`` that misses an edge) survives a control between printable text."""
+        assert safe_message(message) == cleaned
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "no such table: main.sinistres_é_ÿ_Ā_日本語_🚗",
+            "".join(map(chr, range(0xA1, 0xC0))),
+            "".join(map(chr, range(0x21, 0x7F))),
+            "main.می\u200cخواهم",  # a zero-width non-joiner: Persian needs it (Cf)
+            "a\u200eb\ufeffc",  # an LRM and a BOM (Cf): left, on purpose
+            "main.e\u0301cole",  # a combining acute accent (Mn)
+            "main.\U0001d49c",  # a letter outside the BMP
+        ],
+        ids=[
+            "accents-cjk-emoji",
+            "latin1-above-the-c1-block",
+            "printable-ascii",
+            "zero-width-non-joiner",
+            "bidi-mark-and-bom",
+            "combining-accent",
+            "astral-letter",
+        ],
+    )
+    def test_printable_text_is_left_alone(self, text: str) -> None:
+        """Only ``Cc`` is scrubbed: a ``Cf``-wide or ``isprintable``-based scrub would
+        split Persian and emoji sequences."""
+        assert safe_message(text) == text
+
+    def test_whitespace_is_flattened_to_one_line(self) -> None:
+        """SQLAlchemy puts its help URL after a newline on every ``DBAPIError``, and a
+        concern or a note is one markdown bullet or one log record."""
+        assert safe_message("boom\n[SQL: SELECT 1]\n  (Background: https://x)") == (
+            "boom [SQL: SELECT 1] (Background: https://x)"
+        )
+
+    def test_a_lone_surrogate_is_replaced_so_the_text_can_be_written(self) -> None:
+        """A message built by formatting an ``os.fsdecode``-d path carries one, and a
+        report holding one cannot be written as UTF-8 (measured, Session 261)."""
+        assert safe_message("a\udcffb") == "a?b"
+        safe_message("a\udcffb").encode("utf-8")
+
+    def test_a_string_is_as_good_as_an_exception(self) -> None:
+        """``agent.py`` holds the cause as text (``db_error``), not as the exception."""
+        assert safe_message(f"x {ESCAPE_NAME} PWD={SECRET};") == (
+            f"x {ESCAPE_NAME_SCRUBBED} PWD=***;"
+        )
+        assert safe_message(RuntimeError("x\x1by")) == "x y"
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            f"boom{EVERY_CONTROL}done",
+            f"password=head\x1b{SECRET} tail",
+            f"password\x1b={SECRET}",
+            f"postgresql://u:{SECRET}@h/db\n{CONNECT_CAUSE}",
+            "plain",
+            "",
+        ],
+        ids=["every-control", "secret", "key-separator", "dsn-and-cause", "plain", "empty"],
+    )
+    def test_it_is_idempotent(self, message: str) -> None:
+        """Applied again, to text it already cleaned, it changes nothing. The sites that
+        feed it text another site has already cleaned (``agent.py`` after ``connect``,
+        ``discover`` after ``agent.py``'s own caller) depend on that."""
+        once = safe_message(message)
+        assert safe_message(once) == once
+
+    def test_an_unprintable_exception_gives_a_placeholder_and_does_not_raise(self) -> None:
+        class Unprintable(Exception):
+            def __str__(self) -> str:
+                raise RuntimeError("broken __str__")
+
+        assert safe_message(Unprintable()) == "<unprintable>"
+
+    def test_a_str_subclass_message_gives_a_placeholder_and_does_not_raise(self) -> None:
+        """``str(e)`` hands a ``str`` SUBCLASS back unchanged, so guarding only the
+        ``str(e)`` call leaves that subclass's own methods free to raise."""
+
+        class Hostile(str):
+            def encode(self, *a: Any, **k: Any) -> bytes:
+                raise RuntimeError("encode boom")
+
+        class StrSubclassError(Exception):
+            def __str__(self) -> str:
+                return Hostile("x")
+
+        assert safe_message(StrSubclassError()) == "<unprintable>"
+
+
+class TestConnectError:
+    """``ReadOnlyDB.connect`` builds the text of every connect failure, so what the
+    exception says is safe to print wherever it is caught (``BACKLOG.md``, route 1)."""
+
+    def _connect_error(self, url: str = ESCAPING_URL) -> DBConnectionError:
+        with pytest.raises(DBConnectionError) as excinfo:
+            ReadOnlyDB(url).connect()
+        return excinfo.value
+
+    def test_the_message_carries_no_control_character_and_is_one_line(self) -> None:
+        message = str(self._connect_error())
+        assert unsafe(message) == []
+        assert "\n" not in message
+
+    def test_the_message_still_names_the_cause(self) -> None:
+        """A scrub that also ate the cause would trade this item's bug for a quieter one."""
+        message = str(self._connect_error())
+        assert message.startswith("cannot connect to 'fakeesc:///claims': ")
+        assert f'FATAL: role "{ESCAPE_NAME_SCRUBBED}" does not exist' in message
+
+    def test_a_secret_in_the_driver_text_is_masked(self) -> None:
+        message = str(self._connect_error())
+        assert SECRET not in message
+        assert "PWD=***" in message
+
+    def test_the_url_half_is_repr_quoted(self) -> None:
+        """The URL is the operator's own argument and is quoted with ``repr``, which
+        escapes every control character; ``%s`` would print a title sequence raw."""
+        # A real SQLite path that cannot be opened, so the cause is plain
+        # ("unable to open database file") and only the URL half can carry the ESC.
+        message = str(self._connect_error(f"sqlite:////nonexistent/{ESCAPE_NAME}/x.db"))
+        assert "unable to open database file" in message
+        assert unsafe(message) == []
+        assert "\\x1b]0;PWNED-TITLE\\x07" in message
+
+    def test_the_raw_driver_exception_stays_on_the_chain_for_a_debugger(self) -> None:
+        """The message is cleaned; the cause is not touched, so a library caller who
+        wants the original still has it. (Printing it is what a traceback does, which is
+        why ``discover`` catches this exception rather than letting it escape.)"""
+        error = self._connect_error()
+        assert isinstance(error.__cause__, sa.exc.OperationalError)
+        assert ESCAPE_NAME in str(error.__cause__)
