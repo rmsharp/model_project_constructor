@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S270
+date: 2026-10-01
+status: pending
+active_task: Database and driver text reaches the operator's terminal and the report only through one redact-and-scrub helper (BACKLOG.md:417, routes 1 to 3): discover's connect error (db.py:267-270, cli.py:238), run's "database unreachable" concern (agent.py:147) and the driver-exception strings in nodes.py:140 and :231, which reach the report with no redact_secrets call at all; the filed sketch is one helper beside redact_secrets in db.py doing what _safe_message does (redact, scrub, redact) plus a discover that catches DBConnectionError and prints one clean line, and this session measures each route before writing it.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S269
 date: 2026-10-01
 status: complete

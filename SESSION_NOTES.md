@@ -93,6 +93,23 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 270 Did
+**Deliverable:** **database and driver text reaches the operator's terminal and the report only through one
+redact-and-scrub helper** — routes 1 to 3 of `BACKLOG.md`'s item *"Seven more routes put database or driver
+text on a terminal or in a report unscrubbed"* (`:417`): `discover`'s connect error (`db.py:267-270`,
+`cli.py:238`), `run`'s "database unreachable" concern (`agent.py:147`) and the two driver-exception
+strings in `nodes.py:140` and `:231`, the last of which reaches the report with no `redact_secrets` call at
+all. The filed sketch is one helper beside `redact_secrets` in `db.py` that does what `_safe_message` does
+(redact, scrub, redact), plus a `discover` that catches `DBConnectionError` and prints one clean line;
+this session measures each route before writing it. Routes 4 to 7 stay open. Chosen by the operator at
+Phase 1 from a two-step picker (area: database-text safety; item: routes 1 to 3 as one session).
+(IN PROGRESS)
+**Started:** 2026-10-01
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 269 Did
 **Deliverable:** **the schema probe's messages can no longer put terminal control codes on the operator's
 screen — COMPLETE**, closing `BACKLOG.md`'s item *"Database text can put terminal control codes on the

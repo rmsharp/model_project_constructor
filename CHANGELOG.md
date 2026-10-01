@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S270 claim: database and driver text through one redact-and-scrub helper *(in progress)*
+- **Change:** Session 270 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is routes 1 to 3 of `BACKLOG.md`'s item *"Seven more routes put database or driver text on a terminal or in a report unscrubbed"* (`:417`): `discover`'s connect error (`db.py:267-270`, `cli.py:238`), `run`'s "database unreachable" concern (`agent.py:147`) and the driver-exception strings at `nodes.py:140` and `:231`, which reach the report with no `redact_secrets` call. The filed sketch is one helper beside `redact_secrets` in `db.py` that does what `_safe_message` does (redact, scrub, redact), plus a `discover` that catches `DBConnectionError` and prints one clean line; the session measures each route before writing it. Routes 4 to 7 stay open.
+- **Commit/PR:** this commit
+- **Session:** S270 · **Verified:** ledger-only; both ledger guards are run before this commit lands.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-01 · [ad hoc] S269 — close out: control characters in the probe's messages are replaced; the residue is filed; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 269 record: the deliverable and the operator's two picks, what changed (336 new tests, 1,659 to 1,995 passed), what was measured before it was built (the real console script before and after; the redaction order, in one direction), the two mutation passes (29, then 39 of 39 killed), the six-lens review (54 agents, 24 findings, 0 refuted) and what it found in my own design and claims, the handoff evaluation of Session 268 (8/10), the self-assessment (7/10) and the handoff. `HANDOFFS.md` has the S269 receipt completed (`status: complete`). The push to `origin/master` follows this commit, on the operator's ruling at Phase 3; none of the session's commits touches `docs/wiki/`, so nothing was published to the wiki.
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `CHANGELOG.md`; then `git push origin master`
