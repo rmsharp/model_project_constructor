@@ -95,20 +95,142 @@ updates rather than contradicts.
 
 ### What Session 270 Did
 **Deliverable:** **database and driver text reaches the operator's terminal and the report only through one
-redact-and-scrub helper** — routes 1 to 3 of `BACKLOG.md`'s item *"Seven more routes put database or driver
-text on a terminal or in a report unscrubbed"* (`:417`): `discover`'s connect error (`db.py:267-270`,
-`cli.py:238`), `run`'s "database unreachable" concern (`agent.py:147`) and the two driver-exception
-strings in `nodes.py:140` and `:231`, the last of which reaches the report with no `redact_secrets` call at
-all. The filed sketch is one helper beside `redact_secrets` in `db.py` that does what `_safe_message` does
-(redact, scrub, redact), plus a `discover` that catches `DBConnectionError` and prints one clean line;
-this session measures each route before writing it. Routes 4 to 7 stay open. Chosen by the operator at
-Phase 1 from a two-step picker (area: database-text safety; item: routes 1 to 3 as one session).
-(IN PROGRESS)
-**Started:** 2026-10-01
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+redact-and-scrub function — COMPLETE** for routes 1 to 3 of `BACKLOG.md`'s item *"Seven more routes put
+database or driver text on a terminal or in a report unscrubbed"*: `discover`'s connect error, `run`'s
+"database unreachable" concern, and the quality-check and baseline driver errors. `discovery._safe_message`
+became `db.safe_message` (`db.py:147`) and each route went through it. **The residue is filed**, among it a
+secrets matter. Chosen by the operator at Phase 1 from a two-step picker (area: database-text safety; item:
+routes 1 to 3 as one session). **Ruling (operator, by picker, Phase 3):** push at close-out.
+**Started / completed:** 2026-10-01. **Commits: ten** — `022e6de` (claim, alone), four green layers
+(`e60ab3c`, `5332aad`, `e29eb94`, `eaa0434`), two review fixes (`0dc50a4`, `6da5399`), `df6cf71` (docs), `b5fbd56`
+(backlog, learnings) and this close-out. Each carries its own `CHANGELOG.md` entry. The push is recorded in
+the close-out's own ledger entry.
+
+#### What changed
+- `db.py`: `safe_message(error, *, redact=True)` (`:147`, pattern `_CONTROL_CHARACTERS` `:144`); `ReadOnlyDB.connect`
+  builds `DBConnectionError`'s text with it and falls back to the exception's type name when the cause has no
+  text (`:361`). `cli.py:240-251` `discover` catches `DBConnectionError`, prints one `error:` line, exits 1.
+  `agent.py:152` and `nodes.py:146,237` use it; `discovery.py:292,305,322` import it. The sinks (`cli.py`,
+  `agent.py`) call it with `redact=False`: see the review.
+- **Tests: 1,995 to 2,432 passed, 9 skipped, coverage 98.09%** (the same under `GITHUB_ACTIONS=true`); CI-scope
+  `ruff` and `uv run mypy` (68 files) clean. New: `tests/hostile_text.py` (shared hostile input, a simulated
+  failing dialect `fakeesc`, `database_with_a_dangling_view`); `TestSafeMessage`, `TestConnectError`,
+  `TestSafeMessageWithoutRedaction`, `TestTheSharedHelpers` (`test_db.py:735-1007`); six `discover` tests
+  (`test_cli.py:992-1099`); nine route tests (`test_data_agent.py:900-1116`). `USAGE.md`, the `nodes.py` and `state.py`
+  `db_error` comments, `BACKLOG.md` (one item replaced by three), `PROJECT_LEARNINGS.md` #301-304.
+
+#### Measured first, then built (the real Typer app in a subprocess; a real SQLite file; a simulated driver)
+- **Route 1, `discover` on a failed connect: 418 non-blank lines, 6 ESC, `hunter2`, a traceback; after, 1 line,
+  no control character, no secret, exit 1, no file.** The item had said scrubbing the message alone would not
+  help because of the chained `__cause__`; it had not recorded that the chain is **unredacted**, so the secret was
+  on stderr too (learning #302).
+- Route 2, the "database unreachable" concern: 2 ESC and 1 BEL; after, none. Route 3, `result_summary` and the
+  baseline caveat: 2 ESC, 1 BEL and a newline for a hostile table name, and **`PWD=hunter2` unmasked for a table
+  named like a DSN fragment** (the item's secrets claim, first measured here on real SQLite); after, none and `PWD=***`.
+- **Tests first, red against the old sites** (12 of the first batch), then **two mutation passes: 30 of 30 killed on
+  the first four layers, 41 of 41 on the final code** (the second adds `redact` ignored or inverted, the
+  `redact=False` branch weakened, the empty-cause fallback, `discover` catching `Exception`, and a missing newline,
+  the classes the review said survived). The harness was scratch and is gone; the classes are in the ledger by id.
+
+#### The review, and what it changed
+Seven lenses over `022e6de..eaa0434`, two skeptics per finding told to refute it, a completeness critic: **86
+agents, 0 errors, about 47 minutes, 79 clean checks. 42 lens findings, 39 re-checked (the claims lens reported 13,
+the cap was 10): 11 confirmed, 28 partly, 0 refuted; no skeptic rated one above minor; 30 in scope, 9 adjacent. The
+critic added 3 (one `major`, adjacent) and 5 gaps.** What changed the code:
+- **My layering was wrong.** I re-applied the full `safe_message` at `discover`'s echo and `agent.py`'s concern as a
+  belt. The masker over the composed `cannot connect to '<url>': <cause>` ate the `':` after a URL ending in
+  `password=***` and the exception type after a path ending in a key word, where the old concern kept its text. The
+  idempotence test passed because it tested `safe_message(safe_message(x))`, not the composed message (learning #301).
+  Fix: `redact=False` at the sinks (`6da5399`); redaction stays where the text is built. **That gives up one
+  accidental protection and the record says so:** the second pass had masked an unencoded-`@` password's tail in
+  the URL half; the driver's own echo of that tail leaks either way (`BACKLOG.md`, the secrets item).
+- **My test helper broke from SQLite 3.50.4** (even `SELECT 1` fails on a file whose `sqlite_master` I had overwritten;
+  two tests failed on the uv-managed interpreters on this machine; CI's SQLite was never measured). Replaced by a
+  view over a dropped table, probed on SQLite 3.47.1, 3.50.4, 3.53.3 and 3.54.0 (learning #303). One assertion was
+  SQLAlchemy-2.0-specific; two loops could pass over nothing; `connect` printed a bare colon for an empty cause.
+- **`safe_message`'s docstring claimed idempotence and "the masker is idempotent"**: false (`password=''hunter2`
+  becomes `password=***hunter2`, then `password=***`). Reworded, with the second masker limit named.
+- **Corrected by a ledger entry, not an edit:** layer 3's "all seven red" (six against its own parent); "418 lines"
+  (non-blank); the mutation prose; "three more places" (seven); layer 1's "the exception a library caller prints is
+  safe" (`str(e)` only; `__cause__` is raw).
+- **Filed, not fixed** (adjacent, pre-existing): two password shapes `redact_db_url` misses (an unencoded `@`, a
+  mistyped `://`: **a secrets matter**), `redact_secrets` quadratic on some text and `safe_message` unbounded,
+  SQLAlchemy's pool logger printing a raw driver traceback, LLM and graph-crash text raw at `nodes.py:211` and
+  `agent.py:54`, the website templates as an unguarded sink, repo-host failure text.
+
+### Session 269 Handoff Evaluation (by Session 270)
+
+**Score: 8/10.**
+- **+** Route list with line numbers, each measured and labelled real or simulated, and an exact ordering ("route 3
+  first, the secrets half"): Phase 1 needed no rediscovery. Gotcha 1 (redact, scrub, redact: do not simplify) and
+  gotcha 3 (re-measure before writing a fix that depends on a server's wording) were followed. Learning #300's
+  fake-dialect technique was reused as written. Every line number it gave for open items was right when read.
+- **−** **What was wrong:** "the masker is idempotent" sat in its docstring, its ledger entry and the reasoning for the
+  three-pass order, and was never measured; I had to correct it (and the test that leaned on it). It sized routes 1 to
+  3 as "one helper, used by the sites": the helper was, and the sites turned out to compose text from text the
+  helper had already cleaned, which the sketch could not have shown.
+- **−** What was missing: that route 1's chain carries the secret; that `safe_message`'s callers feed it a composed
+  message (the question I should have asked at Research).
+- **ROI: high.**
+
+### Session 270 Self-Assessment
+
+**Score: 7/10.**
+- **+** Measured every route before writing it, including the claimed secrets half and route 1's chain; tests red first;
+  41 of 41 mutants killed; the work is committed as ten commits, four layers each verified as its own snapshot in a
+  clean worktree with the passed-test count predicted first (1,995, 2,340, 2,347, 2,350; 2,427, 2,432: all matched).
+  Fixed the in-scope review findings and filed the rest with their measurements; the review was proportionate.
+- **−** **I let 11 files accumulate over the five-per-commit cap** and split afterwards (learning #304).
+- **−** **I shipped a design the review had to fix** (the second masking pass), and my idempotence test tested the
+  wrong string (learning #301). **I trusted "real SQLite" without running the other SQLite builds on the machine**
+  (learning #303): a helper that failed on 3.50.4 for the whole of the build.
+- **−** Four written claims were overstated and corrected by a ledger entry (red-first count, the mutation prose,
+  "418 lines", a commit title saying the baseline errors were done).
+- **−** The review used about 7.9 million subagent tokens and 47 minutes; the ultracode setting authorised it, the
+  yield (3 design or test fixes, 8 claim corrections, 4 filed items) is not a lot per token.
+- **Decay term:** none removed. This record is growth: `BACKLOG.md` grew by 7,075 B (110,654 to 117,729: one item
+  became three), `PROJECT_LEARNINGS.md` by 3,939 B (four rows).
+
+**What's next** (sizes are estimates, not measurements; the last three sessions each found "small" understated the work).
+1. **`BACKLOG.md`'s secrets item, "A password can still reach the connect error, the report and a warning".** It is
+   the only open item that leaks a secret, it needs no ruling, and its fix is described: do not echo a URL that does
+   not parse, and treat an `@` in the parsed host as part of the password (or scrub the parsed password's fragments
+   from the cause). Add a URL-borne-password case to the route tests: none has one.
+2. **Residue routes 2(b) and 5 of the new item**: a `safe_message(e)` at `nodes.py:211` and `agent.py:54` with tests
+   (one token each), and the pool logger's filter. The review's AST guard idea would stop new raw interpolations.
+3. **Two items still need no ruling:** the Click 8.2 declaration (now 26 of 77 CLI tests fail under Click 8.1) and
+   the `langgraph` floor.
+4. **Rulings owed to the operator, unchanged:** `--db-url` option (c), one per channel for the three channels, the
+   two guard-design calls, a CI job installing the dependency minimums; **new:** whether the website should sanitise
+   report text itself, the saved inventory names, and whether `safe_message` should cap its input.
+5. **Observed, not filed:** the root `methodology_dashboard.py` is v2.18.0 against canonical v2.19.0 (`bin/sync`'s
+   job); the clean leftover worktree `.claude/worktrees/wf_5f96c807-d00-3` at `40b1c4a` is Session 269's review's
+   (`git worktree remove` it); `tests/` is outside the mypy gate; `tests/hostile_text.py` duplicates helpers
+   `test_discovery.py` and `test_cli.py` already hold, on purpose.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `db.py:144,147` `_CONTROL_CHARACTERS`, `safe_message` (its docstring is the specification: order, `redact=False`,
+  why it is not a fixed point, the masker's limits); `:361` the connect error. `cli.py:240-251`, `agent.py:152`,
+  `nodes.py:146,237`.
+- `tests/hostile_text.py:71,96` the dialect and `database_with_a_dangling_view`; `test_db.py:735-1007`;
+  `test_cli.py:992-1099`; `test_data_agent.py:861-1116`. `BACKLOG.md` the three items under "Seven more routes can
+  still ..."; `PROJECT_LEARNINGS.md` #301-304; `CHANGELOG.md` the S270 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **Apply `safe_message` once, to raw text. Do not re-add the masker at a sink.** A message composed from text it
+   already cleaned is mangled by it; pass `redact=False` there. Both orders of redaction and the scrub are still
+   needed inside the function (learning #298).
+2. **`tests/hostile_text.py` registers the `fakeesc` dialect on import** and `database_with_a_dangling_view` is not a
+   corrupt-schema helper any more. A test that depends on a library's behaviour should be run on the other
+   interpreters here (`ls ~/.local/share/uv/python`; SQLite 3.50.4 and 3.53.3 are among them).
+3. **The routes were reproduced on SQLite or a simulated dialect; the review's `@` shape on psycopg 3 against a
+   fake server. Never a live PostgreSQL, MySQL, Oracle or SQL Server.** Re-measure before writing a fix that depends
+   on a server's wording.
+4. **The harness is gone** (the mutation script, the before/after measurement, the layer verifier lived in the
+   session scratchpad); the technique is in learning #304 and the mutant classes are in the ledger by id.
+5. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that
+   touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`.
+6. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 269 Did
 **Deliverable:** **the schema probe's messages can no longer put terminal control codes on the operator's

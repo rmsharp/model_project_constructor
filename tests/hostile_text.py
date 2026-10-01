@@ -1,12 +1,14 @@
 """Hostile database text, shared by the tests that hold it clear of a terminal and a report.
 
-Session 270 (``BACKLOG.md``: *Seven more routes put database or driver text on a terminal
-or in a report unscrubbed*, routes 1 to 3). Session 269's review of its own fix found seven
-routes by which database or driver text still reached a terminal or a report; Session 270
-closed the first three: the connect error ``discover`` let escape as a traceback, the
-"database unreachable" concern ``run`` writes into the report, and the driver exceptions the
-quality checks and the baseline copy into it. Each is its own call site, so each has its own
-test, and they all need the same hostile input: this module is where it lives.
+Session 270 (``BACKLOG.md``: the item that was titled *Seven more routes put database or
+driver text on a terminal or in a report unscrubbed*, routes 1 to 3; it is now *Seven more
+routes can still put database, driver or exception text ...*). Session 269's review of its
+own fix found seven routes by which database or driver text still reached a terminal or a
+report; Session 270 closed the first three: the connect error ``discover`` let escape as a
+traceback, the "database unreachable" concern ``run`` writes into the report, and the driver
+exceptions the quality checks and the baseline copy into it. Each is its own call site, so
+each has its own test, and they all need the same hostile input: this module is where it
+lives.
 
 It serves the tests written for those three routes. ``test_discovery.py`` and ``test_cli.py``
 already held their own copies of the control-character helpers (Session 269) and keep them.
