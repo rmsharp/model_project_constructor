@@ -53,9 +53,11 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
-| Seven more places can still put database text on the operator's screen or in a report | Session 269 closed the schema probe's three messages (control characters in a table name no longer reach the terminal). Seven other routes remain: a failed connection (it ends in a traceback), the "database unreachable" and "SQL error" notes the `run` command copies into its report and the website files, an unparseable `--db-url`, warnings SQLAlchemy prints itself, the table and column names saved in the inventory, and the output path. **One of them is a secrets matter, not a terminal one:** a database's error message is copied into the report unmasked. | **Small** for the first three, one shared helper and one session. **Operator call** on the saved names. |
+| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw. | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
+| A password can still reach the connect error, the report and a warning | Two spellings of a database address slip past the code that hides passwords: a password containing an unencoded `@` (the part after it is read as the host, and a driver quotes the host back), and a mistyped `://` (the whole address is printed with the password in it). Both print a password or most of one in the `error:` line `discover` now shows, in the report, and in a warning. Neither is new (the old code printed them in a traceback), and no test puts a password in the address. | **Small**, no ruling: stop printing an address that does not parse, and treat an `@` in the parsed host as a password. **A secrets matter, so worth doing before the rest.** |
+| `redact_secrets` is slow on some text, and nothing limits how much text `safe_message` reads | A message made of thousands of `://x:` runs with no spaces takes seconds to minutes (4x longer each time the text doubles), and a 10-million-character message uses 1 to 2 GB. No database driver normally produces either. | **Small**, but a choice: a cap on the length shortens a very long `[SQL: ...]` that is now shown whole. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
-| The tests need Click 8.2 and nothing says so | Under Click 8.1, 18 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
+| The tests need Click 8.2 and nothing says so | Under Click 8.1, 26 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -378,7 +380,7 @@ far (Sessions 261 to 267) cover `discover`'s own channels: ranking, reflected te
 `--request-context`. Three siblings have the same shape: a `str` holding a surrogate code point
 validates, is written with exit 0, and then fails to load.
 
-1. **`model-data-agent run --request`** (`cli.py:313-314`). `_load_request` uses `json.loads` and then
+1. **`model-data-agent run --request`** (`cli.py:331`). `_load_request` uses `json.loads` and then
    `DataRequest.model_validate`, so a JSON escape for half an emoji anywhere in the request — the
    target description, a feature name, an embedded inventory's `request_context` — passes. `run`
    exits 0 and writes a `DataReport` that `DataReport.model_validate_json` and the website agent
@@ -403,7 +405,7 @@ Session 267's one deliverable. The library check that exists now is
 ### `run` crashes at the very end when a quality check returns a binary value that is not valid UTF-8
 
 **Found by Session 267's review; reproduced; not fixed.** `ReadOnlyDB.execute` rows go into
-`QualityCheck.raw_result["sample_rows"]` unsanitised (`nodes.py:153`). A BLOB that is not valid UTF-8
+`QualityCheck.raw_result["sample_rows"]` unsanitised (`nodes.py:159`). A BLOB that is not valid UTF-8
 (`SELECT x'ff'` on SQLite) makes `report.model_dump(mode="json")` raise `UnicodeDecodeError` at
 `cli.py:164`, after every LLM call has been made and billed: exit 1, no report written. A
 `memoryview`, which is what psycopg2 returns for a PostgreSQL `bytea`, fails the same dump with
@@ -414,63 +416,120 @@ built (hex for `bytes` and `memoryview`), or build it, try the dump, and on fail
 as `ERROR` with the reason, the way the existing `db.execute` failure path does. **Small, but a
 choice between the two, so an operator call.**
 
-### Seven more routes put database or driver text on a terminal or in a report unscrubbed
+### Seven more routes can still put database, driver or exception text on a terminal or in a report
 
-**Found by Session 269's review of the fix that closed this item's predecessor; each reproduced by a
-lens and again by two skeptics; not fixed.** Session 269 made `_safe_message` (`discovery.py`) replace
-every control character (Unicode `Cc`: ESC, BEL, NUL, DEL and the C1 controls) with a space, which
-covers the probe's three message sites: the failed-probe note, a skipped entity's WARNING and the
-ranking WARNING. Its headline said *database text cannot put terminal control codes on stderr*; by the
-routes below it still can. **What each was reproduced on:** a real SQLite file where the route allows
-it, otherwise a **simulated** driver (a fake SQLAlchemy dialect whose connect error carries ESC in the
-way PostgreSQL echoes a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
+**Routes 1 to 3 of Session 269's list closed in Session 270** (the connect error `discover` let escape as a
+traceback; the "database unreachable" concern; the quality-check and baseline SQL errors): all go through
+`db.safe_message` now, and the review of that change filed the rest. **Each was reproduced by a lens and
+re-checked by two skeptics; none is fixed.** What each was reproduced on: a real SQLite file where the
+route allows it, otherwise a **simulated** driver (a fake SQLAlchemy dialect whose DBAPI error carries what
+PostgreSQL echoes of a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
 Oracle or SQL Server.
 
-1. **`discover` when the connection fails** (`db.py:267-270`, called at `cli.py:238` outside any
-   `try`). `DBConnectionError` is built from `redact_secrets(str(e))`, which masks secrets and
-   replaces nothing, and it escapes as a Rich traceback: **4 to 6 ESC on stderr** (Rich drops BEL and
-   keeps ESC), exit 1, no file. The URL half is `repr`-quoted and safe. **Scrubbing `db.py:269` alone
-   does not fix it:** a patched copy still printed 4 ESC on 2 lines, from the chained `__cause__`
-   exceptions. The fix is for `discover` to catch `DBConnectionError` and print one clean error line.
-2. **`run`'s "database unreachable" concern** (`agent.py:147`). It flattens with
-   `' '.join(str(db_error).split())`, the idiom `_safe_message` just replaced, so the controls survive
-   into `data_quality_concerns`. stderr is clean and the report JSON escapes them, but
-   `templates.py:767-768` writes them raw into the website's committed `reports/data_report.md`
-   (2 ESC and 1 BEL measured).
-3. **`nodes.py:140` and `nodes.py:231`** (`result_summary=f"execution error: {e}"`,
-   `caveats=[f"baseline SQL execution error: {e}"]`). The whole driver exception, **neither redacted,
-   nor flattened, nor scrubbed.** Measured on real SQLite (a table named with ESC whose `sqlite_master`
-   entry was corrupted, so every statement fails with `malformed database schema (<name>)`): raw ESC in
-   `result_summary` and in the baseline caveats, which `templates.py:533` writes into
-   `analysis/06_implementation_plan.qmd`; `result_summary` also reaches the summarise prompt. **The
-   more serious half is not about terminals:** a secret-shaped string such as `PWD=hunter2` in a driver
-   message lands in the report unmasked here, because nothing on this path calls `redact_secrets`.
-4. **An unparseable `--db-url`** (`db.py:223`). `redact_db_url(url)` goes through `%s` and its regex
-   fallback replaces nothing: 1 ESC and 1 BEL on stderr from the operator's own argument, exit 0.
-   **Nit.**
-5. **SQLAlchemy's own reflection warnings** ("Did not recognize type '%s' of column '%s'" in the
-   PostgreSQL, MySQL, Oracle and SQL Server dialects; SQLite's foreign-key-signature warning) go
-   through Python's `warnings`, not the logger, so nothing in this package touches them. Reproduced end
-   to end on SQLite (a case-mismatched foreign key on a table with a control-character name: 2 ESC and
-   1 BEL, exit 0); the unrecognised-type warning only at the `PGDialect` level.
-6. **The persisted inventory** carries table, namespace and column names and `relevance_reason`
+1. **An unparseable `--db-url`** (`db.py:311`, in `sql_dialect_from_url`'s WARNING). `redact_db_url(url)`
+   goes through `%s` and its regex fallback replaces nothing: 1 ESC and 1 BEL on stderr from the operator's
+   own argument, exit 0. **Nit** for the control codes. **Its secrets half is its own item below.**
+2. **SQLAlchemy's own emissions.** (a) The reflection warnings ("Did not recognize type '%s' of column
+   '%s'" in the PostgreSQL, MySQL, Oracle and SQL Server dialects; SQLite's foreign-key-signature
+   warning) go through Python's `warnings`, not the logger, so nothing in this package touches them.
+   Reproduced end to end on SQLite (a case-mismatched foreign key on a table with a control-character
+   name: 2 ESC and 1 BEL, exit 0); the unrecognised-type warning only at the `PGDialect` level. (b)
+   **Found by Session 270's review:** when a driver raises on rollback or close at pool return, SQLAlchemy
+   logs the whole exception, traceback included, on its pool logger ("Exception during reset or
+   similar"). No handler is configured anywhere in the repository, so Python's last-resort handler prints
+   it to stderr raw: the probe's own WARNING and `discover`'s `error:` line are clean and the same text
+   appears a second time unredacted beside them (simulated, with a `PWD=hunter2` in the message).
+   **Fix for both:** a `warnings` filter or `catch_warnings` around the probe, and a logging filter on the
+   `sqlalchemy` loggers that runs the record through `safe_message` and drops `exc_info`.
+3. **The persisted inventory** carries table, namespace and column names and `relevance_reason`
    verbatim. The file is safe to `cat` (`json.dumps` escapes them), but a consumer that loads it and
    prints them gets live ESC and BEL (6 ESC and 3 BEL measured). Nothing in the repository prints
    them, and no test pins `ensure_ascii`, so a later `ensure_ascii=False` would write raw DEL and C1
    characters. **A design call:** scrub names (changing identifiers a consumer joins on) or record them
    faithfully and say so.
-7. **The operator's own `--output` path** is echoed raw by `cli.py:165,255,298,310`. Not database text.
+4. **The operator's own `--output` path** is echoed raw by `cli.py:165,268,311,323`. Not database text.
    **Nit**, arguably not a defect.
+5. **Exception text that is not the database's, written to the same sinks raw.** *Found by Session 270's
+   review (measured; not database text, so outside the class `safe_message` was written for, and the
+   same defect on the same sinks).* `nodes.py:211`, `caveats=[f"LLM baseline-query generation failed:
+   {e}"]`, sits 20 lines above the fixed SQL half: a raw LLM or SDK exception, which `templates.py`
+   writes into `analysis/06_implementation_plan.qmd` (a probe with an ESC, a BEL and `password="hunter2"`
+   in the exception came out with all three). `agent.py:54`, `f"graph crashed: {e}"`, puts any exception
+   that escapes the graph into `data_quality_concerns` **and** the summary. The realistic carriers are an
+   SDK `APIError` and `opencode`'s error event. **Fix:** `safe_message(e)` at both (one token each, plus a
+   test mirroring the route-3 baseline test). The review's guard idea: a small AST test that fails on any
+   f-string interpolating a bare exception name in `nodes.py`, `agent.py` and `cli.py` unless allow-listed,
+   which would have flagged both and would stop new routes arriving raw.
+6. **The website templates are an unguarded sink.** *Found by Session 270's review.* Routes were fixed at
+   the producer, and `templates.py` (around `:421`, `:530-533`, `:758`, `:767`) writes the summary, the
+   confirmed and unconfirmed expectations, the caveats and the concerns raw into committed markdown, so
+   the guarantee holds only for a `DataReport` made by the fixed producer: a checkpoint written before
+   Session 270 and resumed (`determine_resume_point` returns the website stage for a `COMPLETE` report,
+   inferred, not run), a report from another producer (`website run --data <any DataReport JSON>`), and
+   the LLM-written fields, which are always raw. A raw ESC and BEL in a report's concerns, caveats and
+   summary reached `analysis/02_data.qmd`, `analysis/06_implementation_plan.qmd` and
+   `reports/data_report.md` (measured). **Fix:** either say the guarantee is the producer's, or a one-line
+   sanitiser in the templates for report-derived strings, which makes the producer fixes defence in depth.
+7. **Repo-host failure text** (`website/nodes.py:110` and `:219-225`; `gitlab_adapter.py:183`,
+   `github_adapter.py:266`). A `RepoClientError` is built from the raw HTTP response body, becomes
+   `failure_reason`, and `scripts/run_pipeline.py:665` prints it unmodified (measured through the agent,
+   the `print` is a code citation). Server-controlled text, not database text. **Nit.**
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
 and control codes this was about, and scrubbing them would split Persian and emoji sequences. Whether a
 given terminal reorders text on them was not measured.
 
-**Sketch:** one helper beside `redact_secrets` in `db.py` that does what `_safe_message` does (redact,
-scrub, redact: the order is in its docstring and tested both ways), used by `_safe_message`,
-`agent.py`, `nodes.py` and `discover`'s connect error. Routes 1 to 3 are one session. Route 5 needs a
-`warnings` filter or `catch_warnings` around the probe. Routes 6 and 7 need a ruling, not code.
+**Cost:** routes 5 and 2(b) are small and need no ruling; 6 is one decision then one function; 3 is an
+operator call; 1, 4 and 7 are nits.
+
+### A password can still reach the connect error, the report and a warning
+
+**Found by Session 270's critic and a lens; reproduced; pre-existing, and not fixed.** `ReadOnlyDB.connect`
+redacts the URL with `redact_db_url`, and two shapes get past it. **A secrets matter.** (1) **A password
+with an unencoded `@`** (`bob:P@ssw0rdXYZ@host`): SQLAlchemy ends the password at the first `@`, parses
+`P` as the password and `ssw0rdXYZ@host` as the host, the driver echoes that host in its error, and neither
+redaction path sees it: `redact_db_url` takes the `make_url` branch, so its regex that matches to the
+LAST `@` (the comment at `db.py:69-74` says this exact case must not leak) never runs, and the driver's
+text has no `://` and no `key=`. Measured with psycopg 3 against a refused port: `discover --db-url
+'postgresql+psycopg://bob:P@ssw0rdXYZ@127.0.0.1:1/claims'` printed `failed to resolve host
+'ssw0rdXYZ@127.0.0.1'`, and `run --fake-llm` left `ssw0rdXYZ` in the report's `data_quality_concerns`. Before
+Session 270 it reached the traceback, the concern and the warning, and it still reaches the `error:` line and
+the concern **through the driver's own text, which no version of the sinks masks** (the URL half measured
+at the Session 270 close with the `fakeesc` dialect: `fakeesc://bob:P@ssw0rdXYZ@127.0.0.1:1/claims` keeps
+`ssw0rdXYZ` in `str(DBConnectionError)` and in `discover`'s line; the driver's echo of the host measured by
+the review with psycopg 3). `test_redact_db_url_masks_every_secret_shape`
+covers `p@ss@host:$DB_PORT` (the unparseable path) and not the parseable `p@ss@host:5432`
+(`redact_db_url` returns `user:***@ss@host:5432/claims`). (2) **A mistyped scheme separator**
+(`postgresql//bob:hunter2@h/db`, `postgresql:/bob:...`, `bob:hunter2@h/db`): `make_url` fails, the fallback
+regex needs `://`, and the whole URL, password included, is echoed in the `error:` line, the concern and
+route 1's warning above. SQLAlchemy 2.0.49's own `ArgumentError` does not echo the URL. **Fix:** when
+`make_url` fails, do not echo the URL at all (a fixed `<unparseable URL>`: the operator knows what they
+typed), and for the first shape treat an `@` in the parsed host or username as an unencoded password, or
+scrub the parsed password's known fragments from the cause by exact match, which is stronger than
+patterns. Add a URL-borne-password case to the route tests: none of them has one. **Two limits of the
+masker belong with this** (`db.safe_message`'s docstring states both): a control between the separator
+and an opening quote or brace leaves the rest of a multi-word secret, and a quoted value glued to
+following text is read as the whole value. And one consequence of Session 270's own choice, stated so it is
+not rediscovered: the sinks no longer run the masker over the composed message (it ate the `':` after a
+URL ending in `password=***` and the exception type after a path ending in a key word), which had
+accidentally masked this first shape's tail in the URL half; the cause half leaked it either way.
+
+### `redact_secrets` is quadratic on some text and `safe_message` has no input bound
+
+**Found by Session 270's review; reproduced; pre-existing, and not fixed.** `_USERINFO_TEXT`
+(`db.py:76`, `(://[^:/\s]*:)[^\s]*(@)`) is tried at every `://x:` and scans to the end of the
+whitespace-free run: `safe_message('://a:' * n)` takes 0.15 s at 10,000 characters, 2.3 s at 40,000, 37 s at
+160,000 (x4 per doubling, so about 25 minutes extrapolated for 1 MB), and it runs twice per call. A
+comma-joined list of 4,000 URLs with no whitespace (71 KB) takes about 2 s; with a space after each it is
+linear. No driver normally emits that, which is why it is a nit. Separately `safe_message` has no bound on
+its input: about 85 to 230 bytes of memory per character (a 10 MB message peaked at 0.8 to 2.3 GB, 1 to 4
+s), linear in time. `redact_db_url`'s `_USERINFO_URL` fallback (`.*(@)`) has the same shape on the
+operator's own argument. **Fix:** make the userinfo pass linear (within a whitespace-free token only the
+first `://x:` matters and it pairs with the last `@` in that token: a per-token `rfind('@')`, or skip
+tokens with no `@`); and a cap on the text `safe_message` processes (8 to 64 KB with a visible
+`...[truncated]`) before it redacts, which also bounds the quadratic case. A cap changes what a long
+`[SQL: ...]` shows, which is why it is a choice.
 
 ### Only `typer`'s dependency floor has ever been measured — `langgraph>=0.2` cannot start the intake CLI
 
@@ -508,7 +567,9 @@ with `nohup setsid` and print each environment's resolved versions before readin
 ### The test suite needs Click 8.2 or later, and nothing declares it
 
 **Found by Session 268's matrix and review; reproduced by a skeptic; pre-existing.** (1) Under Click
-8.1.8, 18 of the 69 CLI tests fail for every Typer from 0.12.4 to 0.17.0, all
+8.1.8, 26 of the 77 CLI tests fail (**measured at the close of Session 270 with Typer 0.17.0**; it was
+18 of 69 at Session 268, and every test that reads `result.stderr` adds one: Session 269 added two and
+Session 270 six) for every Typer from 0.12.4 to 0.17.0, all
 `ValueError: stderr not separately captured`: they read `result.stderr`, and Click 8.1's `CliRunner`
 mixes stderr into stdout unless told otherwise. The CLIs themselves build and render `--help` there.
 (2) `tests/agents/intake/test_cli.py:10` does `import click` (used at `:21`, `click.unstyle`) while no
