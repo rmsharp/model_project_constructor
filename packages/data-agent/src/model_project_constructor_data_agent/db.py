@@ -105,20 +105,27 @@ def _mask_kv(text: str) -> str:
     return "".join(out)
 
 
-_ALNUM_RUN = re.compile(r"[A-Za-z0-9]+")
+_ASCII_RUN = re.compile(r"[A-Za-z0-9]+")
+_WORD_RUN = re.compile(r"[^\W_]+")
 #: A token of this many characters is removed from a driver's text wherever it appears; a shorter
 #: one only beside the ``@`` that follows it. Four is the least a reader can search for. On the
 #: Session 271 over-masking lens's echo matrix, three buys nothing and each step above four leaks
 #: more.
 _MIN_TOKEN_ANYWHERE = 4
-#: Bounds, because the scrub runs inside an ``except`` block that must not stall and a password this
-#: long is the operator's own argument gone wrong: tokens in one chain, tails of the password taken
-#: after an ``@``, and patterns in all. A chain's gap is up to six characters that are not
-#: alphanumeric.
-_MAX_CHAIN = 6
-_MAX_TAILS = 4
+#: What a chain of tokens may have between them: up to six characters that are not alphanumeric,
+#: which outlasts a doubled backslash, a bracket and a quote together. Not tied to ``_MAX_CHAIN``.
+_ASCII_GAP = r"[^A-Za-z0-9]{0,6}"
+_WORD_GAP = r"[\W_]{0,6}"
+#: Bounds. The scrub runs inside an ``except`` block that must not stall, and a password this long
+#: is the operator's own argument gone wrong. ``_MAX_EXACT`` and ``_MAX_TAILS`` are performance
+#: bounds: an address of 100,000 ``@`` took 8.6 s while the first was missing (the Session 271
+#: review) and 0.001 s with both. Chains cost about 12 microseconds a token, linear, and need
+#: none. The values are not tuned (4 to 8 tokens a chain, 1 to 6 tails and 128 to 1,024 patterns
+#: all measure the same).
+_MAX_CHAIN = 6  # tokens in one chain
+_MAX_TAILS = 4  # tails of the password taken after an '@'
+_MAX_EXACT = 1024  # characters in one exact piece
 _MAX_PATTERNS = 256
-_GAP = r"[^A-Za-z0-9]{0,6}"
 
 
 def _split_userinfo(url: str) -> tuple[str, str, str] | None:
@@ -149,112 +156,141 @@ def _unaccounted_at(url: str, parsed: sa.engine.URL) -> bool:
     """Whether ``url`` holds an ``@`` that SQLAlchemy's parse does not account for.
 
     Accounted for: the one that ends the userinfo, any in the user name or the password, and any in
-    a query VALUE when a host came before the query. Not accounted for: one in the host or the
-    database, in a query KEY (never legitimate), or in a query that follows the userinfo with no
-    host before it (the three-slash typo). SQLAlchemy ends a password at the FIRST ``@``, so a
-    password containing one leaves its tail where a host, a port, a database or a query belongs,
-    and the driver then echoes it. The count is of the percent-DECODED address, so ``%40`` counts
-    on both sides.
+    a query VALUE when a host came before the query, or when the address is only a query (no
+    userinfo, no host, no database: a raw ``odbc_connect`` payload holding ``Uid=ann@srv``). Not
+    accounted for: one in the host or the database, in a query KEY (never legitimate), or in a query
+    that follows userinfo or a database with no host before it. SQLAlchemy ends a password at the
+    FIRST ``@``, so a password containing one leaves its tail where a host, a port, a database or
+    a query belongs, and the driver then echoes it. The count is of the percent-DECODED address,
+    so ``%40`` counts on both sides.
 
-    Two shapes no syntax separates from a legitimate address, so each is read as the legitimate one:
-    a password holding ``@?k=v@`` after a real host is the same text as a ``?k=v@w`` query, and a
-    scheme-less address whose password begins ``//`` parses as another scheme and another user.
+    No syntax separates three shapes from a legitimate address, so each is read as the legitimate
+    one and the password's tail is shown: a password whose tail reads ``host?k=v`` before the real
+    ``@host`` (the fragment makes the host truthy, and the query's ``@`` is then accounted for); a
+    user name holding ``/`` with a ``?`` in the password; and a scheme-less address whose password
+    begins ``//``, which parses as another scheme and another user. The converse costs a legitimate
+    address its host: userinfo with no host and an ``@`` in the query (a unix socket), or an ``@``
+    in the database name, is read as misparsed and masked from the user's colon to the last ``@``.
     """
-    accounted = 1 if (parsed.username is not None or parsed.password is not None) else 0
+    has_userinfo = parsed.username is not None or parsed.password is not None
+    accounted = 1 if has_userinfo else 0
     accounted += (parsed.username or "").count("@") + (parsed.password or "").count("@")
-    if parsed.host:
+    if parsed.host or (not has_userinfo and not parsed.database):
         for value in parsed.query.values():
             accounted += sum(v.count("@") for v in ((value,) if isinstance(value, str) else value))
     return unquote(url).count("@") > accounted
 
 
-def _misparsed_userinfo(url: str) -> tuple[str, str, str] | None:
+def _untrusted_userinfo(url: str | sa.engine.URL) -> tuple[str, str, str] | None:
     """:func:`_split_userinfo` of ``url`` when SQLAlchemy cannot be trusted to have split it.
 
     That is an address it cannot parse (a mistyped scheme separator, a non-numeric port) or one it
     parses with an unaccounted ``@`` (see :func:`_unaccounted_at`). Anything else is trusted: the
-    parse and ``render_as_string`` are exact. A SQLite address has no credentials, only a path.
+    parse and ``render_as_string`` are exact. A SQLite address that names no user or password has
+    only a path, and a path may hold an ``@``; ``sqlite+pysqlcipher`` keeps a passphrase in the
+    password and is not exempt. A URL object is read as the string it renders, which restores the
+    ``@`` a ``make_url`` of an ambiguous string had already split wrongly.
     """
-    if not isinstance(url, str):
+    if isinstance(url, sa.engine.URL):
+        url = url.render_as_string(hide_password=False)
+    elif not isinstance(url, str):
         return None
     try:
         parsed = sa.make_url(url)
     except Exception:
         return _split_userinfo(url)
-    if parsed.get_backend_name() == "sqlite" or not _unaccounted_at(url, parsed):
+    is_path = parsed.get_backend_name() == "sqlite" and not (parsed.username or parsed.password)
+    if is_path or not _unaccounted_at(url, parsed):
         return None
     return _split_userinfo(url)
 
 
-def redact_db_url(url: str) -> str:
+def redact_db_url(url: str | sa.engine.URL) -> str:
     """Return ``url`` with any password masked, for display in an error or log.
 
     Structural where SQLAlchemy can be trusted: :func:`sqlalchemy.make_url` plus
-    ``render_as_string(hide_password=True)``. Where it cannot (see :func:`_misparsed_userinfo`) the
+    ``render_as_string(hide_password=True)``. Where it cannot (see :func:`_untrusted_userinfo`) the
     address is read as the operator typed it and everything from the user's colon to the last
     ``@`` is masked: an unexpanded ``$DB_PORT``, a mistyped ``://``, or a password containing an
     unencoded ``@``, the first of which this project hits in practice. The host, port and database
-    stay, because the operator needs them. An address with no ``@`` has no password to find and
-    is shown as typed. Idempotent for every address measured (the fixed-point test), so a message
-    composed from an already-redacted address is unchanged.
+    stay, because the operator needs them, except where an ``@`` follows them that cannot be told
+    from a password's tail (see :func:`_unaccounted_at`): then they go with the password. An
+    address with no ``@`` has no password to find and is shown as typed. Idempotent for every
+    address measured (the fixed-point test), so a message composed from an address already
+    redacted is unchanged.
     """
-    parts = _misparsed_userinfo(url)
+    parts = _untrusted_userinfo(url)
     if parts is not None:
         head, _, tail = parts
         rendered = f"{head}***{tail}"
-        if _misparsed_userinfo(rendered) is None:
+        if _untrusted_userinfo(rendered) is None:
             # Masked, it reads soundly: render it as any sound address is rendered, so a second
             # pass takes that same path and changes nothing (``bob@corp`` would otherwise come
-            # out as ``bob@corp`` once and ``bob%40corp`` the next time).
+            # out as ``bob@corp`` once and ``bob%40corp`` the next time). ``render_as_string``
+            # raises on a lone surrogate, which the address may hold.
             with contextlib.suppress(Exception):
                 rendered = sa.make_url(rendered).render_as_string(hide_password=True)
     else:
         try:
             rendered = sa.make_url(url).render_as_string(hide_password=True)
         except Exception:
-            rendered = url
+            rendered = str(url)
     return _mask_kv(rendered)
 
 
 def _password_patterns(password: str) -> tuple[list[str], list[str]]:
     """``(patterns removed wherever they appear, short tokens removed only before an '@')``.
 
-    Removed wherever they appear: the password whole and its tail after each ``@`` (what SQLAlchemy
-    hands a driver as a host), as typed and percent-decoded; and every CHAIN of consecutive
-    alphanumeric tokens that holds four characters or more, the tokens joined by a short run of
-    anything that is not alphanumeric. A chain covers the tail of ``kT@9x!Qp#2``, whose every token
-    is under four characters, and a gap that allows up to six characters outlasts a driver's
-    brackets, doubled backslashes and quotes.
+    Removed wherever they appear: the password whole and its tail after each of the first few
+    ``@`` (what SQLAlchemy hands a driver as a host), as typed and percent-decoded; and every CHAIN
+    of consecutive alphanumeric tokens that holds four characters or more, the tokens joined by a
+    short run of anything that is not alphanumeric. A chain covers the tail of ``kT@9x!Qp#2``,
+    whose every token is under four characters. Tokens are read twice when the password is not
+    ASCII: the ASCII runs, which are what survives a driver that prints a bytes repr, and the
+    Unicode runs, which are what a driver that prints the text prints. A Unicode token is removed
+    in its bytes-repr form too (``\\xd0\\xbf``). Past ``_MAX_PATTERNS`` the chains of fewest
+    tokens are kept, since they are what a driver echoes of one field.
     """
     exact: set[str] = set()
-    chains: set[str] = set()
+    chains: dict[str, int] = {}
     short: set[str] = set()
     for form in {password, unquote(password)}:
         exact.add(form)
-        # SQLAlchemy ends a password at the FIRST ``@`` and the host takes what follows, so the
-        # tails that matter are the first few; every tail would be quadratic in a password of many.
         at_positions = [i for i, ch in enumerate(form) if ch == "@"]
         exact.update(form[i + 1 :] for i in at_positions[:_MAX_TAILS])
-        tokens = _ALNUM_RUN.findall(form)
-        for first in range(len(tokens)):
-            total = 0
-            for last in range(first, min(first + _MAX_CHAIN, len(tokens))):
-                total += len(tokens[last])
-                if total >= _MIN_TOKEN_ANYWHERE:
-                    chains.add(_GAP.join(map(re.escape, tokens[first : last + 1])))
-        short.update(t for t in tokens if len(t) < _MIN_TOKEN_ANYWHERE)
-    # An alternation takes the first pattern that matches where it starts, not the longest: the
-    # exact pieces go first, longest first, and then the chains, the ones of most tokens first. (By
-    # the length of the pattern a chain outranks the password whole, because its gaps are long.)
+        tokenisations = [(_ASCII_RUN, _ASCII_GAP)]
+        if not form.isascii():
+            tokenisations.append((_WORD_RUN, _WORD_GAP))
+        for run, gap in tokenisations:
+            tokens = run.findall(form)
+            for first in range(len(tokens)):
+                total = 0
+                for last in range(first, min(first + _MAX_CHAIN, len(tokens))):
+                    total += len(tokens[last])
+                    if total >= _MIN_TOKEN_ANYWHERE:
+                        chain = gap.join(map(re.escape, tokens[first : last + 1]))
+                        chains[chain] = last - first + 1
+            short.update(t for t in tokens if len(t) < _MIN_TOKEN_ANYWHERE)
+            if run is _WORD_RUN:
+                exact.update(
+                    "".join(f"\\x{b:02x}" for b in t.encode("utf-8"))
+                    for t in tokens
+                    if not t.isascii()
+                )
+    # An alternation takes the first pattern that matches where it starts, not the longest, so the
+    # exact pieces go first, longest first, then the chains, the ones of most tokens first. The cap
+    # is applied BEFORE that order: it keeps the chains of fewest tokens.
     exact_patterns = sorted(
-        (e for e in exact if len(e) >= _MIN_TOKEN_ANYWHERE), key=len, reverse=True
-    )
-    chain_patterns = sorted(chains, key=lambda c: (-c.count(_GAP), c))
-    patterns = [re.escape(e) for e in exact_patterns] + chain_patterns
-    return patterns[:_MAX_PATTERNS], sorted(short)
+        (e for e in exact if _MIN_TOKEN_ANYWHERE <= len(e) <= _MAX_EXACT), key=len, reverse=True
+    )[:_MAX_PATTERNS]
+    kept = sorted(chains.items(), key=lambda item: (item[1], item[0]))
+    kept = kept[: _MAX_PATTERNS - len(exact_patterns)]
+    kept.sort(key=lambda item: (-item[1], item[0]))
+    patterns = [re.escape(e) for e in exact_patterns] + [pattern for pattern, _ in kept]
+    return patterns, sorted(short)
 
 
-def _scrub_address_password(text: str, url: str) -> str:
+def _scrub_address_password(text: str, url: str | sa.engine.URL) -> str:
     """Remove from ``text`` what a parser or a driver could print of the password in ``url``.
 
     Where SQLAlchemy parsed the address wrongly it hands the driver the tail of the password as a
@@ -264,25 +300,30 @@ def _scrub_address_password(text: str, url: str) -> str:
     value, not by shape.
 
     What is matched is the password's ALPHANUMERIC TOKENS (see :func:`_password_patterns`) and
-    never the text around them, because a driver re-escapes (backslash, quote, bytes repr),
+    not the text around them, because a driver re-escapes (backslash, quote, bytes repr),
     brackets, strips, splits on ``,``, cuts at ``#`` and lower-cases what it echoes, and none of
-    that alters an alphanumeric run (measured on fifteen drivers: 168 of 2,484 rows leaked under
-    matching the typed text of a piece, none under tokens). Matching is case-insensitive.
+    that alters an alphanumeric run (measured on fifteen driver setups: 168 of 2,484 rows leaked
+    under matching the typed text of a piece, none under tokens). Matching is case-insensitive.
 
     A piece of four characters or more goes wherever it appears; a shorter token only where an
-    ``@`` follows it and it does not end a longer word, the shape a mis-assigned host takes. So a
-    password whose tokens are ordinary words (``Server@123``) takes those words out of the text:
-    the price of removing by value, paid only on an address SQLAlchemy could not read, and it errs
-    toward the secret. Not covered: a password of fewer than four alphanumeric characters in all,
-    and a delimiter-free run over 63 bytes that a server truncates in echoing a database name.
+    ``@`` follows it, after up to six characters that are not alphanumeric, and it does not end a
+    longer word: the shape a mis-assigned host or port takes. So a password whose tokens are
+    ordinary words (``Server@123``) takes those words out of the text: the price of removing by
+    value, paid only on an address SQLAlchemy could not read, and it errs toward the secret.
+    Not covered: a token or a tail under four characters that a driver prints alone with nothing
+    after it (``'abc'`` as a whole port field), and a delimiter-free run over 63 bytes that a
+    server truncates in echoing a database name.
 
     Runs on the RAW driver text, before ``safe_message`` flattens it. The exact pieces match the
-    password as typed, and a tab after the ``@`` that is a space once flattened (measured on
-    psycopg2, pg8000, mysql-connector) no longer matches them; a chain's gap still bridges it, so
-    the order is held by a test and not required by the chains.
+    password as typed, and a tab that is a space once flattened no longer matches them. A chain's
+    gap bridges that, so for four characters or more the order does not matter; for less it does:
+    ``@ab<TAB>c`` leaves ``ab`` when flattened first (measured on psycopg2, pg8000, mysql-connector;
+    the review found it, and a test holds the exact output).
+
+    A scrub that cannot finish returns ``<unprintable>``: it has not removed the password.
     """
     try:
-        parts = _misparsed_userinfo(url)
+        parts = _untrusted_userinfo(url)
         if parts is None or not parts[1]:
             return text
         patterns, short_tokens = _password_patterns(parts[1])
@@ -290,7 +331,9 @@ def _scrub_address_password(text: str, url: str) -> str:
             text = re.sub("|".join(patterns), "***", text, flags=re.IGNORECASE)
         if short_tokens:
             text = re.sub(
-                r"(?<![A-Za-z0-9])(?:" + "|".join(map(re.escape, short_tokens)) + r")(?=@)",
+                r"(?<![^\W_])(?:"
+                + "|".join(map(re.escape, short_tokens))
+                + r")[^A-Za-z0-9@]{0,6}(?=@)",
                 "***",
                 text,
                 flags=re.IGNORECASE,
@@ -302,7 +345,7 @@ def _scrub_address_password(text: str, url: str) -> str:
         return "<unprintable>"
 
 
-def redact_secrets(text: str, *, url: str | None = None) -> str:
+def redact_secrets(text: str) -> str:
     """Return ``text`` with any embedded URL password or ``key=value`` secret
     masked — best-effort, per the module comment above.
 
@@ -310,14 +353,8 @@ def redact_secrets(text: str, *, url: str | None = None) -> str:
     connection string back. :func:`redact_db_url` is the right call when the
     whole string IS a URL. To print, log, persist or report such text, call
     :func:`safe_message`, which redacts and also removes what a terminal would
-    act on.
-
-    Pass ``url`` when ``text`` came from a failure to use that address: a password
-    SQLAlchemy read wrongly is then removed by value first (:func:`_scrub_address_password`),
-    which no pattern can do for a driver's echo of a host that is really a password's tail.
+    act on, and removes by value a password SQLAlchemy read wrongly (its ``url``).
     """
-    if url is not None:
-        text = _scrub_address_password(text, url)
     return _mask_kv(_USERINFO_TEXT.sub(r"\1***\2", text))
 
 
@@ -330,7 +367,9 @@ def redact_secrets(text: str, *, url: str | None = None) -> str:
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
-def safe_message(error: object, *, redact: bool = True, url: str | None = None) -> str:
+def safe_message(
+    error: object, *, redact: bool = True, url: str | sa.engine.URL | None = None
+) -> str:
     """``str(error)`` made safe to print, to log, to persist and to put in a report.
 
     The function behind each route that has been closed for carrying database or
@@ -390,9 +429,9 @@ def safe_message(error: object, *, redact: bool = True, url: str | None = None) 
     does the same).
 
     ``url`` is the address the failure was about. When SQLAlchemy cannot be trusted to have read it
-    (:func:`_misparsed_userinfo`) the password is removed by value from the RAW text, before the
-    redaction and before the whitespace is flattened, because it is typed with whatever it holds
-    and a driver echoes it before this function has spaced it out. It applies only with ``redact``.
+    (:func:`_untrusted_userinfo`) the password is removed by value from the RAW text, before the
+    redaction and before the whitespace is flattened (:func:`_scrub_address_password` says why
+    the order is required). It applies only with ``redact``.
 
     Redaction is **best-effort**. :func:`redact_secrets` masks URL userinfo, a
     wide `key=value`/`key: value`/quoted/braced key list (Session 262), and a
@@ -502,7 +541,7 @@ def sql_dialect_from_url(url: str) -> str | None:
             "from a URL that parses but cannot be connected to, which is "
             "reported in the DataReport's data_quality_concerns.",
             redact_db_url(url),
-            redact_secrets(str(e), url=url),
+            safe_message(e, url=url),
         )
         return None
 

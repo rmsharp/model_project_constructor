@@ -1259,9 +1259,10 @@ def test_cli_leaves_dialect_unset_without_a_db(
     assert recorded["sql_dialect"] is None
 
 
-#: (id, address, the password the operator meant). The two shapes ``BACKLOG.md`` filed at Session
-#: 270 and the route each takes: ``fakeecho`` parses and reaches the simulated driver, which echoes
-#: every field SQLAlchemy read; the others fail inside SQLAlchemy itself, which is real.
+#: (id, address, the password the operator meant): the shapes ``BACKLOG.md`` filed at Session 270,
+#: and the route each takes. ``unencoded-at`` and ``three-slashes`` PARSE and reach the simulated
+#: ``fakeecho`` driver, which echoes every field SQLAlchemy read; ``at-and-colon``,
+#: ``mistyped-separator`` and ``no-scheme`` fail inside SQLAlchemy itself, which is real.
 URL_BORNE_SECRETS = [
     ("unencoded-at", "fakeecho://bob:P@ssw0rdXYZ@127.0.0.1:1/claims", "P@ssw0rdXYZ"),
     ("at-and-colon", "fakeecho://bob:P@ss:123xyz@127.0.0.1:1/claims", "P@ss:123xyz"),

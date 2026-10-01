@@ -171,9 +171,12 @@ WIDTH = 4
 def leaked_run(password: str, text: str, width: int = WIDTH) -> str | None:
     """The first run of ``width`` characters of ``password`` that ``text`` still shows.
 
-    When the password is shorter than ``width`` the run is the whole password. A run made only
-    of URL punctuation is not counted: ``@:/?`` is in every address. Case-insensitive, because a
-    resolver folds the case of a host name before it echoes it.
+    When the password is shorter than ``width`` the run is the whole password. A run with no
+    alphanumeric character is not counted (``@:/?`` is in every address), so a password made only
+    of punctuation is not seen. Case-insensitive, because a resolver folds the case of a host name
+    before it echoes it. It is a WINDOWED oracle, so a password built from common letters flags
+    ordinary words (``hunter2`` matches ``enter``): the tests that use it pick passwords whose
+    windows are not English, and a text that gains such a word turns them red.
     """
     haystack = text.lower()
     size = min(width, len(password))

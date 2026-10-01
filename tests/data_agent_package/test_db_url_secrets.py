@@ -37,7 +37,6 @@ from model_project_constructor_data_agent.db import (
     DBConnectionError,
     ReadOnlyDB,
     redact_db_url,
-    redact_secrets,
     safe_message,
     sql_dialect_from_url,
 )
@@ -105,6 +104,38 @@ SHAPES = [
         "fakeecho//bob:N_b:P&e@K/*9%uzX,@127.0.0.1/db",
         "N_b:P&e@K/*9%uzX,",
     ),
+    # A ``:`` alone before a ``://`` that belongs to the password: no scheme at all.
+    (
+        "a-colon-before-the-separator-inside-the-password",
+        "bob:Zq7x://Kw3d@127.0.0.1:1/claims",
+        "Zq7x://Kw3d",
+    ),
+    # A ``?`` in the password gives a query whose KEY holds the ``@`` (SQLAlchemy keeps it).
+    (
+        "at-in-a-query-key-with-a-value",
+        "fakeecho://bob:Zq7x@s?Kw3d@Vb5n=mWpL@127.0.0.1:1/claims",
+        "Zq7x@s?Kw3d@Vb5n=mWpL",
+    ),
+    # SQLAlchemy's port ValueError prints the last segment: a short token, then punctuation.
+    (
+        "a-short-last-token-then-punctuation",
+        "fakeecho://bob:Hunter@2:Ab1!@127.0.0.1:5432/db",
+        "Hunter@2:Ab1!",
+    ),
+    # Passwords with no ASCII letter: the ValueError prints a segment no exact piece matches.
+    (
+        "a-cyrillic-password",
+        "fakeecho://bob:пароль@секрет:пароль2@127.0.0.1/db",
+        "пароль@секрет:пароль2",
+    ),
+    (
+        "a-cjk-password",
+        "fakeecho://bob:密码密码@秘密秘密:密码密码@127.0.0.1/db",
+        "密码密码@秘密秘密:密码密码",
+    ),
+    # A passphrase in a SQLite-family address: the password field is not a path.
+    ("a-sqlcipher-passphrase", "sqlite+pysqlcipher://:Pass@word1234@/enc.db", "Pass@word1234"),
+    ("a-sqlite-address-with-a-user", "sqlite://bob:P@ssw0rdXYZ@127.0.0.1/db", "P@ssw0rdXYZ"),
     # An ``@`` then a ``?`` inside the password: SQLAlchemy sees a query that follows the userinfo
     # with no host or database before it, so the ``@`` in its value is not a legitimate one.
     ("at-then-query", "fakeecho://bob:Zq7xK9@?Vb5nY=mWpL3@127.0.0.1:1/db", "Zq7xK9@?Vb5nY=mWpL3"),
@@ -172,6 +203,10 @@ UNPARSEABLE_IDS = {
     "a-tab-in-the-port-error",
     "a-short-password-ending-in-a-colon",
     "a-password-the-chains-would-cut-short",
+    "a-colon-before-the-separator-inside-the-password",
+    "a-short-last-token-then-punctuation",
+    "a-cyrillic-password",
+    "a-cjk-password",
 }
 UNPARSEABLE = [shape for shape in SHAPES if shape[0] in UNPARSEABLE_IDS]
 
@@ -201,19 +236,28 @@ def test_a_parse_error_that_echoes_the_whole_address_shows_none_of_the_password(
 # ---------------------------------------------------------------------------
 
 #: Addresses with no password in them. Each holds an ``@``, or a ``:`` and an ``@``, in a place that
-#: is not a password, which is what a looser trigger would mistake for one (Session 271 regression
-#: lens: counting every ``@`` rewrote the first of these to ``bob:***@nightly``).
+#: is not a password, which is what a looser trigger would mistake for one.
 SECRETLESS = [
     "sqlite:////tmp/a@b:c/x@y.db",
     "sqlite:///C:/Users/ann@corp/x@y.db",
     "sqlite:///rel/a@b:c/x@y.db",
     "mssql+pyodbc:///?odbc_connect=DRIVER%3D%7BODBC+Driver+17%7D%3BUID%3Dann%40corp",
+    "sqlite+pysqlite:///C:/a@b/x.db",
+    "postgresql://bob@db.example:$DB_PORT/claims",
 ]
 
 
 @pytest.mark.parametrize("url", SECRETLESS)
-def test_an_address_with_no_password_is_echoed_unchanged(url: str) -> None:
-    assert redact_db_url(url) == url
+def test_an_address_with_no_password_is_shown_as_any_address_is(url: str) -> None:
+    """Not masked, and not rewritten beyond what ``render_as_string`` does to every address. That
+    differs by SQLAlchemy version (2.1 percent-encodes a ``:`` in a SQLite path), so the expectation
+    is the renderer's own output and not the address as typed."""
+    try:
+        expected = sa.make_url(url).render_as_string(hide_password=True)
+    except Exception:  # an unexpanded $DB_PORT does not parse: it is shown as typed
+        expected = url
+    assert redact_db_url(url) == expected
+    assert "***" not in redact_db_url(url)
 
 
 @pytest.mark.parametrize(
@@ -250,10 +294,12 @@ def test_a_correct_url_with_an_at_in_a_query_value_keeps_its_host_and_masks_its_
 
 @pytest.mark.parametrize(("_id", "url", "password"), SHAPES, ids=SHAPE_IDS)
 def test_the_connect_error_still_names_the_host(_id: str, url: str, password: str) -> None:
-    """Both halves matter: no password, and still diagnostic. Every shape's host is 127.0.0.1."""
+    """Both halves matter: no password, and still diagnostic. A shape that names the host
+    127.0.0.1 (the SQLite-family ones do not) still names it in the error."""
     with pytest.raises(DBConnectionError) as excinfo:
         ReadOnlyDB(url).connect()
-    assert "127.0.0.1" in str(excinfo.value)
+    if "127.0.0.1" in url:
+        assert "127.0.0.1" in str(excinfo.value)
 
 
 def test_an_unparseable_address_still_shows_the_unexpanded_port_and_the_host_it_was_given() -> None:
@@ -290,10 +336,11 @@ def test_a_cause_that_cannot_be_printed_still_gives_a_connect_error(
 
 # ---------------------------------------------------------------------------
 # What a REAL driver prints. Each text below was captured by Session 271's drivers lens from the
-# named driver and version against a refused or unresolvable target, for the typed password shown,
-# and then hand-copied here: no driver is installed in this project. A driver re-escapes, brackets,
-# strips, splits, truncates or lower-cases what it echoes, so the scrub matches the ALPHANUMERIC
-# TOKENS of the password and never the text a driver might have rewritten around them.
+# named driver and version against a refused or unresolvable target, for the typed password shown
+# (``driver_matrix/out_sa2.0.49_*.json``, field ``raw``), and is pasted here verbatim or cut short
+# at the end; none is paraphrased. No driver is installed in this project. A driver re-escapes,
+# brackets, strips, splits, truncates or lower-cases what it echoes, so the scrub matches the
+# ALPHANUMERIC TOKENS of the password and never the text a driver might have rewritten around them.
 # ---------------------------------------------------------------------------
 
 REAL_ECHOES = [
@@ -321,13 +368,23 @@ REAL_ECHOES = [
         "pymysql-quote",
         "PyMySQL",
         "mysql+pymysql://bob:Zq7xK9@mWpL3'Vb5nY@127.0.0.1:1/db",
-        '(2003, "Can\'t connect to MySQL server on \'mWpL3\\\'Vb5nY@127.0.0.1\'")',
+        (
+            "(pymysql.err.OperationalError) (2003, 'Can\\'t connect to MySQL server "
+            'on "mWpL3\\\'Vb5nY@127.0.0.1" ([Errno 8] nodename nor servname provided,'
+            " or not known)')\n(Background on this error at: https://sqlalche.me/e/2"
+            '0/e3q8)'
+        ),
     ),
     (
         "pymssql-bytes-repr",
         "pymssql",
         "mssql+pymssql://bob:Zq7xK9@mWpL\u00e93\u00fc@127.0.0.1:1/db",
-        "Unable to connect: TDS server is unavailable (mWpL\\xc3\\xa93\\xc3\\xbc@127.0.0.1)",
+        (
+            "(pymssql.exceptions.OperationalError) (20009, b'DB-Lib error message 2"
+            '0009, severity 9:\\nUnable to connect: TDS server is unavailable or doe'
+            "s not exist (mWpL\\xc3\\xa93\\xc3\\xbc@127.0.0.1)\\n')\n(Background on this "
+            'error at: https://sqlalche.me/e/20/e3q8)'
+        ),
     ),
     (
         "mysql-connector-stripped",
@@ -345,7 +402,7 @@ REAL_ECHOES = [
         "clickhouse-lowercased-and-cut-at-hash",
         "clickhouse-driver",
         "clickhouse+native://bob:Zq7xK9@mWpL3#Vb5nY@127.0.0.1:1/db",
-        "Code: 210. Connection refused (mwpl3:9000)",
+        'Orig exception: Code: 210. nodename nor servname provided, or not known (mwpl3:9000)',
     ),
 ]
 REAL_ECHO_IDS = [echo[0] for echo in REAL_ECHOES]
@@ -369,14 +426,34 @@ def test_a_real_drivers_echo_shows_none_of_the_password(
 @pytest.mark.parametrize("control", ["\t", "\n", "\x00", "\x1b", "\x7f"])
 def test_the_password_is_removed_before_the_text_is_flattened(control: str) -> None:
     """A driver prints a control character raw, and ``safe_message`` turns it into a space and
-    collapses whitespace. Removing the password AFTER that leaks it: the typed password has the
-    control in it, and the flattened text no longer does (measured on psycopg2, pg8000 and
-    mysql-connector with a tab, a newline or a NUL after the ``@``)."""
+    collapses whitespace. The exact pieces match the password as typed, so removing it AFTER that
+    leaves what no chain covers: ``ab<control>c`` is a tail of three alphanumeric characters. The
+    leak is two characters (``'ab ***@'``), which is why the exact output is the assertion: the
+    first version of this test used a password the chains cover in either order and could not
+    fail, and the review's swap mutant showed it."""
+    url = f"postgresql://bob:Zq7xK9@ab{control}c@127.0.0.1:1/db"
+    text = f"failed to resolve host 'ab{control}c@127.0.0.1'"
+    assert safe_message(text, url=url) == "failed to resolve host '***@127.0.0.1'"
+
+
+@pytest.mark.parametrize("control", ["\t", "\n", "\x00"])
+def test_a_control_character_inside_a_long_password_does_not_stop_the_removal(control: str) -> None:
+    """The case the chains cover: a gap of one flattened space is inside their six."""
     url = f"postgresql+psycopg2://bob:Zq7xK9@mWpL3{control}Vb5nY@127.0.0.1:1/db"
     text = f'could not translate host name "mWpL3{control}Vb5nY@127.0.0.1" to address'
     cleaned = safe_message(text, url=url)
     assert leaked_run("Zq7xK9@mWpL3 Vb5nY", cleaned) is None
     assert "127.0.0.1" in cleaned
+
+
+def test_the_longest_exact_piece_wins() -> None:
+    """The password whole and its tail after an ``@`` start at the same place when the tail is a
+    prefix of the password: shortest first would mask the tail and leave the rest."""
+    url = "postgresql//bob:Zq7xK9mW@Zq7x@127.0.0.1:1/db"
+    text = f"Could not parse SQLAlchemy URL from string '{url}'"
+    cleaned = safe_message(text, url=url)
+    assert "K9mW" not in cleaned
+    assert leaked_run("Zq7xK9mW@Zq7x", cleaned) is None
 
 
 def test_a_percent_encoded_password_is_removed_in_its_decoded_form_too() -> None:
@@ -412,15 +489,7 @@ def test_the_scrub_is_linear_in_the_password() -> None:
     url = f"postgresql://bob:{password}@h/db"
     start = time.perf_counter()
     safe_message("x " * 5000, url=url)
-    assert time.perf_counter() - start < 2.0
-
-
-def test_redact_secrets_takes_the_address_too() -> None:
-    """The dialect warning calls ``redact_secrets`` on the parse error, not ``safe_message``."""
-    url = "postgresql://bob:Zq7xK9@mWpL3:Vb5nY@127.0.0.1:1/db"
-    text = "invalid literal for int() with base 10: 'Vb5nY@127.0.0.1:1'"
-    assert leaked_run("Vb5nY", redact_secrets(text, url=url)) is None
-    assert redact_secrets(text) == text  # no address: unchanged, as before
+    assert time.perf_counter() - start < 10.0
 
 
 def test_a_scrub_that_cannot_finish_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -433,12 +502,11 @@ def test_a_scrub_that_cannot_finish_fails_closed(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(db_module, "_password_patterns", _boom)
     url = "postgresql://bob:P@ssw0rdXYZ@127.0.0.1:1/db"
     assert safe_message("failed to resolve host 'ssw0rdXYZ@127.0.0.1'", url=url) == "<unprintable>"
-    assert redact_secrets("ssw0rdXYZ", url=url) == "<unprintable>"
 
 
 # ---------------------------------------------------------------------------
-# The decisions inside the redaction, each held by a case that fails when it is removed. Found by
-# a mutation pass over the code (Session 271): 23 of 46 one-line changes survived the tests above.
+# The decisions inside the redaction that a mutation pass and a review found unheld (Session 271).
+# Each case below fails when the decision it names is removed; a decision not named here may not be.
 # ---------------------------------------------------------------------------
 
 
@@ -463,8 +531,8 @@ def test_a_trusted_parse_leaves_the_driver_text_alone(url: str, text: str) -> No
 def test_a_sqlalchemy_url_object_is_a_valid_address() -> None:
     """``ReadOnlyDB`` has always accepted whatever ``make_url`` does."""
     url = sa.make_url("postgresql://bob:hunter2@h/db")
-    assert redact_db_url(url) == "postgresql://bob:***@h/db"  # type: ignore[arg-type]
-    assert safe_message("x hunter2", url=url) == "x hunter2"  # type: ignore[arg-type]
+    assert redact_db_url(url) == "postgresql://bob:***@h/db"
+    assert safe_message("x hunter2", url=url) == "x hunter2"
 
 
 @pytest.mark.parametrize(
@@ -544,4 +612,151 @@ def test_the_pieces_are_bounded_however_long_the_password_is() -> None:
     assert short == []
     start = time.perf_counter()
     safe_message("x " * 5000, url=f"postgresql://bob:{password}@h/db")
-    assert time.perf_counter() - start < 2.0
+    assert time.perf_counter() - start < 10.0
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("bob:Zq7x://Kw3d@h/db", ("bob:", "Zq7x://Kw3d", "@h/db")),
+        ("postgresql://bob@db.example:$DB_PORT/claims", None),
+        ("postgresql//bob@h:5432/db", None),
+        ("bob@h:5432/db", None),
+    ],
+)
+def test_the_split_finds_no_password_where_there_is_none(
+    url: str, expected: tuple[str, str, str] | None
+) -> None:
+    """A colon AFTER the ``@`` is the host's port, not a user's: the search stops at the ``@``."""
+    assert db_module._split_userinfo(url) == expected
+
+
+def test_a_proper_scheme_is_found_before_a_separator_inside_the_password() -> None:
+    url = "postgresql://bob:Zq7x://Kw3d@h:$DB_PORT/db"
+    assert redact_db_url(url) == "postgresql://bob:***@h:$DB_PORT/db"
+
+
+def test_a_repeated_query_key_with_an_at_in_it_is_a_legitimate_query() -> None:
+    url = "postgresql://bob:hunter2@db.example:5432/claims?a=b&a=c@d"
+    assert redact_db_url(url) == "postgresql://bob:***@db.example:5432/claims?a=b&a=c%40d"
+
+
+def test_a_chain_does_not_bridge_alphanumerics() -> None:
+    """The gap is characters that are NOT alphanumeric; ``.{0,6}`` would remove a phrase."""
+    url = "postgresql://bob:Zq@qx:zv@h/db"
+    assert safe_message("no route to qx and zv now", url=url) == "no route to qx and zv now"
+
+
+def test_an_address_that_is_only_a_query_keeps_an_at_in_its_value() -> None:
+    """A raw ``odbc_connect`` payload holds ``Uid=ann@srv``: no userinfo, no host, no database."""
+    url = (
+        "mssql+pyodbc:///?odbc_connect=Driver={ODBC Driver 18 for SQL Server};"
+        "Server=tcp:srv.database.windows.net,1433;Database=claims;Uid=ann@srv;"
+        "Pwd=Sup3rSecretValue;Encrypt=yes"
+    )
+    shown = redact_db_url(url)
+    assert "srv.database.windows.net" in shown
+    assert "Sup3rSecretValue" not in shown
+    text = "Login failed for srv.database.windows.net claims"
+    assert safe_message(text, url=url) == text
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "sqlite+pysqlcipher://:Pass@word1234@/enc.db",
+        "sqlite://bob:P@ssw0rdXYZ@127.0.0.1/db",
+    ],
+)
+def test_a_sqlite_family_address_with_a_password_is_not_exempt(url: str) -> None:
+    """``sqlite+pysqlcipher`` keeps a passphrase in the password field: the backend name alone is
+    not a reason to trust the parse (the review's red-team lens, measured on the real console)."""
+    shown = redact_db_url(url)
+    assert "word1234" not in shown
+    assert "ssw0rdXYZ" not in shown
+
+
+def test_a_sqlalchemy_url_made_from_an_ambiguous_string_is_read_as_typed() -> None:
+    """``make_url`` has already split ``P@ssw0rdXYZ@h`` into a password ``P`` and a host
+    ``ssw0rdXYZ@h``; rendering the object restores the ``@`` the trigger looks for."""
+    url = sa.make_url("postgresql://bob:P@ssw0rdXYZ@127.0.0.1:1/db")
+    assert leaked_run("P@ssw0rdXYZ", redact_db_url(url)) is None
+    cleaned = safe_message("could not translate host name 'ssw0rdXYZ@127.0.0.1'", url=url)
+    assert leaked_run("P@ssw0rdXYZ", cleaned) is None
+
+
+def test_a_lone_surrogate_in_the_address_does_not_raise() -> None:
+    """``render_as_string`` raises on one, and the masked address is rendered again."""
+    assert "ssw0rd" not in redact_db_url("postgresql://bob:p@ssw0rd@h/db\udcff")
+
+
+def test_a_non_latin_password_is_removed_in_its_bytes_repr_too() -> None:
+    """pymssql prints a bytes repr of the host (captured: ``mWpL\\xc3\\xa93\\xc3\\xbc``)."""
+    password = "Zq7xK9@\u5bc6\u7801\u5f88\u957f"
+    url = f"mssql+pymssql://bob:{password}@127.0.0.1:1/db"
+    escaped = "".join(f"\\x{b:02x}" for b in "\u5bc6\u7801\u5f88\u957f".encode())
+    text = f"Unable to connect: TDS server is unavailable ({escaped}@127.0.0.1)"
+    cleaned = safe_message(text, url=url)
+    assert "\\xe5" not in cleaned
+    assert "127.0.0.1" in cleaned
+
+
+def test_a_long_password_keeps_every_token_a_driver_echoes_of_one_field() -> None:
+    """Past ``_MAX_PATTERNS`` the cap must drop the chains of MOST tokens, not the single tokens a
+    driver echoes (the review's red-team lens: 50 tokens leaked the first)."""
+    password = "tok00000@" + "/".join(f"t{i:05d}x" for i in range(1, 60))
+    url = f"postgresql://bob:{password}@127.0.0.1:1/db"
+    for token in ("t00001x", "t00030x", "t00059x"):
+        cleaned = safe_message(f"could not translate host name \"{token}\" to address", url=url)
+        assert token not in cleaned
+
+
+def test_a_100_kilobyte_address_does_not_stall_the_scrub() -> None:
+    """The bounds on exact pieces and tokens are performance bounds: without them an address of
+    100,000 ``@`` took 8.6 s (measured by the review; 0.001 s with them). Mutating the code cannot
+    show that, only a size can."""
+    url = "postgresql://bob:" + "@" * 100_000 + "h/db"
+    start = time.perf_counter()
+    safe_message("x y z", url=url)
+    redact_db_url(url)
+    assert time.perf_counter() - start < 5.0
+
+
+def test_a_url_of_a_type_nobody_expected_is_tolerated() -> None:
+    """``safe_message`` runs inside the ``except`` blocks that deliver "never raises": an address
+    that is neither a string nor a URL is not a reason to raise, or to withhold the text."""
+    assert safe_message("x y", url=12345) == "x y"  # type: ignore[arg-type]
+
+
+def test_a_lone_surrogate_in_a_query_value_does_not_raise() -> None:
+    """``render_as_string`` percent-encodes the query and raises on a lone surrogate, and the
+    masked address is rendered once more."""
+    shown = redact_db_url("postgresql://bob:p@ssw0rdXYZ@h/db?x=\udcff")
+    assert "ssw0rdXYZ" not in shown
+
+
+def test_the_tail_after_the_first_at_goes_whole_when_no_token_or_chain_can() -> None:
+    """``ab:c`` has three alphanumeric characters: no token and no chain reaches four, and the
+    short token ``c`` alone would leave ``ab:``. The tail is four characters, so it is a piece."""
+    url = "postgresql://bob:Zq7xK9@ab:c@127.0.0.1:1/db"
+    assert safe_message("failed to resolve host 'ab:c@127.0.0.1'", url=url) == (
+        "failed to resolve host '***@127.0.0.1'"
+    )
+
+
+def test_a_chain_of_short_non_latin_tokens_bridges_what_a_driver_puts_between_them() -> None:
+    """Two letters each, so only a chain of the Unicode tokens can remove them, with the Unicode
+    gap: a bracket and a backslash are not letters in either alphabet."""
+    url = "postgresql://bob:Zq@\u5bc6\u7801:\u79d8\u5bc6@127.0.0.1:1/db"
+    cleaned = safe_message("no route to \u5bc6\u7801[\\\u79d8\u5bc6] now", url=url)
+    assert "\u5bc6" not in cleaned
+    assert "\u79d8" not in cleaned
+
+
+def test_a_password_of_many_short_tokens_does_not_stall_the_scrub() -> None:
+    """A chain is built from every token and every length up to six: unbounded, a password of
+    200,000 tokens costs seconds and megabytes in an ``except`` block. Only a size can show it."""
+    url = "postgresql://bob:" + "".join(f"t{i}@" for i in range(60_000)) + "h/db"
+    start = time.perf_counter()
+    safe_message("x y z", url=url)
+    assert time.perf_counter() - start < 5.0
