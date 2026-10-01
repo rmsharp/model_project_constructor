@@ -104,10 +104,11 @@ class UnwritableRequestContextError(ValueError):
 
 
 #: What a terminal acts on instead of printing: the C0 controls, DEL and the C1
-#: controls, which are Unicode's ``Cc`` category (65 characters; a test holds the
-#: range against the Unicode database). ``_safe_message`` replaces each with a
-#: space. ``str.split`` already treats ten of them as whitespace, so the range
-#: stays whole instead of naming only what the flatten still lets through.
+#: controls, which are Unicode's ``Cc`` category (65 characters; a test compares
+#: this pattern with the Unicode database over every code point).
+#: ``_safe_message`` replaces each with a space. ``str.split`` already treats ten
+#: of them as whitespace, so the range stays whole instead of naming only what
+#: the flatten still lets through.
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
@@ -195,11 +196,21 @@ def _safe_message(e: Exception) -> str:
     stderr. A terminal acts on ESC, BEL, NUL, DEL and the C1 controls instead of
     printing them (measured: the ESC and BEL of a title sequence and a colour code
     in a table name reached stderr raw). A space, not nothing, so ``a<ESC>b``
-    does not read ``ab``; and AFTER redaction, never before:
-    :func:`db.redact_secrets` reads an unquoted secret as a run of non-whitespace
-    and these characters are not whitespace to it, so scrubbing first would end
-    the value at the control and print what follows (measured:
-    ``password=abc<ESC>def`` came out as ``password=*** def``).
+    does not read ``ab``.
+
+    Redaction runs on BOTH sides of the scrub, because each order alone leaks in
+    the other's case (all measured, with the 55 controls that are not whitespace
+    to :func:`db.redact_secrets`). Before it: the masker reads an unquoted secret
+    as a run of non-whitespace, so scrubbing first would end the value at the
+    control and print what follows (``password=abc<ESC>def`` came out
+    ``password=*** def``). After it: a control between a key and its separator
+    hides the key from the masker, and only the scrub turns that control into
+    the space the masker tolerates there (``password<ESC>=hunter2`` came out
+    ``password =hunter2``). The second pass changes only what the first could not
+    see, since the masker is idempotent. What neither pass closes is the masker's
+    own limit that an unquoted value ends at whitespace, so
+    ``password=<ESC> hunter2`` still prints ``hunter2``, as ``password=x hunter2``
+    always has.
 
     Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo,
     a wide `key=value`/`key: value`/quoted/braced key list (Session 262), and
@@ -211,7 +222,8 @@ def _safe_message(e: Exception) -> str:
     """
     try:
         raw = str(e).encode("utf-8", "replace").decode("utf-8")
-        return " ".join(_CONTROL_CHARACTERS.sub(" ", redact_secrets(raw)).split())
+        scrubbed = _CONTROL_CHARACTERS.sub(" ", redact_secrets(raw))
+        return " ".join(redact_secrets(scrubbed).split())
     except Exception:
         return "<unprintable>"
 
@@ -266,7 +278,8 @@ def probe_information_schema(
       :data:`SKIPPED_NOTE_PREFIX`, counts the skipped entities against every
       entity found, and names up to ten of them in full, ``repr``-quoted, with
       each one's exception type. Each cause goes to its own WARNING, redacted
-      best-effort, on one line, and is never persisted. A partial inventory is
+      best-effort, on one line with control characters replaced by a space
+      (Session 269), and is never persisted. A partial inventory is
       never returned unlabelled. A lost connection is not a skip: it fails the
       probe, as the next bullet says (``ReadOnlyDB.get_information_schema``).
     - **Reflection, or building an entry from it, fails** in any other way
@@ -277,8 +290,8 @@ def probe_information_schema(
       be written as UTF-8 — :class:`UnwritableEntryError`, naming the table):
       ``entries=[]`` and ``notes`` begins
       :data:`PROBE_FAILED_NOTE_PREFIX`, then the exception's type and its
-      message — redacted best-effort, on one line. One such table fails the
-      whole probe.
+      message — redacted best-effort, on one line, with control characters
+      replaced by a space (Session 269). One such table fails the whole probe.
     - **Ranking fails** (no credentials, a malformed or truncated reply, a
       ranking that fails schema validation, names no entry, applies a score that
       is not a finite number in [0.0, 1.0], or carries a reason that cannot be

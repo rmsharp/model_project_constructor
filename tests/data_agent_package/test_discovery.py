@@ -32,6 +32,7 @@ from model_project_constructor_data_agent.anthropic_client import (
 )
 from model_project_constructor_data_agent.db import SkippedEntity
 from model_project_constructor_data_agent.discovery import (
+    _CONTROL_CHARACTERS,
     PROBE_FAILED_NOTE_PREFIX,
     PRODUCER_ID,
     PRODUCER_VERSION,
@@ -1140,6 +1141,14 @@ class TestMessagesCarryNoControlCharacters:
         assert scanned == CONTROLS
         assert len(CONTROLS) == 65
 
+    def test_the_pattern_matches_exactly_the_cc_category(self) -> None:
+        """The code's own pattern, not the test's list of it: over every code point,
+        so a class widened or narrowed by one character fails here and names it."""
+        matched = [
+            chr(cp) for cp in range(sys.maxunicode + 1) if _CONTROL_CHARACTERS.fullmatch(chr(cp))
+        ]
+        assert _control_ids(matched) == _control_ids(CONTROLS)
+
     @pytest.mark.parametrize("ch", CONTROLS, ids=_control_ids(CONTROLS))
     def test_a_failure_replaces_each_control_with_a_space(
         self, ch: str, caplog: pytest.LogCaptureFixture
@@ -1150,13 +1159,10 @@ class TestMessagesCarryNoControlCharacters:
             inv = probe_information_schema(
                 _RaisingDB(RuntimeError(f"no such table: main.a{ch}b"))  # type: ignore[arg-type]
             )
+        assert _unsafe(inv.producers[0].notes or "") == []
         assert inv.producers[0].notes == (
             f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: no such table: main.a b"
         )
-        # Loaded back, the note is what the file holds: a JSON escape of a control
-        # is a real control again once something prints the loaded text.
-        loaded = DataSourceInventory.model_validate_json(inv.model_dump_json())
-        assert _unsafe(loaded.producers[0].notes or "") == []
         (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
         assert message.endswith("RuntimeError: no such table: main.a b")
         assert _unsafe(message) == []
@@ -1168,10 +1174,11 @@ class TestMessagesCarryNoControlCharacters:
             inv = probe_information_schema(
                 _RaisingDB(RuntimeError(f"boom{EVERY_CONTROL}done"))  # type: ignore[arg-type]
             )
-        assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: boom done"
         (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
-        assert message.endswith("RuntimeError: boom done")
+        assert _unsafe(inv.producers[0].notes or "") == []
         assert _unsafe(message) == []
+        assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: boom done"
+        assert message.endswith("RuntimeError: boom done")
 
     def test_every_control_is_gone_from_a_skipped_entitys_warning(
         self, caplog: pytest.LogCaptureFixture
@@ -1186,8 +1193,8 @@ class TestMessagesCarryNoControlCharacters:
             )
         assert inv.producers[0].notes == _skip_note(2, "view 'main.v_stale' (OperationalError)")
         (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
-        assert "no such table: main.evil tbl" in message
         assert _unsafe(message) == []
+        assert "no such table: main.evil tbl" in message
 
     def test_every_control_is_gone_from_the_ranking_warning(
         self, caplog: pytest.LogCaptureFixture
@@ -1199,8 +1206,8 @@ class TestMessagesCarryNoControlCharacters:
                 _RowsDB(_three_rows()), llm=_Ranker(_raise(exc))  # type: ignore[arg-type]
             )
         (message,) = [r.getMessage() for r in _discovery_warnings(caplog)]
-        assert message.endswith("RuntimeError: gateway said a b")
         assert _unsafe(message) == []
+        assert message.endswith("RuntimeError: gateway said a b")
 
     @pytest.mark.parametrize(
         "ch", NON_SPACE_CONTROLS, ids=_control_ids(NON_SPACE_CONTROLS)
@@ -1208,11 +1215,12 @@ class TestMessagesCarryNoControlCharacters:
     def test_a_control_inside_a_secret_does_not_cut_the_masking_short(
         self, ch: str, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """The scrub runs AFTER redaction. ``redact_secrets`` reads an unquoted
+        """Redaction runs BEFORE the scrub. ``redact_secrets`` reads an unquoted
         value as a run of non-whitespace, and these controls are not whitespace to
         it, so ``password=head<ESC>hunter2`` is one value and is masked whole.
         Scrubbing first would turn the control into a space, end the value there,
-        and print ``hunter2`` (measured Session 269, before writing the fix)."""
+        and print ``hunter2`` (measured Session 269). It also runs AFTER: see
+        ``test_a_control_between_a_secret_key_and_its_separator_hides_nothing``."""
         exc = RuntimeError(f"driver said password=head{ch}{SECRET} tail")
         with caplog.at_level(logging.WARNING, logger=DISCOVERY_LOGGER):
             inv = probe_information_schema(
@@ -1223,19 +1231,89 @@ class TestMessagesCarryNoControlCharacters:
         assert SECRET not in notes
         assert SECRET not in caplog.text
 
+    @pytest.mark.parametrize("ch", CONTROLS, ids=_control_ids(CONTROLS))
+    @pytest.mark.parametrize(
+        ("shape", "masked"),
+        [
+            ("password{ch}={s}", "password =***"),
+            ("DB_PASSWORD{ch}: {s}", "DB_PASSWORD : ***"),
+            ('token"{ch}={s}', 'token" =***'),
+        ],
+        ids=["equals", "colon-after-a-prefixed-key", "quoted-key"],
+    )
+    def test_a_control_between_a_secret_key_and_its_separator_hides_nothing(
+        self, ch: str, shape: str, masked: str
+    ) -> None:
+        """Redaction also runs AFTER the scrub. A control between a key and its
+        separator is not whitespace to ``redact_secrets`` (for the 55 that are not),
+        so it hides the key and the secret is printed; only the scrub's space lets
+        the masker see ``password =hunter2`` (measured Session 269: 55 of 65 leaked
+        with a single pass, none with the second). The 10 whitespace controls were
+        already masked and still are. Each shape's output is the same for all 65."""
+        text = shape.format(ch=ch, s=SECRET)
+        inv = probe_information_schema(
+            _RaisingDB(RuntimeError(f"driver said {text} tail"))  # type: ignore[arg-type]
+        )
+        assert inv.producers[0].notes == (
+            f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: driver said {masked} tail"
+        )
+
+    @pytest.mark.parametrize(
+        ("message", "cleaned"),
+        [
+            ("\x1b[2Jfoo", "[2Jfoo"),
+            ("foo\x1b", "foo"),
+            ("\x1b", ""),
+            ("\x1b\x07\x9b", ""),
+            ("x" * 5000 + "\x1b" + "y", "x" * 5000 + " y"),
+            ("a\n\x1bb", "a b"),
+        ],
+        ids=[
+            "first",
+            "last",
+            "only-one",
+            "only-controls",
+            "after-a-long-prefix",
+            "after-a-newline",
+        ],
+    )
+    def test_a_control_is_replaced_wherever_it_sits(self, message: str, cleaned: str) -> None:
+        """Every other test puts the control between printable text, in a short
+        message. A scrub keyed to a position or a length (a leading or trailing
+        ``strip``, a cut-off, a ``translate`` that misses an edge) survived those."""
+        inv = probe_information_schema(_RaisingDB(RuntimeError(message)))  # type: ignore[arg-type]
+        assert _unsafe(inv.producers[0].notes or "") == []
+        assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: {cleaned}"
+
     @pytest.mark.parametrize(
         "text",
         [
             "no such table: main.sinistres_é_ÿ_Ā_日本語_🚗",
             "".join(map(chr, range(0xA1, 0xC0))),
             "".join(map(chr, range(0x21, 0x7F))),
+            "main.می\u200cخواهم",  # a zero-width non-joiner: Persian needs it (Cf)
+            "a\u200eb\ufeffc",  # an LRM and a BOM (Cf): left, on purpose
+            "main.e\u0301cole",  # a combining acute accent (Mn)
+            "main.a\ufffdb",  # a literal U+FFFD, which is what a lone surrogate becomes
+            "main.\U0001d49c",  # a letter outside the BMP
         ],
-        ids=["accents-cjk-emoji", "latin1-above-the-c1-block", "printable-ascii"],
+        ids=[
+            "accents-cjk-emoji",
+            "latin1-above-the-c1-block",
+            "printable-ascii",
+            "zero-width-non-joiner",
+            "bidi-mark-and-bom",
+            "combining-accent",
+            "replacement-character",
+            "astral-letter",
+        ],
     )
     def test_printable_text_is_left_alone(self, text: str) -> None:
         """The scrub must not eat what an operator needs to read. U+00A0 is left out
         of the second case on purpose: it is whitespace, which the flatten has
-        always collapsed."""
+        always collapsed. The Cf, Mn and U+FFFD cases pin the decision that only
+        ``Cc`` is scrubbed: a ``Cf``-wide or ``isprintable``-based scrub would split
+        Persian and emoji sequences."""
         inv = probe_information_schema(_RaisingDB(RuntimeError(text)))  # type: ignore[arg-type]
         assert inv.producers[0].notes == f"{PROBE_FAILED_NOTE_PREFIX}: RuntimeError: {text}"
 

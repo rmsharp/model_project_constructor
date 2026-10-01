@@ -910,8 +910,9 @@ def _unsafe(text: str) -> list[str]:
     )
 
 
-#: The text of the Session 267 reproduction: a terminal-title sequence and a
-#: colour code, each opened by ESC, inside an identifier.
+#: A name matching the Session 267 measurement (2 ESC and 1 BEL; that record does
+#: not keep the text): a terminal-title sequence and a colour code, each opened by
+#: ESC, inside an identifier.
 ESCAPE_NAME = "evil\x1b]0;PWNED-TITLE\x07\x1b[31mred"
 
 

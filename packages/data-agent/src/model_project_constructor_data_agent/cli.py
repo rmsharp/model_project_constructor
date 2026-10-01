@@ -260,7 +260,11 @@ def discover(
     # longer raises for either, so without this a missing API key would turn
     # from exit 1 into exit 0, and ``discover ... && next-step`` could not tell
     # an empty or unranked inventory from a good one. The probe sets ``notes``
-    # only when it degraded; the note is safe to echo — it is in the file.
+    # only when it degraded. The note is safe to echo: echoing adds no
+    # disclosure beyond the file, and its only free text is ``_safe_message``'s
+    # output (secrets masked best-effort, control characters replaced by a
+    # space — Session 269) and ``repr``-quoted names, so it cannot put a
+    # terminal control code on the screen.
     #
     # Session 265 added a PARTIAL inventory: tables or views the database could
     # not reflect were skipped. It also exits 1, unless ``--allow-skipped``
