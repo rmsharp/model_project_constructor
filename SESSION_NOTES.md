@@ -94,16 +94,159 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 266 Did
-**Deliverable:** **the tenth trim of `SESSION_NOTES.md`** — the handoff's first ask: the file passed
-the 196,608 B trigger at Session 265's close-out (198,514 B). Chosen by the operator at Phase 1 from
-a two-step picker (area: ledger; item: the trim). (IN PROGRESS)
-**Started:** 2026-09-26
-**Status:** Session claimed. Work beginning. The operator also gave the go-ahead to restore Session
-262's missing record heading first, as its own commit before the trim (the trim commit itself carries
-no record edit).
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **the tenth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 257 → 249 (nine
+records, 1,447 lines, a pure byte slice) are in
+[`docs/architecture-history/SESSION_NOTES-S257-through-S249.md`](docs/architecture-history/SESSION_NOTES-S257-through-S249.md)
+(1,498 lines) beside its proof. The live file landed at 91,593 B and keeps eight non-stub records;
+the front-matter table gained row 10, and the two bequests retired. The proof adds **no** assertion
+(ruling F) and ships 109 mutants. Chosen by the operator at Phase 1 from a two-step picker (area:
+ledger; item: the trim).
+
+**Started / completed:** 2026-09-26 → 2026-09-30 (UTC; the session spanned a multi-day gap with no
+intervening commits, confirmed before resuming). **Commits: seven** — `fb3db59` (claim, alone),
+`b418244` (a read-budget guard fix the trim's own claim state needed), `39b313d` (restoring Session
+262's record heading, operator go-ahead), `ac366ae` (rewording one quotation in Session 258's record
+so the cut cannot defeat the R-series proof), `49d23b7` (the trim, no record edit, **eight files**),
+`475ba1d` (two guard-design items the review found, four learnings), and this close-out. Each carries
+its own `CHANGELOG.md` entry. **Pushed at close-out on the operator's ruling.**
+
+#### Two defects fixed before the trim could land
+
+1. **The read-budget guard's own claim state was red** (`b418244`). Mutant M08 (`satisfiable`'s sole
+   catcher) has now been repaired five times across four sessions; this cut's claim state put the
+   pad's lines inside the 672-line page instead of beyond it, so the head's bytes rose, the page fell
+   into the reduced regime and `check_k_lines` co-fired. Fixed by landing the pad at the first line
+   boundary at or beyond both the K+1 record and the page's last line.
+2. **A quotation would have defeated the R-series proof** (`ac366ae`). Its oldest-record mutant finds
+   the last heading with `rfind("### What Session ")`, which matches the LAST occurrence of that text
+   anywhere. After this cut, that was a quotation inside Session 258's retained record, not a heading,
+   so `--self-test` would have reported M43 survived. Reworded the one quotation (10 B shorter,
+   meaning unchanged) rather than anchoring the proof, per the operator's ruling.
+
+#### The cut, and the ledger
+
+The byte rule fired at 199,275 B (ac366ae). Keeping Session 257 lands at 98,882 B, 578 B over the
+98,304 B stop, so the fewest-records rule cuts at 257 → 249: nine headings, including one abandoned
+claim stub (S251), new for this lineage and harmless (L11's floor reads the retained side alone).
+Front matter 7,839 B → 7,569 B: row 9's `this commit` resolved to its shard's add-commit `9342637`;
+row 10 composed from the artifacts; the two bequests (never resurrect the rejected `L14`; publish a
+sweep, never repeat it) retired into a three-line paragraph, both instructions now in `CLAUDE.md`.
+The shard was probed: an explicit whole-file `Read` measures **42,378 tokens**; a default `Read`
+returns an announced partial view, lines 1-751 of 1,499.
+
+#### The proof: carried forward, one new mutant, no new assertion
+
+`L0`–`L14` are AST-identical to the ninth proof's except `self_test`; the per-arm coverage (68 arms,
+48 with a sole catcher) is identical to the ninth's, arm for arm. `M109` is new, for the one new kind
+of front-matter edit (resolving row 9's hash) — it is caught by four `L2` arms together and isolates
+none, which the header now says correctly after the review. `M58`'s floor is now derived (non-stub
+count + 1 = 9), because a typed 7 would have survived this cut's geometry (9 kept, 8 non-stub, where
+the ninth kept 8 of which 6 were non-stub). 23 prose edits across `CLAUDE.md`, `README.md`,
+`BACKLOG.md` and `PROJECT_CONVENTIONS.md`; one README phrase reworded so the census guard's
+30-character scan window stays clear at "ten".
+
+#### The review gated the commit
+
+Built with a five-analyst read-only mapping workflow, then an adversarial review (five lenses, a
+skeptic per finding): **20 findings, 11 pre-existing, 10 verified (3 confirmed, 6 partly, 1
+refuted), 67 clean checks.** One blocker — the generated header claimed M109 "isolates" an arm that
+four arms actually catch — and four more defects were fixed before the trim commit: a wrong ordinal
+("seventh" for "eleventh"), a stale M58 label, two carried-forward sentences the generator had
+dropped, and six `REACH`-pinned strings whose neighbouring text (which stated true facts about this
+cut) could be deleted or falsified with every proof and guard green. Each hole was re-tested after
+the fix and now goes red (verified with nine targeted perturbations, each RED). Two defects were
+filed rather than fixed, both operator calls, in `BACKLOG.md`: a later table row's hash and shape are
+guarded only in form, not against git; and the read-budget guard cannot model "claim, then a wide
+close-out" starting from a close-out state, which bounds how large this very record may be.
+
+#### Verification
+
+- All 12 proofs green in both modes; both guards 82/82; full suite 1,587 passed, 9 skipped; `ruff`
+  and `uv run mypy` (68 files) clean. Re-run in full after the multi-day gap, with no drift from
+  `origin` in between (`git log @{u}..HEAD` and `HEAD..@{u}` both checked before resuming).
+- Sweep, published as a dated fact (the bequest's intent, since `L15` stays unbuilt under ruling F):
+  at `49d23b7`, `git grep -l 'SESSION_NOTES-[A-Za-z0-9-]*\.md'` returns **32** files (ten shards, ten
+  proofs, two collapse proofs, four prose files, this ledger, `PROJECT_LEARNINGS.md`, two planning
+  documents, the census guard); the broad `SESSION_NOTES-` form returns **34**, the extra two being
+  `.github/workflows/ci.yml` and `docs/architecture-history/evolution-page-plan.md`.
+- Pushed: `git push origin master` after this close-out; parity checked against local `HEAD`.
+
+### Session 265 Handoff Evaluation (by Session 266)
+
+**Score: 9/10.**
+- **+** What's-next #1 was exact and complete: claim, trim, close out, as its own session. Every
+  gotcha that applied did: run both guards before committing, the shell is zsh, real-dialect checks.
+- **+** Its size figure (198,514 B) was the fact that triggered this session's deliverable, and it
+  was still accurate at this session's Orient.
+- **+** What's-next #2 (restore Session 262's heading, with the operator's go-ahead, before the trim)
+  was exactly right and is what this session did first.
+- **−** It did not anticipate that the trim's own claim state would turn the read-budget guard red
+  (`b418244`) or that the cut would defeat the R-series proof (`ac366ae`) — but neither was knowable
+  without building the trim, which was not its job.
+- **ROI: high.** The handoff's ordering (restore the heading, then trim) saved a round trip.
+
+### Session 266 Self-Assessment
+
+**Score: 8/10.**
+- **+** Mapped before building: a five-analyst workflow found the R-series hazard and the M08 defect
+  before any trim file was written, and built the mechanics, prose and proof as checkable scripts
+  rather than hand edits.
+- **+** Adversarially reviewed before committing, with every finding re-verified by a separate
+  skeptic, and every confirmed or partly-confirmed defect fixed and re-tested with a red-then-green
+  perturbation, not just re-read.
+- **+** Measured every figure this record cites (sizes, hashes, token counts, mutant counts) from a
+  command, several after a multi-day gap, rather than trusting what an earlier tool call had said.
+- **−** Two defects the review found were in generated text I had approved without re-checking against
+  the predecessor proof: the false "isolates" claim and the stale ordinal. A closer read of the
+  generator's templates before the first build would have caught both without a review.
+- **−** The read-budget guard's close-out/claim coupling (now filed) means this very record's size is
+  bounded by a budget nothing yet checks mechanically; I am sizing it by the review's measurement
+  rather than a guard.
+- **Decay term:** none removed this session; the front matter grew by one row (122 B) as the rule
+  requires, and the bequest paragraph shrank from 8 lines to 3.
+
+**What's next.**
+1. **The two guard-design items this review filed are operator calls**, both in `BACKLOG.md`: a later
+   row's hash is unguarded against git, and the read-budget guard cannot model a close-out followed by
+   a wide claim from a close-out state. Neither blocks anything; both recur at the next trim.
+2. **Size this record's successor conservatively.** The review measured red windows for a close-out
+   near 19.7–22 KB at 45 B/line with no stub above it; this record targets well under that, and the
+   coupled K=2 budget (front matter + two newest records) means Session 267's own record shares the
+   same ceiling. Run `uv run pytest tests/test_read_budget.py --no-cov` before committing Session
+   267's close-out, not just its claim.
+3. **Two rulings are still owed**, unchanged from Session 265's handoff: the `--request-context` item
+   (`BACKLOG.md:369`, reject or scrub) and `--db-url` option (c) (`BACKLOG.md:330`).
+4. **Observed, not filed, carried from Session 265:** `_safe_message` passes terminal control
+   characters from a driver's message to stderr; a duck-typed `db` can put an unescaped `entity_kind`
+   in a skip note; `discover --db-url sqlite:///<typo>` creates an empty file and exits 0; `cli.py`'s
+   module docstring says only `anthropic` exists.
+
+**Key files** (read off `grep -n` at this close-out).
+- `docs/architecture-history/SESSION_NOTES-S257-through-S249.md` and its `.verify.sh` — read the
+  proof's header first.
+- `tests/test_read_budget.py:684` `_m08_the_retention_rule_has_no_compliant_cut`; `:995`
+  `_successor_wide_closeout_then_claim`.
+- `docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh:1091,1158` the `rfind`
+  hazard; `SESSION_NOTES.md:309` Session 264's record still quotes the literal.
+- `tests/test_session_notes_census.py:422` the hash slot; `:245,741` the two stale docstrings the
+  review found.
+- `BACKLOG.md:369` `--request-context`; `:330` `--db-url`; `:501` the quotation item; `:525` the
+  table-rows item; `:552` the wide-close-out item.
+- `PROJECT_LEARNINGS.md` #287–#290.
+
+**Gotchas.**
+1. **A trim's own claim state can turn the read-budget guard red before any record is written** — run
+   it at the claim commit, not only at close-out.
+2. **Build a trim's shard, prose and proof as scripts against a scratch clone**, verify the whole
+   gate there, then apply the identical scripts to the real tree and verify again. Hand-editing a
+   write-once file risks a defect no amend can repair.
+3. **A proof's header is prose and is read by nothing unless `REACH` pins it through the end of the
+   sentence** — a fragment-level pin lets the neighbouring fact be deleted or falsified.
+4. **`rfind` on a heading's literal text finds its last occurrence anywhere**, including inside a
+   quotation. Simulate the post-cut tree before trusting a `--self-test` run on the pre-cut one.
+5. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every
+   commit that touches `SESSION_NOTES.md` or the four prose files; both proof modes over
+   `docs/architecture-history/*.verify.sh` before any trim commit.
 
 ### What Session 265 Did
 **Deliverable:** **one unreflectable view no longer empties the whole inventory — COMPLETE**, closing
