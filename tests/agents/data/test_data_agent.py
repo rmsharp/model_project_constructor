@@ -37,6 +37,7 @@ from tests.hostile_text import (
     SECRET,
     SECRET_NAME,
     database_with_a_dangling_view,
+    leaked_run,
     unsafe,
 )
 
@@ -1162,3 +1163,40 @@ def test_the_whole_serialized_report_holds_no_control_character_or_secret(
     assert any("no such table" in s for s in strings)
     assert [s for s in strings if unsafe(s.replace("\n", " "))] == []
     assert [s for s in strings if SECRET in s] == []
+
+
+@pytest.mark.parametrize(
+    ("url", "password"),
+    [
+        ("fakeecho://bob:P@ssw0rdXYZ@127.0.0.1:1/claims", "P@ssw0rdXYZ"),
+        ("fakeecho//bob:hunter2@127.0.0.1:1/claims", "hunter2"),
+        ("fakeecho:///bob:Hn4rT8qPz@127.0.0.1:1/claims", "Hn4rT8qPz"),
+    ],
+    ids=["unencoded-at", "mistyped-separator", "three-slashes"],
+)
+def test_the_unreachable_database_concern_carries_no_part_of_a_password_in_the_address(
+    url: str,
+    password: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Session 271: the concern is written into the report, the checkpoint and a committed
+    project's markdown, so a password that reached it was published. ``agent.py`` cleans the
+    text it is handed and leaves the redaction to ``connect``, so this is held where the text is
+    built, through the whole agent. The host stays: the operator needs it."""
+    report = _run_with(
+        ReadOnlyDB(url),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
+    assert "127.0.0.1" in concern
+    assert leaked_run(password, concern) is None
+    assert leaked_run(password, report.model_dump_json()) is None

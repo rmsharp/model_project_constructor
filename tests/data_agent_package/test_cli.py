@@ -35,6 +35,7 @@ from tests.hostile_text import (
     ESCAPING_URL,
     EVERY_CONTROL,
     SECRET,
+    leaked_run,
 )
 
 FIXTURE_REQUEST = (
@@ -1256,3 +1257,74 @@ def test_cli_leaves_dialect_unset_without_a_db(
 
     assert result.exit_code == 0, result.output
     assert recorded["sql_dialect"] is None
+
+
+#: (id, address, the password the operator meant). The two shapes ``BACKLOG.md`` filed at Session
+#: 270 and the route each takes: ``fakeecho`` parses and reaches the simulated driver, which echoes
+#: every field SQLAlchemy read; the others fail inside SQLAlchemy itself, which is real.
+URL_BORNE_SECRETS = [
+    ("unencoded-at", "fakeecho://bob:P@ssw0rdXYZ@127.0.0.1:1/claims", "P@ssw0rdXYZ"),
+    ("at-and-colon", "fakeecho://bob:P@ss:123xyz@127.0.0.1:1/claims", "P@ss:123xyz"),
+    ("mistyped-separator", "fakeecho//bob:hunter2@127.0.0.1:1/claims", "hunter2"),
+    ("no-scheme", "bob:hunter2@127.0.0.1:1/claims", "hunter2"),
+    ("three-slashes", "fakeecho:///bob:Hn4rT8qPz@127.0.0.1:1/claims", "Hn4rT8qPz"),
+]
+URL_BORNE_IDS = [shape[0] for shape in URL_BORNE_SECRETS]
+
+
+@pytest.mark.parametrize(("_id", "db_url", "password"), URL_BORNE_SECRETS, ids=URL_BORNE_IDS)
+def test_cli_discover_a_password_in_the_address_stays_out_of_the_error_line(
+    runner: CliRunner, tmp_path: Path, _id: str, db_url: str, password: str
+) -> None:
+    """Session 271 (``BACKLOG.md``: *A password can still reach the connect error, the report
+    and a warning*). ``discover`` prints the text of ``ReadOnlyDB.connect``'s error, and the
+    address in it was masked only to the first ``@``, or not at all when it did not parse. One
+    line, no part of the password, and the host the operator needs still named."""
+    result = runner.invoke(
+        app, ["discover", "--db-url", db_url, "--output", str(tmp_path / "inv.json")]
+    )
+
+    assert result.exit_code == 1, result.output
+    (line,) = result.stderr.splitlines()
+    assert line.startswith("error: cannot connect to ")
+    assert "127.0.0.1" in line
+    assert leaked_run(password, line) is None
+
+
+@pytest.mark.parametrize(("_id", "db_url", "password"), URL_BORNE_SECRETS, ids=URL_BORNE_IDS)
+def test_cli_run_a_password_in_the_address_stays_out_of_the_report_and_the_warning(
+    runner: CliRunner,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    _id: str,
+    db_url: str,
+    password: str,
+) -> None:
+    """The same address through ``run``: the unreachable-database concern the report writes
+    (and so the checkpoint and the generated project's ``reports/data_report.*``), and the
+    WARNING ``sql_dialect_from_url`` logs when the address does not parse."""
+    out = tmp_path / "report.json"
+    with caplog.at_level(logging.WARNING):
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--request",
+                str(FIXTURE_REQUEST),
+                "--output",
+                str(out),
+                "--fake-llm",
+                "--db-url",
+                db_url,
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    report = DataReport.model_validate(json.loads(out.read_text()))
+    (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
+    assert "127.0.0.1" in concern
+    assert leaked_run(password, concern) is None
+    assert leaked_run(password, out.read_text()) is None
+    assert leaked_run(password, caplog.text) is None
+    assert leaked_run(password, result.output) is None
