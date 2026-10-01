@@ -241,7 +241,9 @@ it is `null` on a healthy run.
   or reflected text — a name, a column type — that cannot be written as
   UTF-8): `entries` is empty and `notes` begins
   `information_schema probe failed:` followed by the error's type and message,
-  on one line, with any URL password masked (best-effort).
+  on one line, with any URL password masked (best-effort) and every control
+  character (ESC, BEL, NUL, DEL and the C1 controls) replaced by a space, so the
+  message cannot carry a terminal control code to whatever prints the note.
 - **`--rank-with-llm` was requested and ranking fails** (no credentials, a
   malformed or truncated reply, a reply that names none of the discovered
   tables exactly, a score that is not a finite number from 0.0 to 1.0 on a

@@ -53,7 +53,7 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
-| Database text can put terminal control codes on the operator's screen | An error from the database, with escape characters in an object's name, is printed to stderr raw, so it can change a terminal's title or colours. The skipped-table note is safe (it is quoted); the failed-probe note, which is also saved in the file, is not. | **Small** — scrub control characters in `_safe_message`. |
+| Seven more places can still put database text on the operator's screen or in a report | Session 269 closed the schema probe's three messages (control characters in a table name no longer reach the terminal). Seven other routes remain: a failed connection (it ends in a traceback), the "database unreachable" and "SQL error" notes the `run` command copies into its report and the website files, an unparseable `--db-url`, warnings SQLAlchemy prints itself, the table and column names saved in the inventory, and the output path. **One of them is a secrets matter, not a terminal one:** a database's error message is copied into the report unmasked. | **Small** for the first three, one shared helper and one session. **Operator call** on the saved names. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
 | The tests need Click 8.2 and nothing says so | Under Click 8.1, 18 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
@@ -414,19 +414,63 @@ built (hex for `bytes` and `memoryview`), or build it, try the dump, and on fail
 as `ERROR` with the reason, the way the existing `db.execute` failure path does. **Small, but a
 choice between the two, so an operator call.**
 
-### Database text can put terminal control codes on the operator's screen
+### Seven more routes put database or driver text on a terminal or in a report unscrubbed
 
-**Found by Session 267's review; reproduced; not fixed.** `_safe_message`
-(`discovery.py:171-194`) flattens whitespace with `str.split()`, which removes only whitespace, so
-ESC, BEL, NUL, DEL and the C1 controls (U+0080 to U+009F, except U+0085) survive into the probe's
-WARNING. Measured: a SQLite view over a table whose name held an ESC-introduced terminal-title
-sequence and a colour code made `discover` print both to stderr raw (two ESC and one BEL in the
-captured bytes), exit 1. For the probe-failed note the raw ESC is also in the persisted `notes`
-(JSON-escaped in the file, a real ESC again once loaded), so any consumer that prints it inherits the
-problem; the skipped-entity note is `repr`-quoted and is safe. **Sketch:** replace C0 and C1 controls
-with a space before the whitespace flatten (`[\x00-\x1f\x7f-\x9f]`), and add a regression test that
-neither the WARNING nor the note carries one. **Small**; `_safe_message` already scrubs rather than
-rejects.
+**Found by Session 269's review of the fix that closed this item's predecessor; each reproduced by a
+lens and again by two skeptics; not fixed.** Session 269 made `_safe_message` (`discovery.py`) replace
+every control character (Unicode `Cc`: ESC, BEL, NUL, DEL and the C1 controls) with a space, which
+covers the probe's three message sites: the failed-probe note, a skipped entity's WARNING and the
+ranking WARNING. Its headline said *database text cannot put terminal control codes on stderr*; by the
+routes below it still can. **What each was reproduced on:** a real SQLite file where the route allows
+it, otherwise a **simulated** driver (a fake SQLAlchemy dialect whose connect error carries ESC in the
+way PostgreSQL echoes a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
+Oracle or SQL Server.
+
+1. **`discover` when the connection fails** (`db.py:267-270`, called at `cli.py:238` outside any
+   `try`). `DBConnectionError` is built from `redact_secrets(str(e))`, which masks secrets and
+   replaces nothing, and it escapes as a Rich traceback: **4 to 6 ESC on stderr** (Rich drops BEL and
+   keeps ESC), exit 1, no file. The URL half is `repr`-quoted and safe. **Scrubbing `db.py:269` alone
+   does not fix it:** a patched copy still printed 4 ESC on 2 lines, from the chained `__cause__`
+   exceptions. The fix is for `discover` to catch `DBConnectionError` and print one clean error line.
+2. **`run`'s "database unreachable" concern** (`agent.py:147`). It flattens with
+   `' '.join(str(db_error).split())`, the idiom `_safe_message` just replaced, so the controls survive
+   into `data_quality_concerns`. stderr is clean and the report JSON escapes them, but
+   `templates.py:767-768` writes them raw into the website's committed `reports/data_report.md`
+   (2 ESC and 1 BEL measured).
+3. **`nodes.py:140` and `nodes.py:231`** (`result_summary=f"execution error: {e}"`,
+   `caveats=[f"baseline SQL execution error: {e}"]`). The whole driver exception, **neither redacted,
+   nor flattened, nor scrubbed.** Measured on real SQLite (a table named with ESC whose `sqlite_master`
+   entry was corrupted, so every statement fails with `malformed database schema (<name>)`): raw ESC in
+   `result_summary` and in the baseline caveats, which `templates.py:533` writes into
+   `analysis/06_implementation_plan.qmd`; `result_summary` also reaches the summarise prompt. **The
+   more serious half is not about terminals:** a secret-shaped string such as `PWD=hunter2` in a driver
+   message lands in the report unmasked here, because nothing on this path calls `redact_secrets`.
+4. **An unparseable `--db-url`** (`db.py:223`). `redact_db_url(url)` goes through `%s` and its regex
+   fallback replaces nothing: 1 ESC and 1 BEL on stderr from the operator's own argument, exit 0.
+   **Nit.**
+5. **SQLAlchemy's own reflection warnings** ("Did not recognize type '%s' of column '%s'" in the
+   PostgreSQL, MySQL, Oracle and SQL Server dialects; SQLite's foreign-key-signature warning) go
+   through Python's `warnings`, not the logger, so nothing in this package touches them. Reproduced end
+   to end on SQLite (a case-mismatched foreign key on a table with a control-character name: 2 ESC and
+   1 BEL, exit 0); the unrecognised-type warning only at the `PGDialect` level.
+6. **The persisted inventory** carries table, namespace and column names and `relevance_reason`
+   verbatim. The file is safe to `cat` (`json.dumps` escapes them), but a consumer that loads it and
+   prints them gets live ESC and BEL (6 ESC and 3 BEL measured). Nothing in the repository prints
+   them, and no test pins `ensure_ascii`, so a later `ensure_ascii=False` would write raw DEL and C1
+   characters. **A design call:** scrub names (changing identifiers a consumer joins on) or record them
+   faithfully and say so.
+7. **The operator's own `--output` path** is echoed raw by `cli.py:165,255,298,310`. Not database text.
+   **Nit**, arguably not a defect.
+
+Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
+zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
+and control codes this was about, and scrubbing them would split Persian and emoji sequences. Whether a
+given terminal reorders text on them was not measured.
+
+**Sketch:** one helper beside `redact_secrets` in `db.py` that does what `_safe_message` does (redact,
+scrub, redact: the order is in its docstring and tested both ways), used by `_safe_message`,
+`agent.py`, `nodes.py` and `discover`'s connect error. Routes 1 to 3 are one session. Route 5 needs a
+`warnings` filter or `catch_warnings` around the probe. Routes 6 and 7 need a ruling, not code.
 
 ### Only `typer`'s dependency floor has ever been measured — `langgraph>=0.2` cannot start the intake CLI
 
