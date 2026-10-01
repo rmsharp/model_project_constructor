@@ -31,7 +31,8 @@ class DataAgentState(TypedDict, total=False):
     quality_checks: list[list[QualityCheck]]
     db_executed: bool
     # Set only on the connect-failure branch of EXECUTE_QC, carrying the
-    # (password-redacted) DBConnectionError text. Absent when no --db-url was
+    # DBConnectionError text as ReadOnlyDB.connect built it (secrets masked
+    # best-effort, control characters replaced, one line). Absent when no --db-url was
     # supplied, so a missing key means "no database was configured" rather than
     # "the database was fine". Nothing mechanical catches this key being
     # dropped -- langgraph silently discards a node return key that is not

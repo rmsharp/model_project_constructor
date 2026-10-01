@@ -18,9 +18,12 @@ Flow (from architecture-plan.md §10.2)::
 returns ``db_executed=False`` and leaves every ``QualityCheck`` at
 ``execution_status="NOT_EXECUTED"``. When a ``--db-url`` was supplied and the
 connection failed, it also returns ``db_error`` carrying the
-(password-redacted) :class:`DBConnectionError` text, which ``agent.py``
-appends to the report's ``data_quality_concerns`` so the operator can tell a
-bad URL from a database that is genuinely down. ``db_error`` is absent when no
+:class:`DBConnectionError` text, which ``ReadOnlyDB.connect`` built through
+``safe_message`` (secrets masked best-effort, every control character replaced
+by a space, one line) and which ``agent.py`` appends to the report's
+``data_quality_concerns``, replacing control characters again, so the operator
+can tell a bad URL from a database that is genuinely down. It is stored as
+``str(e)``, not cleaned again here, on purpose. ``db_error`` is absent when no
 ``--db-url`` was given, because there is no error to report.
 """
 

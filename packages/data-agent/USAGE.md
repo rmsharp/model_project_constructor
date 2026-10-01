@@ -211,8 +211,12 @@ model-data-agent discover \
 
 The command writes a JSON file conforming to `DataSourceInventory` and
 exits 0 with a one-line confirmation (`wrote inventory.json (N entries)`).
-(It exits non-zero and writes nothing when the database cannot be connected to
-or the LLM client cannot be constructed. It exits 2 and writes nothing, without
+(When the database cannot be connected to it prints one line on stderr,
+`error: cannot connect to '<url, password masked>': <cause>`, with no traceback,
+exits 1 and writes nothing; the cause is on one line, with any secret in it masked
+(best-effort) and every control character replaced by a space. It exits non-zero
+and writes nothing when the LLM client cannot be constructed. It exits 2 and writes
+nothing, without
 connecting, when `--request-context` cannot be written as UTF-8 — on POSIX that is
 a stray byte that is not valid UTF-8 in the shell, which arrives as a surrogate
 code point; rejected, never scrubbed.)
@@ -477,9 +481,14 @@ curated-producer example.
   this propagates through the outer boundary and becomes `EXECUTION_FAILED`.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
-  error text — with any URL password masked — to
+  error text — with any URL password masked (best-effort), on one line and with
+  every control character replaced by a space — to
   `DataReport.data_quality_concerns`, so the operator can tell a malformed URL
-  from a database that is down. The report status stays `COMPLETE`.
+  from a database that is down. The report status stays `COMPLETE`. The same
+  treatment is applied to the driver error a quality check or the baseline query
+  raises (`QualityCheck.result_summary`, `BaselineSnapshot.caveats`). A library
+  caller who lets `DBConnectionError` escape still prints its chained `__cause__`,
+  the raw driver exception, in a traceback.
 - `probe_information_schema()` lets no `Exception` raised by the `db` or the
   `llm` escape: a table or view the database cannot reflect is skipped and the
   rest are returned, any other reflection failure returns an empty inventory, a
