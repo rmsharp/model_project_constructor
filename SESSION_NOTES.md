@@ -94,18 +94,142 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 269 Did
-**Deliverable:** **database text can no longer put terminal control codes on the operator's screen** —
-`BACKLOG.md`'s item of that name (`:417`): `_safe_message` (`discovery.py:171-194`) flattens whitespace
-with `str.split()`, which removes only whitespace, so ESC, BEL, NUL, DEL and the C1 controls survive into
-the probe's WARNING and into the persisted `notes`. The filed sketch is a C0/C1 scrub before the
-whitespace flatten plus a regression test; this session measures it before writing it. Chosen by the
-operator at Phase 1 from a two-step picker (area: small CLI fixes, no ruling needed; item: this one).
-(IN PROGRESS)
-**Started:** 2026-10-01
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **the schema probe's messages can no longer put terminal control codes on the operator's
+screen — COMPLETE**, closing `BACKLOG.md`'s item *"Database text can put terminal control codes on the
+operator's screen"*. `_safe_message` (`discovery.py:180`), the one function behind the probe's three
+message sites, now replaces every Unicode `Cc` character (ESC, BEL, NUL, DEL and the C1 controls: 65)
+with a space, in the order **redact, scrub, redact**. **The item's residue is filed as a new item**
+(`BACKLOG.md:417`): seven other routes by which database or driver text reaches a terminal or a report
+unscrubbed, one of them a secrets matter. Chosen by the operator at Phase 1 from a two-step picker (area:
+small CLI fixes, no ruling needed; item: this one). **Ruling (operator, by picker, Phase 3):** push at
+close-out.
+**Started / completed:** 2026-10-01. **Commits: five** — `9442af2` (claim, alone), `40b1c4a` (the fix),
+`fb8f89d` (what the review found), `5ad21fd` (docs: the item closed, its residue filed, learnings
+#298-300) and this close-out. Each carries its own `CHANGELOG.md` entry. **Pushed at close-out on the
+operator's ruling**; the push is recorded in the close-out's own ledger entry.
+
+#### What changed
+- `discovery.py:112` `_CONTROL_CHARACTERS`; `:180` `_safe_message`, body at `:225-226`; the docstrings of
+  `_safe_message` and `probe_information_schema` name the scrub. `cli.py:263` the "safe to echo" comment
+  now says what makes the note safe. `USAGE.md:244` the failed-probe note's description.
+- **336 new tests, 1,659 to 1,995 passed, 9 skipped, coverage 98.08%** (the same under
+  `GITHUB_ACTIONS=true`): `TestMessagesCarryNoControlCharacters` at `test_discovery.py:1127` (334) and two
+  in `test_cli.py:919,956`. CI-scope `ruff` and `uv run mypy` (68 files) clean.
+- `BACKLOG.md`: the item and its row replaced by the residue item (`:417`). `PROJECT_LEARNINGS.md`
+  #298-300; `CLAUDE.md` the count (300 learnings) and the file's size (346.7 KB).
+
+#### Measured first, then built
+- **The defect, on the real `model-data-agent discover`:** a SQLite view over a dropped table whose name
+  held a title sequence and a colour code gave **2 ESC and 1 BEL on stderr, exit 1**; after, **0 and 0,
+  exit 1**, the cause still readable. Repeated on the final code. The CLI's own echo is a second route:
+  Click strips a colour code (`ESC [ ... letter`) from a non-terminal stream and not a title sequence
+  (`ESC ] ... BEL`), so the failed-probe note carried an ESC to stderr.
+- **The order was not the filed sketch's to choose.** `redact_secrets` reads an unquoted secret as a run
+  of non-whitespace and 55 of the 65 are not whitespace to it, so scrubbing first printed the tail of
+  `password=abc<ESC>def`. I measured that, wrote "AFTER redaction, never before" — and **the review found
+  the opposite case**: a control between a key and its separator hides the key from the masker, so
+  scrubbing second printed `password =hunter2` for 55 of 65 controls. Neither order alone is complete;
+  redact, scrub, redact is (0 of 65 leak on three key shapes; the masker is idempotent, measured).
+- **Tests first, red against the old code** (58 of the first 127, plus both CLI tests), then **two mutation
+  passes: 29, then 39 of 39 killed**, the second adding the second redaction dropped, a leading or trailing
+  control skipped, a scrub bounded to the first 120 or 4,000 characters, an `isprintable()` scrub, and
+  classes widened to `Cf`, to U+200C and U+200D, to combining marks and to U+FFFD. Four mutants of the first
+  pass were equivalent in OUTPUT; the pattern-equality test now kills them anyway, by the pattern.
+
+#### The review
+A six-lens review of `40b1c4a` (scrub correctness; adjacent sites; test adequacy by mutation in an
+isolated worktree; truth of written claims plus stale docs; hostile input beyond `Cc`; CI parity and side
+effects): **54 agents, 24 findings, every one verified by two skeptics told to refute it: 6 confirmed, 18
+partly, 0 refuted; no blocker, 13 minor, 11 nit; 14 in scope, 10 adjacent; 82 clean checks.**
+- **It cleared the fix:** `uv.lock` untouched and `uv lock --check` clean; the decoupling job's shape
+  passes with the new `import re`; the regex equals exactly the 65 `Cc` code points on every local Python
+  3.9 to 3.14; the only code that parses a note uses `startswith`/`in` on constant prefixes; `repr` escapes
+  all 65, so the skipped-entity note is safe as claimed.
+- **It found a real defect in my design** (the order), fixed in `fb8f89d`; **gaps in my tests** (the
+  pattern itself unpinned; no control first, last or after a long prefix; "only `Cc`" pinned by one
+  incidental code point), fixed; **six overstated claims of mine** (the headline "database text cannot put
+  control codes on stderr"; "never before"; "bidi marks are not controls a terminal acts on", unmeasured; a
+  comment that a test held the pattern; "the text of the Session 267 reproduction"; the `cli.py` reason),
+  corrected by a ledger entry; and **seven adjacent routes**, filed with their measurements.
+- **Declined:** a shared `_unsafe` helper (per-file helpers are this package's convention), and README's
+  stale test counts (already filed as an operator call).
+
+### Session 268 Handoff Evaluation (by Session 269)
+
+**Score: 8/10.**
+- **+** `BACKLOG.md:417` was the exact line and the item carried a sketch, a measurement and its own
+  reproduction, so Phase 1 needed no rediscovery. Gotchas 3 (the `## 2026-10` heading) and 5 (run both
+  guards before a commit that touches the ledger files) were exactly right and were followed; the claim
+  commit was green. "Sizes are estimates, not measurements" was the right label.
+- **+** All three line numbers it gave for open items (`:417`, `:431`, `:464`) were correct when read.
+- **−** **What was wrong:** "one regex, a test, mutants" sized this as trivial, and the sketch carried a
+  hidden ordering dependency ("before the whitespace flatten" left open whether that was before or after
+  redaction). The regex was one line; the deliverable was a design decision, 336 tests and a seven-route
+  residue. It is the second session running in which the handoff's "small" meant "small to write".
+- **−** Its key files named nothing this deliverable touched except the BACKLOG line.
+- **ROI: high.**
+
+### Session 269 Self-Assessment
+
+**Score: 7/10.**
+- **+** Measured before writing: reproduced on the real console script, measured the redaction order
+  before choosing it, read the three call sites and the siblings (`agent.py:147`, `db.py`) at Research and
+  decided to defer them rather than widen the commit. Tests first, red; two mutation passes; the review in
+  proportion, and it found a defect in my own design.
+- **+** Caught two overstatements of mine (a "retitled the window" claim I had not measured) before the
+  first commit, and corrected the rest by a new ledger entry, not an edit.
+- **−** **I wrote an absolute ("never before") from a measurement that ran one way**, and put it in a
+  docstring, a ledger entry and a test docstring. Three lenses found the other direction (learning #298).
+- **−** **My headline was broader than my diff, for the third session running** (learning #299), and I
+  listed the sibling sites I had seen without measuring whether they reach a terminal: the review did, and
+  found seven routes, one of which (`nodes.py`, driver text copied into the report unredacted) matters more
+  than the one I fixed.
+- **−** The scrub's `Cf` question (bidirectional marks) was answered in the ledger by an unmeasured
+  sentence; the review corrected it.
+- **Decay term:** none removed. This record is growth; `BACKLOG.md` grew by 4,129 B (106,525 B to 110,654
+  B: one item and its row replaced by a longer one) and `PROJECT_LEARNINGS.md` by 2,785 B (three rows).
+
+**What's next** (sizes are estimates, not measurements; both predecessors' "small" understated the work).
+1. **Routes 1 to 3 of `BACKLOG.md:417`, as one session.** One helper beside `redact_secrets` in `db.py`
+   that does what `_safe_message` does (redact, scrub, redact), used by `_safe_message`, `agent.py:147`,
+   `nodes.py:140` and `:231`, and a `discover` that catches `DBConnectionError` at `cli.py:238` and prints
+   one clean line (scrubbing `db.py:269` alone leaves 4 ESC from the chained exceptions). **Route 3 is the
+   one worth doing first:** driver error text reaches `result_summary` and the baseline caveats with no
+   `redact_secrets` call, so a DSN a driver echoes lands in the report.
+2. **Two items still need no ruling:** the Click 8.2 declaration (`BACKLOG.md:508`; it touches `uv.lock`)
+   and the `langgraph` floor (`:475`, a measurement session of Session 268's shape).
+3. **Rulings owed to the operator, unchanged:** the `--db-url` option (c) (`BACKLOG.md:334`), one per
+   channel for the three channels (`:373`), the two guard-design calls, whether a CI job should install
+   the dependency minimums (`:475`); **and new:** routes 6 and 7 of `:417` (scrub the persisted names or
+   record them faithfully; the operator's own `--output` path).
+4. **Observed, not filed:** the root `methodology_dashboard.py` is v2.18.0 against canonical v2.19.0 (Phase
+   0 saw it; syncing rewrites a synced file, `bin/sync`'s job, and was not done). `ruff format --check`
+   would reformat both new test files; CI does not run it. And Session 268's list, unchanged: Typer below
+   0.26 and Click 9, an unescaped `entity_kind` in a skip note, `discover --db-url sqlite:///<typo>`
+   creating an empty file and exiting 0, `cli.py`'s module docstring naming only `anthropic`.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `discovery.py:112` `_CONTROL_CHARACTERS`, `:180-228` `_safe_message` (its docstring states the order and
+  its limits), the call sites at `:352`, `:365` and `:382`.
+- `tests/data_agent_package/test_discovery.py:1102-1127` `CONTROLS`, `NON_SPACE_CONTROLS`, `_unsafe` and the
+  class; `:1144` the pattern test, `:1244` the key-separator shapes, `:1280` the positions, `:1311` the
+  printable text. `test_cli.py:905-956` `_unsafe`, `ESCAPE_NAME` and the two CLI tests.
+- `BACKLOG.md:417` the residue item; `PROJECT_LEARNINGS.md` #298 to #300; `CHANGELOG.md` the S269
+  entries under `## 2026-10`.
+
+**Gotchas.**
+1. **`_safe_message` is redact, scrub, redact. Do not simplify it to one pass:** the mutants for scrub-first
+   and for the second redaction dropped are each caught by a different test, and both orders leak alone.
+2. **`test_discovery.py` imports the private `_CONTROL_CHARACTERS` on purpose**, to compare the code's own
+   pattern with the Unicode database; the pattern test is what pins "only `Cc`".
+3. **The routes in `BACKLOG.md:417` were reproduced on SQLite or on a simulated driver (a fake SQLAlchemy
+   dialect), never on a live PostgreSQL, MySQL, Oracle or SQL Server**; the item says which. Re-measure
+   before writing a fix that depends on a server's wording.
+4. **The harness is gone**: the mutation scripts, the repro database and the review's scratch files lived
+   in the session scratchpad. The mutant classes are described in the review's ledger entry.
+5. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every
+   commit that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`.
+6. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 268 Did
 **Deliverable:** **the `typer` floor is made true — COMPLETE**, closing `BACKLOG.md`'s item *"The
