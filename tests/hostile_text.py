@@ -22,6 +22,7 @@ from __future__ import annotations
 import sqlite3
 import unicodedata
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
@@ -95,6 +96,47 @@ registry.register("fakeesc", __name__, "EscapingDialect")
 ESCAPING_URL = "fakeesc:///claims"
 
 
+class EchoingDialect(SQLiteDialect_pysqlite):
+    """A dialect whose every connect fails with an error that echoes the URL it was given.
+
+    SIMULATED, like :class:`EscapingDialect`. psycopg 3 puts the host in its error
+    (``failed to resolve host 'ssw0rdXYZ@127.0.0.1'``, measured by Sessions 270 and 271 against
+    a refused port); the libpq drivers add the port and the database and MySQL's name the
+    user. This one echoes EVERY field SQLAlchemy parsed, which is the worst case for a
+    password SQLAlchemy has split in the wrong place: a password containing an unencoded ``@``
+    ends at the first one, and the rest is handed to the driver as the host, the port or the
+    database. A password SQLAlchemy parsed correctly is never echoed here, as no driver
+    measured so far echoes one.
+    """
+
+    name = "fakeecho"
+    driver = "fakeecho"
+    supports_statement_cache = True
+
+    def create_connect_args(self, url: Any) -> tuple[list[object], dict[str, object]]:
+        return (
+            [],
+            {
+                "host": url.host,
+                "port": url.port,
+                "database": url.database,
+                "user": url.username,
+                "query": ",".join(f"{k}={v}" for k, v in url.query.items()),
+            },
+        )
+
+    def connect(self, *cargs: object, **cparams: object) -> object:
+        raise sqlite3.OperationalError(
+            f"failed to resolve host '{cparams['host']}' port '{cparams['port']}' "
+            f"database '{cparams['database']}' user '{cparams['user']}' "
+            f"options '{cparams['query']}': [Errno 8] nodename nor servname provided, "
+            "or not known"
+        )
+
+
+registry.register("fakeecho", __name__, "EchoingDialect")
+
+
 def database_with_a_dangling_view(path: Path, table_name: str) -> str:
     """Build a SQLite file in which ``claims`` is a view over a table that is gone.
 
@@ -119,3 +161,24 @@ def database_with_a_dangling_view(path: Path, table_name: str) -> str:
     finally:
         con.close()
     return f"sqlite:///{path}"
+
+
+#: A run of this many characters of a password is what the oracle calls a leak. Shorter than this
+#: the whole password is: four characters is the least a reader can search for.
+WIDTH = 4
+
+
+def leaked_run(password: str, text: str, width: int = WIDTH) -> str | None:
+    """The first run of ``width`` characters of ``password`` that ``text`` still shows.
+
+    When the password is shorter than ``width`` the run is the whole password. A run made only
+    of URL punctuation is not counted: ``@:/?`` is in every address. Case-insensitive, because a
+    resolver folds the case of a host name before it echoes it.
+    """
+    haystack = text.lower()
+    size = min(width, len(password))
+    for start in range(len(password) - size + 1):
+        run = password[start : start + size]
+        if any(ch.isalnum() for ch in run) and run.lower() in haystack:
+            return run
+    return None
