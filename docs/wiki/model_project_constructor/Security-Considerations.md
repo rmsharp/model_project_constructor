@@ -353,7 +353,7 @@ From `pyproject.toml` (root) and `packages/data-agent/pyproject.toml`:
 | `sqlparse>=0.5` | Data Agent SQL validation | Parse-level only — no execution. |
 | `sqlalchemy>=2.0,<3` | `ReadOnlyDB` | Standard; DB URL is operator-provided. |
 | `httpx>=0.27,<1` | GitLab + GitHub adapters | Direct REST calls (BSD-3-Clause — see [SBOM](Software-Bill-of-Materials)); replaced `python-gitlab` in Session 191 and `PyGithub` in Session 193. |
-| `typer>=0.12` | CLIs | Standard. |
+| `typer>=0.16.0` | CLIs | Standard. |
 | `fastapi>=0.110`, `uvicorn>=0.29`, `sse-starlette>=2` | intake web UI | Only needed for live interviews. |
 | `langgraph-checkpoint-sqlite>=2.0,<3` | intake web UI checkpoints | SQLite-backed state persistence for live interviews. |
 

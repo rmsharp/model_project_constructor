@@ -14,6 +14,14 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ---
 
+## 2026-10
+
+### 2026-10-01 · [ad hoc] S268 — docs(wiki): the three stale `typer` floors in the SBOM and Security pages now read `>=0.16.0`; published to the live GitHub Wiki
+- **Change:** `docs/wiki/model_project_constructor/Software-Bill-of-Materials.md` lines 35 and 73 (`| typer | >=0.12 | CLI framework |`, the Agent stack and Data Agent tables) and `Security-Considerations.md` line 356 (`` | `typer>=0.12` | CLIs | Standard. | ``) go to `>=0.16.0`. Both pages mirror the `pyproject.toml` constraints row for row (the Security page says "From `pyproject.toml` (root) and `packages/data-agent/pyproject.toml`"), so the three cells stated a floor neither file declares after `c398fc4`. Found independently by three lenses of the review. **Non-commit action, on the operator's explicit go-ahead at the Session 268 picker:** this commit touches `docs/wiki/model_project_constructor/`, so the tracked `post-commit` hook publishes it to the live GitHub Wiki. Before committing, the source directory and the local wiki clone were byte-identical (`diff -rq`, clean), so the publish carries exactly these three cells; its result is recorded in the next entry.
+- **Commit/PR:** this commit — the two wiki pages and `CHANGELOG.md`
+- **Session:** S268 · **Verified:** `git diff` is three one-cell changes; `grep` shows no remaining `>=0.12` in either page.
+- **Model:** Claude Sonnet 5.5
+
 ## 2026-09
 
 ### 2026-09-30 · [ad hoc] S268 — what the adversarial review found: six claims in the entry below corrected, the guard tightened, three pyproject comments reworded

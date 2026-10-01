@@ -32,7 +32,7 @@ This SBOM covers both the **Model Project Constructor** (the tool) and the **gen
 | sqlparse | >=0.5 | SQL parsing and validation |
 | sqlalchemy | >=2.0,<3 | Database abstraction (Data Agent) |
 | httpx | >=0.27,<1 | GitLab + GitHub API adapters — direct REST calls (Website Agent) |
-| typer | >=0.12 | CLI framework |
+| typer | >=0.16.0 | CLI framework |
 
 ### Web UI stack (`--extra ui`)
 
@@ -70,7 +70,7 @@ This SBOM covers both the **Model Project Constructor** (the tool) and the **gen
 | sqlparse | >=0.5 | SQL parsing and analysis |
 | sqlalchemy | >=2.0,<3 | Database abstraction |
 | anthropic[bedrock] | >=0.94 | Claude API client; the `[bedrock]` extra pulls in boto3/botocore for the AWS Bedrock provider |
-| typer | >=0.12 | CLI framework |
+| typer | >=0.16.0 | CLI framework |
 
 ### Key transitive dependencies
 
