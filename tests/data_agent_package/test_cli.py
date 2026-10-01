@@ -9,6 +9,10 @@ flow; the output JSON is parsed as a DataReport and inspected.
 from __future__ import annotations
 
 import json
+import os
+import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -344,6 +348,122 @@ def test_cli_discover_unreachable_db_errors(runner: CliRunner, tmp_path: Path) -
     )
     assert result.exit_code != 0
     assert not out.exists()
+
+
+#: A stray ``0xFF`` byte on a POSIX command line. Python decodes ``argv`` with
+#: ``surrogateescape``, so the byte arrives as the lone surrogate U+DCFF — a
+#: ``str`` that validates and then cannot be written as UTF-8 (Session 264).
+STRAY_BYTE_CONTEXT = "claims \udcff"
+
+
+def _flat(output: str) -> str:
+    """A usage error's text with Typer's Rich panel taken off.
+
+    Typer boxes an error and wraps it at 80 columns, so the same sentence breaks
+    at a different word depending on how long the option name and the message
+    are. Drop the box and the line breaks, and a test asserts on the sentence
+    rather than on where it happened to wrap.
+    """
+    return " ".join(re.sub(r"[│╭╮╰╯─]", " ", output).split())
+
+
+@pytest.mark.parametrize("flags", [[], ["--rank-with-llm", "--fake-llm"]], ids=["plain", "ranking"])
+@pytest.mark.parametrize("database", ["reachable", "unreachable"])
+def test_cli_discover_rejects_a_request_context_that_cannot_be_written(
+    runner: CliRunner, tmp_path: Path, flags: list[str], database: str
+) -> None:
+    """Operator ruling, Session 267: REJECT, never scrub. A usage error — exit 2 —
+    before the database is touched, and no file is written.
+
+    Measured at ``2808473``: it exited 0 and wrote ``"claims \\udcff"``, which
+    ``DataSourceInventory.model_validate_json`` then refused, with nothing on
+    stderr. ``unreachable`` is how "before connecting" is proven: a check that
+    ran after ``connect`` would exit 1 on the connection error instead of 2.
+    """
+    db_url = (
+        _seed_discover_db(tmp_path / "discover.db")
+        if database == "reachable"
+        else "postgresql://nobody:nobody@127.0.0.1:1/none"
+    )
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        [
+            "discover",
+            "--db-url",
+            db_url,
+            "--output",
+            str(out),
+            "--request-context",
+            STRAY_BYTE_CONTEXT,
+            *flags,
+        ],
+    )
+    assert result.exit_code == 2, result.output
+    assert not out.exists()
+    # A usage error from the option itself: it names the option, says what is
+    # wrong and where, and does not quote the text (which would put a lone
+    # surrogate on a stream that may refuse it).
+    message = _flat(result.output)
+    assert "Invalid value for '--request-context'" in message
+    assert "request_context cannot be written as UTF-8" in message
+    assert "the character at index 7 (U+DCFF) is a lone surrogate" in message
+    assert "\udcff" not in result.output
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["", "sinistres déclarés — 日本語", "astral 😀 plane", "non-character ￿"],
+    ids=["empty", "non-ascii", "astral", "noncharacter"],
+)
+def test_cli_discover_keeps_a_writable_request_context_and_the_file_reloads(
+    runner: CliRunner, tmp_path: Path, text: str
+) -> None:
+    """The check must not over-reject, and what ``discover`` writes the
+    orchestrator's loader must read — the property the rejection protects."""
+    db_url = _seed_discover_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", db_url, "--output", str(out), "--request-context", text],
+    )
+    assert result.exit_code == 0, result.output
+    inv = DataSourceInventory.model_validate_json(out.read_text())
+    assert inv.request_context == text
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="raw non-UTF-8 argv bytes are POSIX-only")
+def test_console_script_rejects_a_real_stray_byte_on_the_command_line(
+    tmp_path: Path,
+) -> None:
+    """The two tests above hand Click the surrogate directly. This one sends the
+    BYTE, through a real process, so it is the only one that exercises Python's
+    own ``argv`` decoding — the path the operator's shell takes. ``PYTHONUTF8=1``
+    pins that decoding to UTF-8 + ``surrogateescape``: under a Latin-1 locale
+    ``0xFF`` is a valid ``ÿ`` and there would be nothing to reject."""
+    db_url = _seed_discover_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "model_project_constructor_data_agent",
+            "discover",
+            "--db-url",
+            db_url,
+            "--output",
+            str(out),
+            "--request-context",
+            b"claims \xff",
+        ],
+        capture_output=True,
+        env={**os.environ, "PYTHONUTF8": "1"},
+    )
+    stderr = result.stderr.decode("utf-8", "replace")
+    assert result.returncode == 2, stderr
+    assert not out.exists()
+    assert "Invalid value for '--request-context'" in _flat(stderr)
+    assert "the character at index 7 (U+DCFF) is a lone surrogate" in _flat(stderr)
 
 
 class _FailingRanker:

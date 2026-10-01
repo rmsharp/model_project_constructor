@@ -37,7 +37,9 @@ from model_project_constructor_data_agent.db import ReadOnlyDB
 from model_project_constructor_data_agent.discovery import (
     RANKING_FAILED_NOTE_PREFIX,
     SKIPPED_NOTE_PREFIX,
+    UnwritableRequestContextError,
     probe_information_schema,
+    validate_request_context,
 )
 from model_project_constructor_data_agent.factory import (
     KNOWN_PROVIDERS,
@@ -73,6 +75,25 @@ _PROVIDER_HELP = f"LLM provider. One of: {', '.join(KNOWN_PROVIDERS)}."
 @app.callback()
 def _main() -> None:
     """Standalone Data Agent CLI — see ``run --help`` for options."""
+
+
+def _check_request_context(value: str | None) -> str | None:
+    """``--request-context``'s callback: reject text that cannot be written as UTF-8.
+
+    Operator ruling, Session 267: a usage error (exit 2), never a scrub. Click
+    runs a callback while it parses the options, so the error lands before
+    ``discover``'s body does anything — in particular before it connects. On POSIX
+    a command-line byte that is not valid UTF-8 arrives as a lone surrogate; it
+    validates as a ``str``, and the file written from it could not be loaded back
+    (measured Session 264). The check itself is the library's
+    :func:`validate_request_context`, so ``discover`` and
+    :func:`probe_information_schema` cannot disagree about what is writable.
+    """
+    try:
+        validate_request_context(value)
+    except UnwritableRequestContextError as e:
+        raise typer.BadParameter(str(e)) from e
+    return value
 
 
 @app.command()
@@ -189,9 +210,11 @@ def discover(
     request_context: str | None = typer.Option(
         None,
         "--request-context",
+        callback=_check_request_context,
         help=(
             "Free-text description of the downstream request; fed to the "
-            "LLM when --rank-with-llm is set."
+            "LLM when --rank-with-llm is set. Stored in the file either way, "
+            "so it must be valid UTF-8: anything else is a usage error (exit 2)."
         ),
     ),
     model: str = typer.Option(
