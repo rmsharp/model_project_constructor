@@ -93,6 +93,19 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 267 Did
+**Deliverable:** **a `--request-context` that cannot be encoded as UTF-8 is rejected, not written** —
+`BACKLOG.md`'s item *"A `--request-context` that cannot be written as UTF-8 writes a file that will
+not reload"*, one of the two rulings Session 266's handoff said were owed. Chosen by the operator at
+Phase 1 from a two-step picker (area: pipeline CLI; item: this one). (IN PROGRESS)
+**Started:** 2026-09-30
+**Status:** Session claimed. Work beginning. **Rulings (operator, by picker, 2026-09-30):** (1) REJECT,
+never scrub — a usage error (exit 2) before connecting, and no file written; (2) the check lives in
+BOTH surfaces, `cli.discover` and `probe_information_schema`, via one shared validator.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 266 Did
 **Deliverable:** **the tenth trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 257 → 249 (nine
 records, 1,447 lines, a pure byte slice) are in

@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S267
+date: 2026-09-30
+status: pending
+active_task: A --request-context that cannot be encoded as UTF-8 is rejected instead of written (BACKLOG.md's item of that name). Chosen by the operator at Phase 1 from a two-step picker. Rulings: reject, never scrub (usage error, exit 2, before connecting, no file written); the check lives in both cli.discover and probe_information_schema through one shared validator. Master is level with origin at the claim; pushing at close-out is not yet ruled.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S266
 date: 2026-09-26 to 2026-09-30
 status: complete

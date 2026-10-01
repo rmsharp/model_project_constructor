@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-09
 
+### 2026-09-30 · [ad hoc] S267 claim: reject a `--request-context` that cannot be encoded as UTF-8 *(in progress)*
+- **Change:** Session 267 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is `BACKLOG.md`'s item *"A `--request-context` that cannot be written as UTF-8 writes a file that will not reload"*: `model-data-agent discover --request-context "$(printf 'claims \xff')"` exits 0 and writes `"claims \udcff"`, which the orchestrator's loader (`DataSourceInventory.model_validate_json`) then refuses, with nothing on stderr. The operator chose the area and the item at Phase 1 from a two-step picker and ruled two points: **reject, never scrub** (a usage error, exit 2, before connecting, no file written), and **check in both surfaces**, `cli.discover` and `probe_information_schema`, through one shared validator. Order of commits: this claim, then the tests-first implementation, then the close-out.
+- **Commit/PR:** this commit
+- **Session:** S267 · **Verified:** ledger-only. `tests/test_read_budget.py` and `tests/test_session_notes_census.py` are green at this claim state (82 passed), so the claim does not repeat Session 266's claim-state red.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-09-30 · [ad hoc] S266 — close out: the tenth trim of `SESSION_NOTES.md`; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 266 record: the two defects fixed before the trim could land (the read-budget guard's own claim-state red; the R-series quotation hazard), the cut and ledger mechanics, the proof's carry-forward and its one new mutant, the adversarial review's 20 findings and what they changed, verification, and the sweep (32 narrow / 34 broad files, published rather than asserted, per the bequeathed instruction). The Session 265 handoff evaluation (9/10) and this session's self-assessment (8/10) are included. `HANDOFFS.md`'s receipt is `status: complete`. **Non-commit action: `master` pushed to `origin`**, on the operator's ruling at Phase 1, carrying all seven of this session's commits.
 - **Commit/PR:** this commit — `SESSION_NOTES.md`, `HANDOFFS.md`, `CHANGELOG.md`; then `git push origin master`
