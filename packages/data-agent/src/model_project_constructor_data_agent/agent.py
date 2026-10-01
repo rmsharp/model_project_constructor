@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from model_project_constructor_data_agent.db import ReadOnlyDB
+from model_project_constructor_data_agent.db import ReadOnlyDB, safe_message
 from model_project_constructor_data_agent.graph import build_graph
 from model_project_constructor_data_agent.llm import (
     LLMClient,
@@ -142,9 +142,13 @@ def _assemble_complete_report(
         )
         db_error = final_state.get("db_error")
         if db_error:
-            # SQLAlchemy appends a help URL after a newline on every DBAPIError,
-            # and a concern is rendered as one markdown bullet, so flatten it.
-            concern = f"{concern}: {' '.join(str(db_error).split())}"
+            # Driver text. SQLAlchemy appends a help URL after a newline on every
+            # DBAPIError and a concern is rendered as one markdown bullet, and the
+            # report is written into a committed project, so a terminal control code
+            # in it would be live wherever it is printed: one line, controls replaced
+            # (``safe_message``). Cleaned here as well as where ``connect`` builds it,
+            # because this is where it is written.
+            concern = f"{concern}: {safe_message(db_error)}"
         data_quality_concerns.append(concern)
 
     baseline_snapshot: BaselineSnapshot | None = final_state.get("baseline_snapshot")

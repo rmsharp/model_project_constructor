@@ -10,12 +10,13 @@ EXECUTION_FAILED branch.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 from model_project_constructor_data_agent.llm import BaselineQuerySpec
 
 from model_project_constructor.agents.data import DataAgent, LLMClient
-from model_project_constructor.agents.data.db import ReadOnlyDB
+from model_project_constructor.agents.data.db import DBConnectionError, ReadOnlyDB
 from model_project_constructor.agents.data.llm import (
     PrimaryQuerySpec,
     QualityCheckSpec,
@@ -26,6 +27,17 @@ from model_project_constructor.schemas.v1.data import (
     Datasheet,
     DataSourceInventory,
     QualityCheck,
+)
+from tests.hostile_text import (
+    CONNECT_CAUSE,
+    ESCAPE_NAME,
+    ESCAPE_NAME_SCRUBBED,
+    ESCAPING_URL,
+    EVERY_CONTROL,
+    SECRET,
+    SECRET_NAME,
+    corrupt_schema_database,
+    unsafe,
 )
 
 
@@ -832,3 +844,269 @@ def test_no_db_url_keeps_the_canned_concern_alone(
         "database unreachable at QC execution time; quality checks not executed"
         in report.data_quality_concerns
     )
+
+
+# ---------------------------------------------------------------------------
+# Session 270 — database and driver text never reaches the report raw.
+#
+# ``BACKLOG.md``, *Seven more routes ...*, routes 2 and 3. Everything below lands in
+# ``data_quality_concerns``, a quality check's ``result_summary`` or a baseline's
+# ``caveats``, which ``templates.py`` writes into the generated project's committed
+# markdown and the report JSON, and which the summarise prompt also reads. Each of the
+# three sites is its own call, so each has its own test: a site that goes back to a raw
+# ``f"{e}"`` leaves the others green.
+# ---------------------------------------------------------------------------
+
+
+class _RawConnectErrorDB(ReadOnlyDB):
+    """A database whose connect fails with text this package did not build, as a
+    subclass, a wrapper or a later change could raise ``DBConnectionError``."""
+
+    def connect(self) -> None:
+        raise DBConnectionError(f"cannot connect: {CONNECT_CAUSE} {EVERY_CONTROL} end")
+
+
+class _RawExecuteErrorDB(ReadOnlyDB):
+    """A database that connects and then fails every statement with raw driver text."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__("sqlite:///unused.db")
+        self._message = message
+
+    def connect(self) -> None:
+        return None
+
+    def execute(self, sql: str) -> list[dict[str, object]]:
+        raise RuntimeError(self._message)
+
+
+def _run_with(
+    db: ReadOnlyDB,
+    request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> object:
+    fake = FakeLLMClient(
+        primary_queries_sequence=[[primary_query_spec_valid]],
+        qc_response=[qc_specs_valid],
+        summary_response=summary_response,
+        datasheet_response=datasheet_response,
+    )
+    return DataAgent(llm=fake, db=db).run(request)
+
+
+def test_the_unreachable_database_concern_carries_no_control_character(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Route 2, through the real connect error. ``agent.py`` flattened it with
+    ``' '.join(str(db_error).split())``, which removes whitespace only, so the ESC and
+    BEL of a driver's quoted role name reached the report (2 ESC and 1 BEL measured)."""
+    report = _run_with(
+        ReadOnlyDB(ESCAPING_URL),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
+    assert unsafe(concern) == []
+    assert "\n" not in concern
+    assert f'FATAL: role "{ESCAPE_NAME_SCRUBBED}" does not exist' in concern
+    assert SECRET not in concern
+
+
+def test_the_unreachable_database_concern_cleans_text_it_was_handed_raw(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """The report is where the text is written, so it is cleaned there too, not only
+    where ``ReadOnlyDB.connect`` builds it: swapping ``agent.py``'s call for the old
+    flatten survives the test above, because the connect error is already clean."""
+    report = _run_with(
+        _RawConnectErrorDB("sqlite:///unused.db"),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    (concern,) = [c for c in report.data_quality_concerns if "database unreachable" in c]
+    assert unsafe(concern) == []
+    assert SECRET not in concern
+    assert concern.startswith(
+        "database unreachable at QC execution time; quality checks not executed: "
+        "cannot connect: FATAL: role "
+    )
+    assert concern.endswith(" end")
+
+
+def test_a_quality_check_error_carries_no_control_character_or_secret(
+    tmp_path: Path,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Route 3, ``nodes.py``'s ``execute_qc``: ``f"execution error: {e}"`` was the whole
+    driver exception, neither redacted nor flattened nor scrubbed. A real SQLite file
+    whose schema cannot be read quotes a table's NAME in the error, so a hostile name
+    reaches ``result_summary`` (2 ESC and 1 BEL measured, and a newline)."""
+    for n, (name, scrubbed) in enumerate(
+        [
+            (ESCAPE_NAME, ESCAPE_NAME_SCRUBBED),
+            (SECRET_NAME, "cfg PWD=***;Database=claims"),
+        ]
+    ):
+        url = corrupt_schema_database(tmp_path / f"{n}.db", name)
+        report = _run_with(
+            ReadOnlyDB(url),
+            sample_request,
+            primary_query_spec_valid,
+            qc_specs_valid,
+            summary_response,
+            datasheet_response,
+        )
+        checks = report.primary_queries[0].quality_checks
+        assert [qc.execution_status for qc in checks] == ["ERROR", "ERROR"]
+        for qc in checks:
+            assert unsafe(qc.result_summary) == []
+            assert "\n" not in qc.result_summary
+            assert SECRET not in qc.result_summary
+            assert qc.result_summary.startswith("execution error: ")
+            assert f"malformed database schema ({scrubbed})" in qc.result_summary
+
+
+def test_a_quality_check_error_is_cleaned_in_full(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Every control, a secret and a newline, through a driver that raises raw text."""
+    report = _run_with(
+        _RawExecuteErrorDB(f"boom{EVERY_CONTROL}done\npassword={SECRET}"),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    for qc in report.primary_queries[0].quality_checks:
+        assert qc.execution_status == "ERROR"
+        assert qc.result_summary == "execution error: boom done password=***"
+
+
+def test_a_baseline_error_carries_no_control_character_or_secret(
+    tmp_path: Path,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Route 3, ``nodes.py``'s baseline collection: ``caveats=[f"baseline SQL execution
+    error: {e}"]`` reaches ``analysis/06_implementation_plan.qmd``. Its own call site, so
+    its own test."""
+    for n, (name, scrubbed) in enumerate(
+        [
+            (ESCAPE_NAME, ESCAPE_NAME_SCRUBBED),
+            (SECRET_NAME, "cfg PWD=***;Database=claims"),
+        ]
+    ):
+        url = corrupt_schema_database(tmp_path / f"{n}.db", name)
+        report = _run_with(
+            ReadOnlyDB(url),
+            _request_with_baseline(sample_request),
+            primary_query_spec_valid,
+            qc_specs_valid,
+            summary_response,
+            datasheet_response,
+        )
+        snapshot = report.baseline_snapshot
+        assert snapshot is not None
+        assert snapshot.query_execution_status == "FAILED"
+        (caveat,) = snapshot.caveats
+        assert unsafe(caveat) == []
+        assert "\n" not in caveat
+        assert SECRET not in caveat
+        assert caveat.startswith("baseline SQL execution error: ")
+        assert f"malformed database schema ({scrubbed})" in caveat
+
+
+def test_a_baseline_error_is_cleaned_in_full(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    report = _run_with(
+        _RawExecuteErrorDB(f"boom{EVERY_CONTROL}done\npassword={SECRET}"),
+        _request_with_baseline(sample_request),
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    snapshot = report.baseline_snapshot
+    assert snapshot is not None
+    assert snapshot.caveats == ["baseline SQL execution error: boom done password=***"]
+
+
+def test_the_whole_serialized_report_holds_no_control_character_or_secret(
+    tmp_path: Path,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Asserted over the WHOLE report as the website reads it, once decoded, so a place
+    these tests did not think of would also fail. JSON escapes a control as ``\\u001b``,
+    which is why the check is on the decoded values, not on the serialized text."""
+    import json
+
+    name = f"{ESCAPE_NAME} {SECRET_NAME}"
+    url = corrupt_schema_database(tmp_path / "whole.db", name)
+    report = _run_with(
+        ReadOnlyDB(url),
+        _request_with_baseline(sample_request),
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    decoded = json.loads(json.dumps(report.model_dump(mode="json")))
+    strings: list[str] = []
+
+    def _collect(value: object) -> None:
+        if isinstance(value, str):
+            strings.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                _collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                _collect(item)
+
+    _collect(decoded)
+    assert any("malformed database schema" in s for s in strings)  # the route was exercised
+    assert [s for s in strings if unsafe(s.replace("\n", " "))] == []
+    assert [s for s in strings if SECRET in s] == []

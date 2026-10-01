@@ -29,7 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
-from model_project_constructor_data_agent.db import DBConnectionError, ReadOnlyDB
+from model_project_constructor_data_agent.db import DBConnectionError, ReadOnlyDB, safe_message
 from model_project_constructor_data_agent.llm import LLMClient
 from model_project_constructor_data_agent.schemas import BaselineSnapshot, QualityCheck
 from model_project_constructor_data_agent.sql_validation import validate_sql
@@ -131,13 +131,16 @@ def make_execute_qc(
                 try:
                     rows = db.execute(qc.check_sql)
                 except Exception as e:
+                    # The driver's own text, which can quote a table or column NAME
+                    # or echo a connection string, and which reaches the report, the
+                    # committed project and the summarise prompt: ``safe_message``.
                     new_group.append(
                         QualityCheck(
                             check_name=qc.check_name,
                             check_sql=qc.check_sql,
                             expectation=qc.expectation,
                             execution_status="ERROR",
-                            result_summary=f"execution error: {e}",
+                            result_summary=f"execution error: {safe_message(e)}",
                             raw_result=None,
                         )
                     )
@@ -228,7 +231,7 @@ def make_baseline_collection(
                     measurement_unit=spec.measurement_unit,
                     query_sql=spec.sql,
                     query_execution_status="FAILED",
-                    caveats=[f"baseline SQL execution error: {e}"],
+                    caveats=[f"baseline SQL execution error: {safe_message(e)}"],
                 )
             }
 
