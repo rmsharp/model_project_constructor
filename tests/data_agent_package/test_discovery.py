@@ -30,9 +30,8 @@ from model_project_constructor_data_agent.anthropic_client import (
     AnthropicLLMClient,
     LLMParseError,
 )
-from model_project_constructor_data_agent.db import SkippedEntity
+from model_project_constructor_data_agent.db import _CONTROL_CHARACTERS, SkippedEntity
 from model_project_constructor_data_agent.discovery import (
-    _CONTROL_CHARACTERS,
     PROBE_FAILED_NOTE_PREFIX,
     PRODUCER_ID,
     PRODUCER_VERSION,
@@ -1126,13 +1125,14 @@ def _unsafe(text: str) -> list[str]:
 
 class TestMessagesCarryNoControlCharacters:
     """Session 269 (``BACKLOG.md``: *Database text can put terminal control codes
-    on the operator's screen*). ``_safe_message`` used to remove only whitespace,
-    so ESC, BEL, NUL, DEL and the C1 controls reached the stderr WARNING and the
-    persisted note, where a terminal acts on them instead of printing them
-    (measured: the ESC and BEL of a terminal-title sequence and a colour code
-    inside a table name reached stderr raw). Each of the probe's three message
-    sites is its own call, so each is tested on its own: Session 261 swapped one
-    for a raw ``str(e)`` and every other test stayed green."""
+    on the operator's screen*). The function behind the probe's messages (then
+    ``discovery._safe_message``, since Session 270 ``db.safe_message``) used to
+    remove only whitespace, so ESC, BEL, NUL, DEL and the C1 controls reached the
+    stderr WARNING and the persisted note, where a terminal acts on them instead
+    of printing them (measured: the ESC and BEL of a terminal-title sequence and
+    a colour code inside a table name reached stderr raw). Each of the probe's
+    three message sites is its own call, so each is tested on its own: Session
+    261 swapped one for a raw ``str(e)`` and every other test stayed green."""
 
     def test_controls_is_exactly_the_cc_category(self) -> None:
         scanned = [
@@ -1434,7 +1434,7 @@ class TestRankingFailureKeepsEntries:
     def test_ranking_warning_is_masked_and_single_line(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Stage 2 has its OWN ``_safe_message`` call site; stage 1's tests do not
+        """Stage 2 has its OWN ``safe_message`` call site; stage 1's tests do not
         reach it. Swapping it for a raw ``str(e)`` survived every other test here
         (measured Session 261)."""
         exc = RuntimeError(f"gateway refused postgresql://user:{SECRET}@host/db\nretry later")

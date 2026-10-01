@@ -29,12 +29,11 @@ from __future__ import annotations
 
 import logging
 import math
-import re
 import reprlib
 from datetime import UTC, datetime
 from typing import Any
 
-from model_project_constructor_data_agent.db import ReadOnlyDB, SkippedEntity, redact_secrets
+from model_project_constructor_data_agent.db import ReadOnlyDB, SkippedEntity, safe_message
 from model_project_constructor_data_agent.schemas import (
     ColumnMetadata,
     DataSourceEntry,
@@ -103,14 +102,6 @@ class UnwritableRequestContextError(ValueError):
     """
 
 
-#: What a terminal acts on instead of printing: the C0 controls, DEL and the C1
-#: controls, which are Unicode's ``Cc`` category (65 characters; a test compares
-#: this pattern with the Unicode database over every code point).
-#: ``_safe_message`` replaces each with a space. ``str.split`` already treats ten
-#: of them as whitespace, so the range stays whole instead of naming only what
-#: the flatten still lets through.
-_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
-
 #: Bounds the names a :class:`RankingMatchedNoEntryError` message quotes: the
 #: names come from the model's reply, and the message is logged whole.
 _BRIEF = reprlib.Repr()
@@ -175,57 +166,6 @@ def validate_request_context(request_context: str | None) -> None:
             "surrogate code point, which UTF-8 cannot encode. On a command line, a "
             "byte that is not valid UTF-8 arrives as one."
         ) from e
-
-
-def _safe_message(e: Exception) -> str:
-    """``str(e)`` made safe to log and to persist.
-
-    Runs inside the ``except`` blocks that deliver "never raises", so it must
-    not be a raise site itself. The whole body is guarded, not just ``str(e)``:
-    a broken ``__str__`` raises there, and one returning a ``str`` *subclass*
-    raises later, from that subclass's own ``encode`` / ``split`` (measured).
-
-    Lone surrogates are scrubbed because a note holding one makes
-    ``model_dump_json`` raise and the written file fail to reload (measured).
-    An OS-raised ``OSError`` repr-escapes its filename, so it carries none; a
-    message built by formatting an ``os.fsdecode``-d path into text does.
-
-    Control characters are replaced with a space (Session 269), because the
-    message is database text that reaches the operator's terminal twice: as the
-    WARNING, and — for a failed probe — as the note ``discover`` echoes to
-    stderr. A terminal acts on ESC, BEL, NUL, DEL and the C1 controls instead of
-    printing them (measured: the ESC and BEL of a title sequence and a colour code
-    in a table name reached stderr raw). A space, not nothing, so ``a<ESC>b``
-    does not read ``ab``.
-
-    Redaction runs on BOTH sides of the scrub, because each order alone leaks in
-    the other's case (all measured, with the 55 controls that are not whitespace
-    to :func:`db.redact_secrets`). Before it: the masker reads an unquoted secret
-    as a run of non-whitespace, so scrubbing first would end the value at the
-    control and print what follows (``password=abc<ESC>def`` came out
-    ``password=*** def``). After it: a control between a key and its separator
-    hides the key from the masker, and only the scrub turns that control into
-    the space the masker tolerates there (``password<ESC>=hunter2`` came out
-    ``password =hunter2``). The second pass changes only what the first could not
-    see, since the masker is idempotent. What neither pass closes is the masker's
-    own limit that an unquoted value ends at whitespace, so
-    ``password=<ESC> hunter2`` still prints ``hunter2``, as ``password=x hunter2``
-    always has.
-
-    Redaction is **best-effort**. :func:`db.redact_secrets` masks URL userinfo,
-    a wide `key=value`/`key: value`/quoted/braced key list (Session 262), and
-    a secret percent-encoded inside `odbc_connect=`; it still does not see a
-    bare-key, header, ``Bearer``, or SigV4-signature shape with no `key=`/
-    `key:` form at all, nor a key outside its fixed list. Flattened with the
-    same idiom as ``agent.py`` so the WARNING is one log record: SQLAlchemy
-    puts its help URL after a newline on every ``DBAPIError``.
-    """
-    try:
-        raw = str(e).encode("utf-8", "replace").decode("utf-8")
-        scrubbed = _CONTROL_CHARACTERS.sub(" ", redact_secrets(raw))
-        return " ".join(redact_secrets(scrubbed).split())
-    except Exception:
-        return "<unprintable>"
 
 
 def probe_information_schema(
@@ -349,7 +289,7 @@ def probe_information_schema(
         # much as the rows are, so a malformed report is a probe failure.
         notes = [_skipped_note(skipped, found=len(entries) + len(skipped))] if skipped else []
     except Exception as e:
-        cause = f"{type(e).__name__}: {_safe_message(e)}"
+        cause = f"{type(e).__name__}: {safe_message(e)}"
         _LOG.warning(
             "probe_information_schema: reflection failed; returning an EMPTY inventory: %s",
             cause,
@@ -362,7 +302,7 @@ def probe_information_schema(
             s.entity_kind,
             _fqn(s.namespace, s.name),
             type(s.error).__name__,
-            _safe_message(s.error),
+            safe_message(s.error),
         )
 
     if llm is not None and entries:
@@ -379,7 +319,7 @@ def probe_information_schema(
                 "%d entries UNRANKED: %s: %s",
                 len(entries),
                 type_name,
-                _safe_message(e),
+                safe_message(e),
             )
             notes.append(
                 f"{RANKING_FAILED_NOTE_PREFIX} ({type_name}); all {len(entries)} "

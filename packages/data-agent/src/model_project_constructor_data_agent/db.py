@@ -128,9 +128,78 @@ def redact_secrets(text: str) -> str:
 
     For arbitrary text — a driver's own exception message, which may echo the
     connection string back. :func:`redact_db_url` is the right call when the
-    whole string IS a URL.
+    whole string IS a URL. To print, log, persist or report such text, call
+    :func:`safe_message`, which redacts and also removes what a terminal would
+    act on.
     """
     return _mask_kv(_USERINFO_TEXT.sub(r"\1***\2", text))
+
+
+#: What a terminal acts on instead of printing: the C0 controls, DEL and the C1
+#: controls, which are Unicode's ``Cc`` category (65 characters; a test compares
+#: this pattern with the Unicode database over every code point).
+#: :func:`safe_message` replaces each with a space. ``str.split`` already treats
+#: ten of them as whitespace, so the range stays whole instead of naming only
+#: what the flatten still lets through.
+_CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+
+
+def safe_message(error: object) -> str:
+    """``str(error)`` made safe to print, to log, to persist and to put in a report.
+
+    The one function every route that carries database or driver text to a person
+    goes through: the schema probe's three messages (``discovery.py``), the connect
+    error (:meth:`ReadOnlyDB.connect`) and ``discover``'s echo of it (``cli.py``),
+    the "database unreachable" concern (``agent.py``) and the quality-check and
+    baseline errors (``nodes.py``), the last two of which are written into a
+    committed project's markdown. It takes anything with a ``str``: the exception
+    itself, or the text a caller already holds. Session 269 wrote it for the
+    probe; Session 270 moved it here, beside :func:`redact_secrets`, for the rest.
+
+    Runs inside the ``except`` blocks that deliver "never raises", so it must not
+    be a raise site itself. The whole body is guarded, not just ``str(error)``:
+    a broken ``__str__`` raises there, and one returning a ``str`` *subclass*
+    raises later, from that subclass's own ``encode`` / ``split`` (measured).
+
+    Lone surrogates are scrubbed because a note holding one makes
+    ``model_dump_json`` raise and the written file fail to reload (measured).
+    An OS-raised ``OSError`` repr-escapes its filename, so it carries none; a
+    message built by formatting an ``os.fsdecode``-d path into text does.
+
+    Control characters are replaced with a space, because a terminal acts on ESC,
+    BEL, NUL, DEL and the C1 controls instead of printing them (measured: the ESC
+    and BEL of a title sequence and a colour code in a table name reached stderr
+    raw). A space, not nothing, so ``a<ESC>b`` does not read ``ab``.
+
+    Redaction runs on BOTH sides of the scrub, because each order alone leaks in
+    the other's case (all measured, with the 55 controls that are not whitespace
+    to :func:`redact_secrets`). Before it: the masker reads an unquoted secret as
+    a run of non-whitespace, so scrubbing first would end the value at the control
+    and print what follows (``password=abc<ESC>def`` came out ``password=***
+    def``). After it: a control between a key and its separator hides the key from
+    the masker, and only the scrub turns that control into the space the masker
+    tolerates there (``password<ESC>=hunter2`` came out ``password =hunter2``).
+    The second pass changes only what the first could not see, since the masker is
+    idempotent. What neither pass closes is the masker's own limit that an
+    unquoted value ends at whitespace, so ``password=<ESC> hunter2`` still prints
+    ``hunter2``, as ``password=x hunter2`` always has. Applied again to its own
+    output it changes nothing, so a caller may use it on text an earlier site has
+    already cleaned.
+
+    Redaction is **best-effort**. :func:`redact_secrets` masks URL userinfo, a
+    wide `key=value`/`key: value`/quoted/braced key list (Session 262), and a
+    secret percent-encoded inside `odbc_connect=`; it still does not see a
+    bare-key, header, ``Bearer``, or SigV4-signature shape with no `key=`/`key:`
+    form at all, nor a key outside its fixed list. The result is one line, so it
+    is also one log record and one markdown bullet: SQLAlchemy puts its help URL
+    after a newline on every ``DBAPIError``.
+    """
+    try:
+        raw = str(error).encode("utf-8", "replace").decode("utf-8")
+        scrubbed = _CONTROL_CHARACTERS.sub(" ", redact_secrets(raw))
+        return " ".join(redact_secrets(scrubbed).split())
+    except Exception:
+        return "<unprintable>"
 
 
 class DBConnectionError(Exception):
@@ -264,9 +333,11 @@ class ReadOnlyDB:
             with engine.connect() as conn:
                 conn.execute(sa.text("SELECT 1"))
         except Exception as e:
+            # The URL half is ``repr``-quoted, which escapes every control character.
+            # The cause is the driver's own text, so it goes through ``safe_message``:
+            # ``discover`` prints this message and ``run`` writes it into the report.
             raise DBConnectionError(
-                f"cannot connect to {redact_db_url(self.url)!r}: "
-                f"{redact_secrets(str(e))}"
+                f"cannot connect to {redact_db_url(self.url)!r}: {safe_message(e)}"
             ) from e
         self._engine = engine
 
