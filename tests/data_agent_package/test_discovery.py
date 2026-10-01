@@ -510,20 +510,34 @@ class _SpyDB:
     def get_information_schema(
         self, schemas: list[str] | None = None, *, skipped: Any = None
     ) -> Any:
+        # One real row, not none: the probe ranks only a NON-EMPTY inventory, so
+        # with ``[]`` the ranker below would be unreachable and "the ranker was
+        # not called" true by construction (Session 267's review).
         self.reflections += 1
-        return []
+        return [GOOD_ROW]
 
 
-#: ``(request_context, index of its first lone surrogate, that surrogate)``. The
-#: first is what a stray ``0xFF`` byte on a POSIX command line becomes — Python
-#: decodes ``argv`` with ``surrogateescape``, so a byte 0xXY that is not valid
-#: UTF-8 arrives as U+DCXY. The last is half of an emoji: not a CLI artefact, a
-#: caller's own truncation. Position varies, so a check of one end cannot pass.
+#: ``(request_context, index of its first surrogate, that surrogate)``.
+#: ``stray-0xFF-byte`` is what a stray ``0xFF`` on a POSIX command line becomes:
+#: Python decodes ``argv`` with ``surrogateescape``, so a byte 0xXY that is not
+#: valid UTF-8 arrives as U+DCXY. ``lone-high-surrogate-last`` is half of an
+#: emoji, not a CLI artefact but a caller's own truncation, and
+#: ``adjacent-pair`` is both halves: Python does not combine them in a ``str``,
+#: UTF-8 cannot encode either, and a writer that escapes to ASCII would turn the
+#: pair into one different character, which is why it is rejected too. Position
+#: varies, and the boundaries of the surrogate range and a long text are here,
+#: so a check of one end, a prefix or a hand-rolled range cannot pass.
 UNWRITABLE_REQUEST_CONTEXTS = [
     pytest.param("claims \udcff", 7, "U+DCFF", id="stray-0xFF-byte"),
     pytest.param("\udc80 leading", 0, "U+DC80", id="first-character"),
     pytest.param("cut mid-emoji \ud83d", 14, "U+D83D", id="lone-high-surrogate-last"),
-    pytest.param("ok \udcff and \udcfe", 3, "U+DCFF", id="two-names-the-first"),
+    pytest.param("ok \udcff and \udcfe", 3, "U+DCFF", id="two-bad-bytes"),
+    pytest.param("pair " + chr(0xD83D) + chr(0xDE00), 5, "U+D83D", id="adjacent-pair"),
+    pytest.param("ab\udcff\udcfe cd", 2, "U+DCFF", id="run-names-the-first"),
+    pytest.param("\ud800", 0, "U+D800", id="lowest-surrogate"),
+    pytest.param("\udfff", 0, "U+DFFF", id="highest-surrogate"),
+    pytest.param("\udcff" + "x" * 5000, 0, "U+DCFF", id="long-offender-first"),
+    pytest.param("x" * 5000 + "\udcff", 5000, "U+DCFF", id="long-offender-last"),
 ]
 
 #: Text that IS writable and must be left alone, including everything a naive
@@ -534,8 +548,14 @@ WRITABLE_REQUEST_CONTEXTS = [
     pytest.param("sinistres déclarés — 日本語", id="non-ascii-bmp"),
     pytest.param("astral 😀 plane", id="astral"),
     pytest.param("é combining", id="combining"),
-    pytest.param("replacement � char", id="replacement-character"),
-    pytest.param("non-character ￿", id="noncharacter"),
+    pytest.param("replacement \ufffd char", id="replacement-character"),
+    pytest.param("non-character \uffff", id="noncharacter"),
+    pytest.param("\ud7ff just below the surrogates", id="just-below-surrogates"),
+    pytest.param("just above the surrogates \ue000", id="just-above-surrogates"),
+    pytest.param("highest code point \U0010ffff", id="highest-code-point"),
+    pytest.param("one\ntwo\tthree\x00  ", id="whitespace-and-control"),
+    pytest.param("  padded\n\ttabbed\n  ", id="padded-multi-line"),
+    pytest.param("x" * 5000, id="long"),
 ]
 
 
@@ -579,9 +599,10 @@ class TestRequestContextMustBeWritable:
     def test_the_message_never_carries_the_bad_text(
         self, text: str, index: int, codepoint: str
     ) -> None:
-        """The message is logged, echoed to stderr and shown by the CLI. Quoting
-        the offending ``str`` would put a lone surrogate into all three — which
-        raises on a strict stream. It names the position and code point instead."""
+        """The CLI echoes this message to stderr in its usage-error panel and a
+        library caller is likely to log it. Quoting the offending ``str`` would put
+        a surrogate on either — which raises on a strict stream. It names the
+        position and code point instead."""
         with pytest.raises(UnwritableRequestContextError) as caught:
             probe_information_schema(_SpyDB(), request_context=text)  # type: ignore[arg-type]
         message = str(caught.value)
@@ -619,12 +640,40 @@ class TestRequestContextMustBeWritable:
         assert inv.request_context == "claims"
 
     def test_validate_request_context_is_the_shared_entry_point(self) -> None:
-        """The CLI calls this same function, so the two surfaces cannot disagree
-        about what is writable. Returns ``None`` for what it accepts."""
+        """The CLI's option callback calls this same function (``test_cli.py``
+        pins that through the real command), so the two surfaces share one
+        verdict. Returns ``None`` for what it accepts."""
         assert validate_request_context(None) is None
         assert validate_request_context("fine") is None
         with pytest.raises(UnwritableRequestContextError):
             validate_request_context("x\ud800")
+
+    def test_a_valid_context_does_reach_the_database_and_the_ranker(self) -> None:
+        """The control for ``test_raises_before_anything_is_touched``: the same
+        spy database and ranker with a writable context, and both ARE reached.
+        Without it, "the ranker was not called" could be true because the ranker
+        was unreachable rather than because the check ran first."""
+        db = _SpyDB()
+        llm = _Ranker(lambda entries: [])
+        probe_information_schema(db, llm=llm, request_context="ok")  # type: ignore[arg-type]
+        assert db.reflections == 1
+        assert llm.calls == ["ok"]
+
+    @pytest.mark.parametrize("hostile", ["encode-lies", "encode-raises"])
+    def test_a_str_subclass_cannot_change_the_verdict(self, hostile: str) -> None:
+        """Judged through ``str``'s own methods, so a subclass that overrides
+        ``encode`` can neither wave a surrogate through nor make the check raise
+        something else (an ``IndexError``, measured). Found by Session 267's
+        review; hostile input only, since Click always passes a plain ``str``."""
+
+        class _Lies(str):
+            def encode(self, encoding: str = "utf-8", errors: str = "strict") -> bytes:
+                if hostile == "encode-raises":
+                    raise UnicodeEncodeError("utf-8", "x", 99, 100, "boom")
+                return b"ok"
+
+        with pytest.raises(UnwritableRequestContextError, match=r"index 1 \(U\+DCFF\)"):
+            validate_request_context(_Lies("x\udcff"))
 
 
 class TestProbeNeverRaises:

@@ -359,12 +359,18 @@ STRAY_BYTE_CONTEXT = "claims \udcff"
 def _flat(output: str) -> str:
     """A usage error's text with Typer's Rich panel taken off.
 
-    Typer boxes an error and wraps it at 80 columns, so the same sentence breaks
-    at a different word depending on how long the option name and the message
-    are. Drop the box and the line breaks, and a test asserts on the sentence
-    rather than on where it happened to wrap.
+    Typer boxes an error and wraps it at the terminal's width, so the same
+    sentence breaks at a different word depending on how long the option name and
+    the message are. On GitHub Actions it also COLOURS the panel, because Typer
+    forces a terminal there whenever ``GITHUB_ACTIONS`` is set: Session 267's
+    review measured five of these tests passing locally and failing under
+    ``GITHUB_ACTIONS=true``, with the escape codes inside the option name. Drop
+    the colour codes, the box and the line breaks, and a test asserts on the
+    sentence rather than on how it happened to render. It assumes Rich's Unicode
+    box (UTF-8 output) and a width of at least about 25 columns.
     """
-    return " ".join(re.sub(r"[│╭╮╰╯─]", " ", output).split())
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", output)
+    return " ".join(re.sub(r"[│╭╮╰╯─]", " ", plain).split())
 
 
 @pytest.mark.parametrize("flags", [[], ["--rank-with-llm", "--fake-llm"]], ids=["plain", "ranking"])
@@ -378,7 +384,10 @@ def test_cli_discover_rejects_a_request_context_that_cannot_be_written(
     Measured at ``2808473``: it exited 0 and wrote ``"claims \\udcff"``, which
     ``DataSourceInventory.model_validate_json`` then refused, with nothing on
     stderr. ``unreachable`` is how "before connecting" is proven: a check that
-    ran after ``connect`` would exit 1 on the connection error instead of 2.
+    ran after ``connect`` would exit 1 on the connection error instead of 2. (On
+    this machine, and in CI, that URL fails because no PostgreSQL driver is
+    installed rather than because nothing is listening — either way ``connect``
+    raises, which is all the proof needs.)
     """
     db_url = (
         _seed_discover_db(tmp_path / "discover.db")
@@ -403,18 +412,58 @@ def test_cli_discover_rejects_a_request_context_that_cannot_be_written(
     assert not out.exists()
     # A usage error from the option itself: it names the option, says what is
     # wrong and where, and does not quote the text (which would put a lone
-    # surrogate on a stream that may refuse it).
+    # surrogate on a stream that may refuse it). The runner decodes its stream, so
+    # a quoted surrogate would not survive as one: look for the text and for its
+    # repr instead.
     message = _flat(result.output)
     assert "Invalid value for '--request-context'" in message
     assert "request_context cannot be written as UTF-8" in message
-    assert "the character at index 7 (U+DCFF) is a lone surrogate" in message
-    assert "\udcff" not in result.output
+    assert "the character at index 7 (U+DCFF) is a surrogate code point" in message
+    assert "claims" not in message
+    assert r"\udcff" not in message
+
+
+#: ``(request_context, index of its first surrogate, that surrogate)`` — shapes
+#: the stray-byte case does not cover: the first character, a half emoji, a value
+#: spanning lines, and two bad bytes. A constant message that hard-codes index 7
+#: and U+DCFF, or a check of only the first line, would pass the test above.
+REJECTED_CONTEXTS = [
+    pytest.param("\udc80 leading", 0, "U+DC80", id="first-character"),
+    pytest.param("cut mid-emoji \ud83d", 14, "U+D83D", id="half-emoji"),
+    pytest.param("line one\nline two \udcff", 18, "U+DCFF", id="second-line"),
+    pytest.param("ok \udcff and \udcfe", 3, "U+DCFF", id="two-bad-bytes"),
+]
+
+
+@pytest.mark.parametrize(("text", "index", "codepoint"), REJECTED_CONTEXTS)
+def test_cli_discover_names_where_the_unwritable_character_is(
+    runner: CliRunner, tmp_path: Path, text: str, index: int, codepoint: str
+) -> None:
+    """The message is derived from the input, not fixed, and the whole value is
+    scanned, not its first line or first few characters."""
+    db_url = _seed_discover_db(tmp_path / "discover.db")
+    out = tmp_path / "inv.json"
+    result = runner.invoke(
+        app,
+        ["discover", "--db-url", db_url, "--output", str(out), "--request-context", text],
+    )
+    assert result.exit_code == 2, result.output
+    assert not out.exists()
+    assert f"the character at index {index} ({codepoint})" in _flat(result.output)
 
 
 @pytest.mark.parametrize(
     "text",
-    ["", "sinistres déclarés — 日本語", "astral 😀 plane", "non-character ￿"],
-    ids=["empty", "non-ascii", "astral", "noncharacter"],
+    [
+        "",
+        "sinistres déclarés — 日本語",
+        "astral 😀 plane",
+        "non-character \uffff",
+        "  padded\n\ttabbed\n  ",
+        "line one\nline two\nline three",
+        "x" * 5000,
+    ],
+    ids=["empty", "non-ascii", "astral", "noncharacter", "whitespace", "multi-line", "long"],
 )
 def test_cli_discover_keeps_a_writable_request_context_and_the_file_reloads(
     runner: CliRunner, tmp_path: Path, text: str
@@ -433,14 +482,19 @@ def test_cli_discover_keeps_a_writable_request_context_and_the_file_reloads(
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="raw non-UTF-8 argv bytes are POSIX-only")
-def test_console_script_rejects_a_real_stray_byte_on_the_command_line(
+def test_module_entry_point_rejects_a_real_stray_byte_on_the_command_line(
     tmp_path: Path,
 ) -> None:
-    """The two tests above hand Click the surrogate directly. This one sends the
-    BYTE, through a real process, so it is the only one that exercises Python's
-    own ``argv`` decoding — the path the operator's shell takes. ``PYTHONUTF8=1``
-    pins that decoding to UTF-8 + ``surrogateescape``: under a Latin-1 locale
-    ``0xFF`` is a valid ``ÿ`` and there would be nothing to reject."""
+    """The tests above hand Click the surrogate directly. This one sends the
+    BYTE, through a real ``python -m`` process, so it is the only one that
+    exercises Python's own ``argv`` decoding — the path the operator's shell takes.
+    (The installed ``model-data-agent`` script reaches the same ``cli.app``; the
+    runtime check in the ledger ran that one.) ``PYTHONUTF8=1`` pins the decoding
+    to UTF-8 + ``surrogateescape`` where a Latin-1 locale would otherwise read
+    ``0xFF`` as a valid ``ÿ`` and leave nothing to reject — macOS always decodes
+    ``argv`` as UTF-8, so there it changes nothing. ``PYTHONIOENCODING=utf-8``
+    keeps Rich on its Unicode box, which ``_flat`` strips; an ambient ASCII
+    setting would draw a ``+-|`` box it does not."""
     db_url = _seed_discover_db(tmp_path / "discover.db")
     out = tmp_path / "inv.json"
     result = subprocess.run(
@@ -457,13 +511,13 @@ def test_console_script_rejects_a_real_stray_byte_on_the_command_line(
             b"claims \xff",
         ],
         capture_output=True,
-        env={**os.environ, "PYTHONUTF8": "1"},
+        env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"},
     )
     stderr = result.stderr.decode("utf-8", "replace")
     assert result.returncode == 2, stderr
     assert not out.exists()
     assert "Invalid value for '--request-context'" in _flat(stderr)
-    assert "the character at index 7 (U+DCFF) is a lone surrogate" in _flat(stderr)
+    assert "the character at index 7 (U+DCFF) is a surrogate code point" in _flat(stderr)
 
 
 class _FailingRanker:
