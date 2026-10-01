@@ -94,17 +94,140 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 268 Did
-**Deliverable:** **the `typer` floor is made true** — `BACKLOG.md`'s item *"The `typer>=0.12` floor is
-wrong"*: `pyproject.toml:24` and `packages/data-agent/pyproject.toml:17` declare a minimum that cannot
-build this project's CLIs, and `uv.lock` (which resolves a far newer release) hides it. The filed fix is
-`>=0.12.4`; this session measures the real minimum across every shipped CLI before writing it. Chosen by
-the operator at Phase 1 from a two-step picker (area: small pipeline-CLI fixes; item: this one).
-(IN PROGRESS)
-**Started:** 2026-09-30
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **the `typer` floor is made true — COMPLETE**, closing `BACKLOG.md`'s item *"The
+`typer>=0.12` floor is wrong"*. The value the item filed, `>=0.12.4`, was **refuted by measurement**:
+both package files now say `typer>=0.16.0`, `uv.lock` is refreshed (two specifier lines), and a new
+test holds the declaration. Chosen by the operator at Phase 1 from a two-step picker (area: small
+pipeline-CLI fixes; item: this one). **Rulings (operator, by picker, Phase 3):** update the three stale
+wiki rows (published to the live GitHub Wiki by the post-commit hook) and push at close-out.
+**Started / completed:** 2026-09-30 → 2026-10-01 (the session crossed midnight, so the ledger opens a
+`## 2026-10` heading). **Commits: six** — `e322876` (claim, alone), `c398fc4` (the fix), `ff74220` (what
+the review found), `c2855ea` (the wiki rows, published as wiki commit `faf7f19`), `6e6924d` (docs: the
+item closed, two findings filed, learnings #295-297) and this close-out. Each carries its own
+`CHANGELOG.md` entry. **Pushed at close-out on the operator's ruling**; the push is recorded in the
+close-out's own ledger entry.
+
+#### What changed
+- `pyproject.toml:24` and `packages/data-agent/pyproject.toml:17`: `typer>=0.12` to `typer>=0.16.0`,
+  each with a comment naming the measurement and the guard.
+- `uv.lock`: exactly lines 1037 and 1062; no resolved version moved (rehearsed in a scratch checkout).
+- `tests/test_dependency_floors.py` (new): `TYPER_MEASURED_FLOOR` at `:41`. Reads every dependency list
+  of the root and of each workspace member `[tool.uv.workspace]` names, plus `[tool.uv]
+  override-dependencies`; each list is judged on its own, by the highest lower bound among its Typer
+  requirements. **A drift guard only:** it cannot make a floor true, and nothing enforces the constant
+  (no quality gate is declared here).
+- The wiki: the SBOM's two rows and the Security page's one now read `>=0.16.0`; verified on the remote
+  and on the live page.
+- `BACKLOG.md`: the item and its index row closed; two adjacent findings filed (`:431`, `:464`).
+
+#### The filed value was wrong
+The item said 0.12.4 works. Measured: **153 isolated environments** (147 ran, 6 could not be resolved),
+each holding the lock's exact pin for every package except `typer` and `click`: Typer 0.12.0 to 0.27.2
+against Click 8.1.8, 8.3.2 and 8.5.0, then 0.16.0 against all ten Clicks 8.2.0 to 8.5.0 and Python 3.11
+to 3.14. Each environment built all three CLIs, rendered `--help` for every command and ran the 69 CLI
+tests.
+- **0.12.0 to 0.12.3** cannot build the CLIs on Python 3.11 to 3.13 (`Type not yet supported: X | None`).
+- **0.12.4 to 0.15.3** build, then `--help` crashes under Click 8.2 or later (`Parameter.make_metavar()
+  missing 1 required positional argument: 'ctx'`), which is the Click an installer resolves today (lock
+  8.3.2, latest 8.5.0). The item's "0.12.4 works" held only beside Click 8.1.x.
+- **0.15.4** pins `click<8.2` and **0.17.5** pins `click<8.3`, so neither can sit beside the lock's
+  Click. **0.26.0 and later vendor Click** and require none.
+- **0.16.0 is the first release to pass beside Click 8.2 or later**, and every later one passed.
+- Under Click 8.1.8, 18 of the 69 tests fail for every Typer because they read `result.stderr`; the
+  CLIs are fine there. Filed as its own item.
+
+#### The review
+A four-lens review of `c398fc4` (real console scripts built from the old and new wheels; adequacy of the
+guard; truth of the written claims plus an inventory of stale statements; side effects and CI parity):
+**22 agents, 18 findings, every one verified by a skeptic: 8 confirmed, 10 partly, 0 refuted; no
+blocker, 10 minor, 8 nit; 13 in scope, 5 adjacent.**
+- **It cleared the fix:** the real console scripts crash at Typer 0.12.0 and work at 0.16.0 on Python
+  3.11 to 3.14; all 40 Click-by-Python pairings render `--help`; `uv.lock` stays byte-identical under
+  all four CI sync commands, plain and `--locked`; the full suite, 1,659 passed and 9 skipped at 98.08%
+  coverage, also passes under `GITHUB_ACTIONS=true`.
+- **It found six overstated claims of mine** (a wrong Click range, a Python 3.14 caveat, a cross-product
+  wording, 0.15.4, the vendoring of Click from 0.26, the unresolvable count), corrected by a ledger
+  entry because entries are never edited; **three holes in the guard** (`override-dependencies`,
+  per-string judging, a hardcoded glob), fixed and mutation-tested (30 runs: the baseline, 20 mutants
+  all caught, 9 legitimate changes passing); **three stale wiki rows** (fixed, with approval); and **two
+  adjacent findings** (filed): `langgraph>=0.2` cannot start the intake CLI at its minimum, with a
+  working floor of 0.2.57 and not the 0.2.47 a first bisect gives, and the suite's undeclared need for
+  Click 8.2.
+
+### Session 267 Handoff Evaluation (by Session 268)
+
+**Score: 8/10.**
+- **+** `BACKLOG.md:430` was the exact line and the item carried its own reproduction, so Phase 1 needed
+  no rediscovery. Gotcha 6, run both guards before committing, was followed at every commit and nothing
+  turned up late. Gotcha 4 is exactly right: re-measured, 294 ruff errors, 111 + 109 + 41 + 33 across
+  the four synced root tools.
+- **+** The "observed, not filed" list stayed accurate; nothing in it was disturbed.
+- **−** **What was wrong:** the item, and the handoff's "two lines plus `uv lock`, no ruling needed",
+  sized this as trivial on a measurement taken in an environment the lock does not produce. "0.12.4
+  works" is false under Click 8.2 or later, so the deliverable became a measurement campaign and a
+  different value. The no-ruling half held; the "small" half did not.
+- **−** Its key files named nothing this deliverable touched apart from the one BACKLOG line.
+- **ROI: high.**
+
+### Session 268 Self-Assessment
+
+**Score: 7/10.**
+- **+** Measured before writing, so the filed value was refuted instead of copied; wrote the test
+  first (red against the old floors, green after); rehearsed the lock refresh in a scratch checkout;
+  committed each concern on its own with its own ledger entry; asked before the outward-facing wiki
+  publish and the push, and verified the publish on the remote and on the live page.
+- **+** Used the review in proportion: 22 agents found real defects in my own claims and guard, and none
+  of the 18 findings was refuted.
+- **−** **I wrote overstated claims into a committed ledger entry and a test docstring again**, the same
+  class as Session 267's false statements, and each cost a correction entry. They were generalisations
+  of a grid that varied one factor at a time.
+- **−** **My review brief prescribed a method that did not test the floor** (`--resolution
+  lowest-direct` on local wheels resolves Typer to 0.27.2); the lens caught it, I did not (learning
+  #296).
+- **−** **I lost six in-flight matrix jobs** by clearing the results directory beside a launch that was
+  still running, and I read a "completed" notice about a wrapper as the job's (learning #297).
+- **−** The first guard had three holes that a more adversarial first draft would have closed.
+- **Decay term:** none removed. This record is growth; `BACKLOG.md` grew by about 4 KB (102,379 B to
+  106,525 B: one item and its row out, two items and two rows in, plus a recipe) and
+  `PROJECT_LEARNINGS.md` by three rows.
+
+**What's next** (sizes are estimates, not measurements).
+1. **Two small items need no ruling:** `_safe_message` control characters (`BACKLOG.md:417`; one regex, a
+   test, mutants) and the Click 8.2 declaration (`BACKLOG.md:464`; declare `click>=8.2` in the `dev`
+   extra or drop the direct import, then re-run the three CLI test files under Click 8.1.8). Either is a
+   complete session.
+2. **A measurement session of this one's shape:** the `langgraph` floor (`BACKLOG.md:431`). Run the data
+   agent's own tests at 0.2.0, raise to `>=0.2.57`, add a drift guard. The recipe is in the item.
+3. **Rulings still owed to the operator, unchanged:** the `--db-url` option (c) (`BACKLOG.md:334`), one
+   per channel for the three channels (`:373`), the two guard-design calls, and now one more: whether a CI
+   job should install the dependency minimums (`:431`).
+4. **Observed, not filed:** Typer below 0.26 imports `click.utils.get_binary_stream` and
+   `get_text_stream`, which Click 8.5 deprecates for removal in Click 9.0, so an install at or near
+   Typer's floor beside a future Click 9 would break (a fresh install gets a Typer that vendors Click).
+   And Session 267's list: a duck-typed `db` can put an unescaped `entity_kind` in a skip note,
+   `discover --db-url sqlite:///<typo>` creates an empty file and exits 0, and `cli.py`'s module
+   docstring says only `anthropic` exists.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `tests/test_dependency_floors.py:41` the constant, `:59` `_workspace_pyprojects`, `:76`
+  `_requirement_lists`, `:101` `_typer_floors`, `:120` and `:129` the two tests.
+- `pyproject.toml:24`, `packages/data-agent/pyproject.toml:17`, `uv.lock` lines 1037 and 1062.
+- `BACKLOG.md:417,431,464` the open items above; `PROJECT_LEARNINGS.md` #295 to #297; `CHANGELOG.md`
+  the S268 entries under `## 2026-10` and `## 2026-09`.
+
+**Gotchas.**
+1. **The measurement harness is gone**: it lived in the session scratchpad. The recipe is in
+   `BACKLOG.md:431`; do not assume a `scratchpad/matrix` directory exists.
+2. **The guard checks drift, not truth.** Raising `TYPER_MEASURED_FLOOR` without re-measuring only makes
+   it stricter about a number nobody tested.
+3. **A new month heading opened this session** (`## 2026-10` above `## 2026-09` in `CHANGELOG.md`); new
+   October entries go under it.
+4. **Any commit that touches `docs/wiki/` publishes it.** This session's was approved, and the repo and
+   the wiki clone were byte-identical before it.
+5. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every
+   commit that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`.
+6. A lowest-version install of LOCAL wheels does not exercise a transitive dependency's floor (learning
+   #296): print the resolved version first.
 
 ### What Session 267 Did
 **Deliverable:** **a `--request-context` that cannot be written as UTF-8 is rejected, not written —

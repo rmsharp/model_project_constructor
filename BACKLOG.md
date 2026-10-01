@@ -452,8 +452,14 @@ distribution, independent of any floor here.
 to `>=0.2.57`, with a drift guard shaped like the `typer` one. (2) **Operator call:** a CI job that
 installs `--resolution lowest-direct` on Python 3.11 and runs the CLI test files, which is the only
 thing that would have caught either floor; it adds a job and may need `pyyaml` raised to install on
-anything newer. The method that worked for `typer` is Session 268's harness: one isolated venv per
-candidate, the lock's exact pins for everything else, the real CLIs, `--help` and a real command.
+anything newer. **The method that worked for `typer`** (Session 268's harness was session-local and is
+not committed; rebuild it from this): `uv export --frozen --no-hashes --all-extras --all-groups
+--no-emit-workspace --no-emit-project`, drop the lines for the packages under test, then for each
+candidate version `uv venv` a fresh environment, `uv pip install` the rest plus the candidate, run with
+`PYTHONPATH=src:packages/data-agent/src`, and for each CLI build the app, render `--help` for it and
+every command, and run the three CLI test files with `--no-cov -p no:cacheprovider`. Launch the jobs
+with `nohup setsid` and print each environment's resolved versions before reading a result
+(learnings #296 and #297).
 
 ### The test suite needs Click 8.2 or later, and nothing declares it
 
