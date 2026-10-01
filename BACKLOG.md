@@ -65,11 +65,13 @@ rows below it are the smaller residue that closing it exposed.
 | The NO-OP guard cannot see a partially inert mutant | Session 253 repaired the broken proof and added a guard: a mutant that corrupts nothing is now reported as a broken *fixture* rather than a missed *assertion*. The guard compares the whole argument list, so it catches a mutant that has gone completely inert — and misses one that mutates three things and loses one of them. Measured: 7 of 46 are exposed, all of them reading frozen inputs that cannot drift, so nothing is broken today. | **Small.** Compare slot-by-slot, or accept the seven and say so. |
 | Neither collapse proof is guarded by anything | `L10` enforces write-once over the ancestor *shard* proofs by a hand-declared list; `R4/GONE` covers every shard the table declares, and its proof. Nothing covers `SESSION_NOTES-pointer-collapse.verify.sh` or `SESSION_NOTES-pointer-collapse-S254.verify.sh` — and the second is the declared second custodian of the 276 deleted lines, the reason "nothing was lost" does not rest on git alone. Delete either file and the remaining proofs pass; CI errors only when *zero* proofs are found. | **Small.** Add both to a write-once list, or have each assert the other exists. |
 | A quotation can defeat the S254 collapse proof's self-test | Two of that proof's self-test mutations find the oldest live record by searching for the text `### What Session `, which matches the LAST place that text appears anywhere, not the last heading. A record that quotes it lands the search inside the quotation, the mutation edits nothing, and the proof reports a surviving mutant, which turns CI red. Session 266's trim would have hit it; rewording one quotation avoided it. Session 264's record holds another, so a later trim can hit it again. | **Operator call.** Small — anchor both searches at a line start — but it edits a custodian proof that nothing guards, in the session that needs it green. |
+| The ledger table's rows after the eighth are guarded only in form | The table at the top of `SESSION_NOTES.md` names, for each trim, the commit that added its archive. A proof checks the first eight commit hashes against git; row 9's and every later one are not checked: the guard accepts any seven to forty hex digits, so a wrong hash, an extra trailing cell or trailing spaces on a later row stay green (each measured in a clone by Session 266's review). That trim typed row 9's hash by hand, after measuring it, and the next trim will copy the pattern for row 10. A related trap found the same way: a session record that quotes the newest row word for word turns four guard tests red at its own commit. | **Small; operator call.** The guard reads no git on purpose (CI checks out shallow), so deriving the hash belongs in the trim's own proof, which does read git. |
+| The read-budget guard cannot model "claim, then a wide close-out" from a close-out state | The guard tests each next commit by modelling what the following session will write. One of its models starts only when the newest record is still a claim stub, so from a finished close-out it never runs. Session 266's review measured the consequence with short lines: a close-out of about 19.7 to 19.9 KB, or of about 22 KB, passes at its own commit and turns the NEXT session's claim commit red. Behind it is a recurring cause: the mutant that isolates one check has been repaired five times in four sessions, each time for the quantity the last red named (learning #287). | **Small.** Add the missing model, and an assertion inside that mutant. Until then, before committing a close-out, put the next claim stub above it in a scratch copy and run the guard. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB); Session 266, that trim, retired the rest into a three-line "nothing is bequeathed" paragraph, with both instructions recorded in `CLAUDE.md`, so the list is empty today. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
 | CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
-**Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk.
+**Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk. Two more of the same kind, found by Session 266's review: `.github/workflows/ci.yml:62` and `:70` state Session 253's measurements in the present tense (a proof count and a set count), and two docstrings in `tests/test_session_notes_census.py` (`:245`, `:741`) were written when nine table rows existed and now read ambiguously.
 
 ---
 
@@ -519,6 +521,57 @@ verified that gives 50 of 50 caught. **Operator call** because it edits a custod
 nothing guards (the item above) in the session that needs it green, which reads as gate erosion
 (failure mode 17) even though the anchor is stricter, not looser. Best done together with the item
 above, since both are about what protects those two files.
+
+### The ledger table's rows after the eighth are guarded only in form
+
+**Filed Session 266 (the tenth trim's adversarial review). Operator call — it is a guard design question.**
+
+`SESSION_NOTES-pointer-collapse-S254.verify.sh` pins rows 1 to 8, and its `R4` checks each of those
+hashes against the git history of its archive. Rows 9 and 10 have no such custodian. The census guard
+(`tests/test_session_notes_census.py:422`) composes every cell of every row except the hash, and its
+hash slot is only the form `[0-9a-f]{7,40}` or the words `this commit`. Session 266's review committed
+each perturbation into a clone and ran every proof and both guards: row 9's hash changed to a wrong
+one (7 hex digits) passes all 82 guard tests and every proof; so does `this commit` replaced by a
+made-up hash in row 10, an extra trailing cell on a row, and trailing spaces on a row.
+
+The tenth trim resolved row 9's `this commit` with a declared substitution in its proof, typing the hash
+after measuring it with `git log --diff-filter=A`. L2 compares the ledger against that same typed value,
+so a wrong hash typed on both sides also passes. The eleventh trim will copy the pattern for row 10.
+
+**A second trap, found the same way:** the census guard's row mutants anchor on the newest row's full
+text and require it to occur exactly once, so a session record that quotes that row word for word turns
+four guard tests red at its own commit, and neither the trim's proof nor the trim commit can see it.
+Session 266's record avoids the quotation; nothing tells the next author to.
+
+**Small.** Options: derive each resolved hash inside the trim's proof from `git log --diff-filter=A`
+(the proof already reads git; the census guard deliberately does not, because CI checks out shallow),
+and anchor the composed row pattern to the whole line with a mutant. **Operator call** because ruling F
+already names the CI guard as the home for table checks, and a hash check that needs history belongs
+in a job that fetches it.
+
+### The read-budget guard cannot model "claim, then a wide close-out" from a close-out state
+
+**Filed Session 266 (the tenth trim's review; a skeptic reproduced it).**
+
+`tests/test_read_budget.py`'s `_successor_wide_closeout_then_claim` (`:995`) returns at once (`:1002`) unless
+the newest record is a claim stub, so `test_next_state` never composes a claim and THEN a wide close-out
+starting from a finished close-out. In the claim state that follows, the wide model parks the K prefix
+within about a line of the page, and mutant M01's padded ledger shifts the page by one line, so
+`check_k_lines` co-fires and `check_ceiling` stops being a sole catcher. Measured at 45 B per line: a
+close-out of 19,650 B, 19,725 to 19,850 B or 21,975 to 22,050 B is green at its own commit and red at
+the next session's claim commit; none at 50, 60, 68 or 73 B per line in about 600 samples. The
+close-out's own commit cannot show it.
+
+**Behind it, a recurring cause (learning #287).** `_m08_the_retention_rule_has_no_compliant_cut` exists
+to make `check_satisfiable` fire alone. It has been repaired five times in four sessions (256 twice,
+258, 262 and 266), and each repair held the quantity the previous red had named. Session 266's was the
+bytes of the page's head, which the pad had entered although it sat beyond the K prefix.
+
+**Small.** Add a parametrisation that runs `_successor_claim` and then `_successor_wide_closeout_then_claim`
+from a close-out state (the skeptic verified it is red from there on the failing sizes and the other
+tests stay green), and assert `page_estimate(mutated) == page_estimate(original)` inside M08, so a promise
+it cannot keep is a build error. **Until then:** before committing a close-out, put a claim stub for the
+next session above it in a scratch copy and run `uv run pytest tests/test_read_budget.py --no-cov`.
 
 ### CI runs the proofs on push, and this repository pushes in bursts
 
