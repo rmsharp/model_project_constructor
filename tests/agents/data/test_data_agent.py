@@ -36,7 +36,7 @@ from tests.hostile_text import (
     EVERY_CONTROL,
     SECRET,
     SECRET_NAME,
-    corrupt_schema_database,
+    database_with_a_dangling_view,
     unsafe,
 )
 
@@ -961,16 +961,17 @@ def test_a_quality_check_error_carries_no_control_character_or_secret(
     datasheet_response: Datasheet,
 ) -> None:
     """Route 3, ``nodes.py``'s ``execute_qc``: ``f"execution error: {e}"`` was the whole
-    driver exception, neither redacted nor flattened nor scrubbed. A real SQLite file
-    whose schema cannot be read quotes a table's NAME in the error, so a hostile name
-    reaches ``result_summary`` (2 ESC and 1 BEL measured, and a newline)."""
+    driver exception, neither redacted nor flattened nor scrubbed. A real SQLite file in
+    which ``claims`` is a view over a dropped table quotes that table's NAME in the error,
+    so a hostile name reaches ``result_summary`` (2 ESC and 1 BEL measured, and a
+    newline)."""
     for n, (name, scrubbed) in enumerate(
         [
             (ESCAPE_NAME, ESCAPE_NAME_SCRUBBED),
             (SECRET_NAME, "cfg PWD=***;Database=claims"),
         ]
     ):
-        url = corrupt_schema_database(tmp_path / f"{n}.db", name)
+        url = database_with_a_dangling_view(tmp_path / f"{n}.db", name)
         report = _run_with(
             ReadOnlyDB(url),
             sample_request,
@@ -981,12 +982,13 @@ def test_a_quality_check_error_carries_no_control_character_or_secret(
         )
         checks = report.primary_queries[0].quality_checks
         assert [qc.execution_status for qc in checks] == ["ERROR", "ERROR"]
+        assert len(checks) == 2
         for qc in checks:
             assert unsafe(qc.result_summary) == []
             assert "\n" not in qc.result_summary
             assert SECRET not in qc.result_summary
             assert qc.result_summary.startswith("execution error: ")
-            assert f"malformed database schema ({scrubbed})" in qc.result_summary
+            assert f"no such table: main.{scrubbed}" in qc.result_summary
 
 
 def test_a_quality_check_error_is_cleaned_in_full(
@@ -1006,7 +1008,9 @@ def test_a_quality_check_error_is_cleaned_in_full(
         datasheet_response,
     )
 
-    for qc in report.primary_queries[0].quality_checks:
+    checks = report.primary_queries[0].quality_checks
+    assert len(checks) == 2  # a loop over nothing passes
+    for qc in checks:
         assert qc.execution_status == "ERROR"
         assert qc.result_summary == "execution error: boom done password=***"
 
@@ -1028,7 +1032,7 @@ def test_a_baseline_error_carries_no_control_character_or_secret(
             (SECRET_NAME, "cfg PWD=***;Database=claims"),
         ]
     ):
-        url = corrupt_schema_database(tmp_path / f"{n}.db", name)
+        url = database_with_a_dangling_view(tmp_path / f"{n}.db", name)
         report = _run_with(
             ReadOnlyDB(url),
             _request_with_baseline(sample_request),
@@ -1045,7 +1049,7 @@ def test_a_baseline_error_carries_no_control_character_or_secret(
         assert "\n" not in caveat
         assert SECRET not in caveat
         assert caveat.startswith("baseline SQL execution error: ")
-        assert f"malformed database schema ({scrubbed})" in caveat
+        assert f"no such table: main.{scrubbed}" in caveat
 
 
 def test_a_baseline_error_is_cleaned_in_full(
@@ -1083,7 +1087,7 @@ def test_the_whole_serialized_report_holds_no_control_character_or_secret(
     import json
 
     name = f"{ESCAPE_NAME} {SECRET_NAME}"
-    url = corrupt_schema_database(tmp_path / "whole.db", name)
+    url = database_with_a_dangling_view(tmp_path / "whole.db", name)
     report = _run_with(
         ReadOnlyDB(url),
         _request_with_baseline(sample_request),
@@ -1107,6 +1111,14 @@ def test_the_whole_serialized_report_holds_no_control_character_or_secret(
                 _collect(item)
 
     _collect(decoded)
-    assert any("malformed database schema" in s for s in strings)  # the route was exercised
+    # The execution routes ran: a quality check and the baseline failed on the dangling view,
+    # and a connect that failed instead would make the report hold none of them.
+    assert [qc.execution_status for qc in report.primary_queries[0].quality_checks] == [
+        "ERROR",
+        "ERROR",
+    ]
+    assert report.baseline_snapshot is not None
+    assert report.baseline_snapshot.query_execution_status == "FAILED"
+    assert any("no such table" in s for s in strings)
     assert [s for s in strings if unsafe(s.replace("\n", " "))] == []
     assert [s for s in strings if SECRET in s] == []

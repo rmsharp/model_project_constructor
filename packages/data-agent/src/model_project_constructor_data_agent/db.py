@@ -144,17 +144,20 @@ def redact_secrets(text: str) -> str:
 _CONTROL_CHARACTERS = re.compile(r"[\x00-\x1f\x7f-\x9f]")
 
 
-def safe_message(error: object) -> str:
+def safe_message(error: object, *, redact: bool = True) -> str:
     """``str(error)`` made safe to print, to log, to persist and to put in a report.
 
-    The one function every route that carries database or driver text to a person
-    goes through: the schema probe's three messages (``discovery.py``), the connect
-    error (:meth:`ReadOnlyDB.connect`) and ``discover``'s echo of it (``cli.py``),
-    the "database unreachable" concern (``agent.py``) and the quality-check and
-    baseline errors (``nodes.py``), the last two of which are written into a
-    committed project's markdown. It takes anything with a ``str``: the exception
-    itself, or the text a caller already holds. Session 269 wrote it for the
-    probe; Session 270 moved it here, beside :func:`redact_secrets`, for the rest.
+    The function behind each route that has been closed for carrying database or
+    driver text to a person: the schema probe's three messages (``discovery.py``),
+    the connect error (:meth:`ReadOnlyDB.connect`), the quality-check and baseline
+    SQL errors (``nodes.py``) and, with ``redact=False`` (below), ``discover``'s
+    echo of the connect error and ``agent.py``'s "database unreachable" concern.
+    The concern and the baseline caveat are written into a committed project's
+    markdown; a quality check's ``result_summary`` goes to the report JSON and the
+    summarise prompt. ``BACKLOG.md`` lists the routes that still do not pass
+    through it. It takes anything with a ``str``: the exception itself, or the
+    text a caller already holds. Session 269 wrote it for the probe; Session 270
+    moved it here, beside :func:`redact_secrets`, for the rest.
 
     Runs inside the ``except`` blocks that deliver "never raises", so it must not
     be a raise site itself. The whole body is guarded, not just ``str(error)``:
@@ -179,12 +182,26 @@ def safe_message(error: object) -> str:
     def``). After it: a control between a key and its separator hides the key from
     the masker, and only the scrub turns that control into the space the masker
     tolerates there (``password<ESC>=hunter2`` came out ``password =hunter2``).
-    The second pass changes only what the first could not see, since the masker is
-    idempotent. What neither pass closes is the masker's own limit that an
-    unquoted value ends at whitespace, so ``password=<ESC> hunter2`` still prints
-    ``hunter2``, as ``password=x hunter2`` always has. Applied again to its own
-    output it changes nothing, so a caller may use it on text an earlier site has
-    already cleaned.
+
+    **Apply it once, to the raw text.** It is not a fixed point: the masker reads a
+    quoted value glued to the text after it as the whole value, so
+    ``password=''hunter2`` becomes ``password=***hunter2`` and a second pass makes
+    it ``password=***`` (measured, Session 270 review). Nor is the masker safe to
+    run over a message that was composed from text it already cleaned: it reads a
+    key, a separator and a run of non-whitespace wherever it finds them, so
+    ``cannot connect to 'postgresql://h/db?password=***': cause`` loses its closing
+    ``':`` and ``...secret': (sqlite3.OperationalError) ...`` loses the exception
+    type (both measured). Pass ``redact=False`` for text that was redacted where it
+    was built, as :meth:`ReadOnlyDB.connect` builds the connect error: only the
+    control characters are replaced and the text put on one line.
+
+    What neither redaction pass closes are the masker's own limits: an unquoted
+    value ends at whitespace, so ``password=<ESC> hunter2`` prints ``hunter2``, as
+    ``password=x hunter2`` always has; and a control between the separator and an
+    opening quote or brace makes the quote part of a bare value, so the rest of a
+    multi-word secret survives (``password=<ESC>"Zq7xK9mW Qw3rT5yU" end`` prints
+    ``Qw3rT5yU" end``; without the control it is masked whole; the masker alone
+    does the same).
 
     Redaction is **best-effort**. :func:`redact_secrets` masks URL userinfo, a
     wide `key=value`/`key: value`/quoted/braced key list (Session 262), and a
@@ -196,6 +213,8 @@ def safe_message(error: object) -> str:
     """
     try:
         raw = str(error).encode("utf-8", "replace").decode("utf-8")
+        if not redact:
+            return " ".join(_CONTROL_CHARACTERS.sub(" ", raw).split())
         scrubbed = _CONTROL_CHARACTERS.sub(" ", redact_secrets(raw))
         return " ".join(redact_secrets(scrubbed).split())
     except Exception:
@@ -336,8 +355,12 @@ class ReadOnlyDB:
             # The URL half is ``repr``-quoted, which escapes every control character.
             # The cause is the driver's own text, so it goes through ``safe_message``:
             # ``discover`` prints this message and ``run`` writes it into the report.
+            # A DBAPI error reaches here wrapped by SQLAlchemy, whose text names its
+            # type; a bare ``TimeoutError()`` has no text at all, and the message
+            # would end in a colon, so fall back to the type's name.
             raise DBConnectionError(
-                f"cannot connect to {redact_db_url(self.url)!r}: {safe_message(e)}"
+                f"cannot connect to {redact_db_url(self.url)!r}: "
+                f"{safe_message(e) or type(e).__name__}"
             ) from e
         self._engine = engine
 

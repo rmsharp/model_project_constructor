@@ -1,12 +1,15 @@
 """Hostile database text, shared by the tests that hold it clear of a terminal and a report.
 
 Session 270 (``BACKLOG.md``: *Seven more routes put database or driver text on a terminal
-or in a report unscrubbed*, routes 1 to 3). Session 269 fixed the schema probe's three
-messages and its review found the same text reaching three more places: the connect error
-``discover`` lets escape as a traceback, the "database unreachable" concern ``run`` writes
-into the report, and the driver exceptions the quality checks and the baseline copy into it.
-Each place is its own call site, so each has its own test, and they all need the same
-hostile input: this module is where it lives.
+or in a report unscrubbed*, routes 1 to 3). Session 269's review of its own fix found seven
+routes by which database or driver text still reached a terminal or a report; Session 270
+closed the first three: the connect error ``discover`` let escape as a traceback, the
+"database unreachable" concern ``run`` writes into the report, and the driver exceptions the
+quality checks and the baseline copy into it. Each is its own call site, so each has its own
+test, and they all need the same hostile input: this module is where it lives.
+
+It serves the tests written for those three routes. ``test_discovery.py`` and ``test_cli.py``
+already held their own copies of the control-character helpers (Session 269) and keep them.
 
 Importing it registers the ``fakeesc`` dialect (see :class:`EscapingDialect`). That is a
 side effect, on purpose: the URL scheme is unique to these tests and nothing else reads it.
@@ -23,7 +26,8 @@ from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
 
 #: The 65 ``Cc`` characters: the C0 controls, DEL and the C1 controls. A terminal ACTS on
 #: these rather than printing them (ESC and BEL open a title or colour sequence; U+009B is
-#: a one-character CSI). Held against the Unicode database by ``test_db.py``.
+#: a one-character CSI). ``test_db.py`` holds this list, and :func:`unsafe`, against the
+#: Unicode database, so neither can drift from it.
 CONTROLS = [*map(chr, range(0x00, 0x20)), *map(chr, range(0x7F, 0xA0))]
 EVERY_CONTROL = "".join(CONTROLS)
 #: The controls ``redact_secrets`` reads as part of an unquoted secret's value. The ten that
@@ -61,9 +65,7 @@ def unsafe(text: str) -> list[str]:
 
 #: What the simulated driver says when a connect fails: PostgreSQL echoes the role name it
 #: was given, and a DSN-shaped detail follows a newline, as SQLAlchemy's own help URL does.
-CONNECT_CAUSE = (
-    f'FATAL: role "{ESCAPE_NAME}" does not exist\ndetail: PWD={SECRET};Database=claims'
-)
+CONNECT_CAUSE = f'FATAL: role "{ESCAPE_NAME}" does not exist\ndetail: PWD={SECRET};Database=claims'
 
 
 class EscapingDialect(SQLiteDialect_pysqlite):
@@ -91,24 +93,26 @@ registry.register("fakeesc", __name__, "EscapingDialect")
 ESCAPING_URL = "fakeesc:///claims"
 
 
-def corrupt_schema_database(path: Path, table_name: str) -> str:
-    """Build a SQLite file whose schema cannot be read, and return its URL.
+def database_with_a_dangling_view(path: Path, table_name: str) -> str:
+    """Build a SQLite file in which ``claims`` is a view over a table that is gone.
 
-    ``table_name`` is a table whose ``sqlite_master`` entry is then overwritten with text
-    that is not SQL, so every statement that reads the schema fails with
-    ``malformed database schema (<table_name>)``: the driver quotes the NAME, which is how
-    a hostile name reaches an error message. ``SELECT 1`` still works, so a connect (which
-    runs it) succeeds and a quality check that names a table fails. A real SQLite file, not
-    a simulation. It also holds a healthy ``claims`` table for those statements to name.
+    Every statement that names ``claims`` then fails with ``no such table:
+    main.<table_name>``: the driver quotes the NAME, which is how a hostile name reaches an
+    error message. ``SELECT 1`` still works, so a connect (which runs it) succeeds and a
+    quality check or baseline that names ``claims`` fails. A real SQLite file, not a
+    simulation, and the same shape Session 269's tests use.
+
+    It replaces a version that overwrote ``sqlite_master`` with text that is not SQL. From
+    SQLite 3.50.4 even ``SELECT 1`` fails on such a file (the connect then fails and the
+    checks are never run), and SQLite built in defensive mode refuses the overwrite. The
+    dangling view behaves the same on every build from 3.39.4 to 3.54.0 (measured by the
+    Session 270 review).
     """
     con = sqlite3.connect(path)
     try:
-        con.execute("CREATE TABLE claims (id INTEGER PRIMARY KEY)")
         con.execute(f'CREATE TABLE "{table_name}" (x INTEGER)')
-        con.execute("PRAGMA writable_schema=ON")
-        con.execute(
-            "UPDATE sqlite_master SET sql='CREATE TABLE garbage(' WHERE name=?", (table_name,)
-        )
+        con.execute(f'CREATE VIEW claims AS SELECT x FROM "{table_name}"')
+        con.execute(f'DROP TABLE "{table_name}"')
         con.commit()
     finally:
         con.close()

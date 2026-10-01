@@ -26,6 +26,8 @@ catch, and its upper bound.
 from __future__ import annotations
 
 import logging
+import sys
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -722,11 +724,12 @@ def test_a_skipped_entity_repr_hides_the_error() -> None:
 # --- Session 270: ``safe_message`` is the one place database text is made safe ---
 #
 # Session 269 wrote this logic as ``discovery._safe_message`` for the schema probe's three
-# messages. Its review found the same text reaching a terminal or a report from three more
-# places (``BACKLOG.md``, *Seven more routes ...*, routes 1 to 3), each of which flattened or
-# printed ``str(e)`` itself. The function moved here, beside ``redact_secrets``, so every one
-# of them can call it. These tests hold the function; each call site has its own test where
-# it lives, because a site that swaps it for a raw ``str(e)`` leaves every other test green.
+# messages. Its review found seven routes by which database or driver text still reached a
+# terminal or a report (``BACKLOG.md``, *Seven more routes ...*); the first three each
+# flattened or printed ``str(e)`` themselves. The function moved here, beside
+# ``redact_secrets``, so they can call it. These tests hold the function; each call site has
+# its own test where it lives, because a site that swaps it for a raw ``str(e)`` leaves every
+# other test green.
 
 
 class TestSafeMessage:
@@ -849,17 +852,33 @@ class TestSafeMessage:
             f"password=head\x1b{SECRET} tail",
             f"password\x1b={SECRET}",
             f"postgresql://u:{SECRET}@h/db\n{CONNECT_CAUSE}",
+            f"password\x1b=''{SECRET} tail",
             "plain",
             "",
         ],
-        ids=["every-control", "secret", "key-separator", "dsn-and-cause", "plain", "empty"],
+        ids=[
+            "every-control",
+            "secret",
+            "key-separator",
+            "dsn-and-cause",
+            "empty-quoted-value",
+            "plain",
+            "empty",
+        ],
     )
-    def test_it_is_idempotent(self, message: str) -> None:
-        """Applied again, to text it already cleaned, it changes nothing. The sites that
-        feed it text another site has already cleaned (``agent.py`` after ``connect``,
-        ``discover`` after ``agent.py``'s own caller) depend on that."""
+    def test_the_output_is_one_line_with_no_control_character_even_when_applied_twice(
+        self, message: str
+    ) -> None:
+        """What holds however often it is applied. It is NOT idempotent: the masker reads a
+        quoted value glued to the text after it as the whole value, so ``password=''hunter2``
+        becomes ``password=***hunter2`` and a second pass makes it ``password=***``
+        (measured, Session 270 review). The docstring says to apply it once, to raw text."""
         once = safe_message(message)
-        assert safe_message(once) == once
+        twice = safe_message(once)
+        for out in (once, twice):
+            assert unsafe(out) == []
+            assert "\n" not in out
+            assert out == " ".join(out.split())
 
     def test_an_unprintable_exception_gives_a_placeholder_and_does_not_raise(self) -> None:
         class Unprintable(Exception):
@@ -916,7 +935,8 @@ class TestConnectError:
         message = str(self._connect_error(f"sqlite:////nonexistent/{ESCAPE_NAME}/x.db"))
         assert "unable to open database file" in message
         assert unsafe(message) == []
-        assert "\\x1b]0;PWNED-TITLE\\x07" in message
+        assert "evil" in message  # the URL is still named. How SQLAlchemy renders the control
+        # characters (raw in 2.0, percent-encoded in 2.1) is not this test's business.
 
     def test_the_raw_driver_exception_stays_on_the_chain_for_a_debugger(self) -> None:
         """The message is cleaned; the cause is not touched, so a library caller who
@@ -925,3 +945,86 @@ class TestConnectError:
         error = self._connect_error()
         assert isinstance(error.__cause__, sa.exc.OperationalError)
         assert ESCAPE_NAME in str(error.__cause__)
+
+    def test_a_cause_with_no_text_falls_back_to_its_type(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A bare ``TimeoutError()`` has an empty ``str``, so the message would end in a
+        colon and ``discover`` would print an ``error:`` line with nothing after it. A DBAPI
+        error reaches here wrapped by SQLAlchemy, whose text names its type; this one does not."""
+
+        def _timeout(*args: object, **kwargs: object) -> object:
+            raise TimeoutError()
+
+        monkeypatch.setattr(sa, "create_engine", _timeout)
+        message = str(self._connect_error("sqlite:///x.db"))
+        assert message == "cannot connect to 'sqlite:///x.db': TimeoutError"
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "fakeesc:///x?password=hunter2",
+            "fakeesc:///secret",
+            "sqlite:////nonexistent_dir/secret",
+            "sqlite:////nonexistent_dir/token",
+        ],
+        ids=["query-password", "path-ends-in-secret", "real-sqlite-secret", "real-sqlite-token"],
+    )
+    def test_a_message_built_here_is_left_whole_by_the_non_redacting_form(self, url: str) -> None:
+        """The sinks (``discover``'s echo, ``agent.py``'s concern) clean this message with
+        ``redact=False``. The masker would not leave it whole: it reads ``key``, a separator
+        and a run of non-whitespace wherever it finds them, so a URL that ends in ``password=``
+        or in a key word loses its closing ``':`` or the exception type (measured, Session 270
+        review). Only the control characters are replaced, and there are none to replace here."""
+        message = str(self._connect_error(url))
+        assert safe_message(message, redact=False) == message
+
+
+class TestSafeMessageWithoutRedaction:
+    """``redact=False``: for text that was redacted where it was built."""
+
+    @pytest.mark.parametrize("ch", CONTROLS, ids=control_ids(CONTROLS))
+    def test_each_control_becomes_a_space(self, ch: str) -> None:
+        assert safe_message(f"a{ch}b", redact=False) == "a b"
+
+    def test_it_flattens_and_replaces_surrogates_like_the_default(self) -> None:
+        assert safe_message("a\n b\udcffc", redact=False) == "a b?c"
+
+    def test_it_does_not_mask(self) -> None:
+        """The point of the flag, and its cost: a secret in text nobody redacted stays."""
+        assert safe_message(f"x {ESCAPE_NAME} PWD={SECRET}", redact=False) == (
+            f"x {ESCAPE_NAME_SCRUBBED} PWD={SECRET}"
+        )
+
+    def test_it_never_raises(self) -> None:
+        class Unprintable(Exception):
+            def __str__(self) -> str:
+                raise RuntimeError("broken __str__")
+
+        assert safe_message(Unprintable(), redact=False) == "<unprintable>"
+
+
+class TestTheSharedHelpers:
+    """``tests/hostile_text.py`` is what every Session 270 test is written against, so a
+    wrong helper would make them pass or fail for nothing. Held against the Unicode database
+    here, once."""
+
+    def test_controls_is_exactly_the_cc_category(self) -> None:
+        scanned = [
+            chr(cp) for cp in range(sys.maxunicode + 1) if unicodedata.category(chr(cp)) == "Cc"
+        ]
+        assert scanned == CONTROLS
+        assert len(CONTROLS) == 65
+        assert [c for c in CONTROLS if not c.isspace()] == NON_SPACE_CONTROLS
+        assert len(NON_SPACE_CONTROLS) == 55
+
+    def test_unsafe_names_every_control_but_a_newline_and_nothing_else(self) -> None:
+        assert unsafe(EVERY_CONTROL) == [f"U+{ord(c):04X}" for c in CONTROLS if c != "\n"]
+        assert unsafe("a\nb") == []
+        assert unsafe("é日本語🚗\u200e\u0301") == []
+        assert unsafe("x\x1by\x07") == ["U+0007", "U+001B"]
+
+    def test_the_hostile_names_are_what_the_tests_say_they_are(self) -> None:
+        assert unsafe(ESCAPE_NAME) == ["U+0007", "U+001B"]
+        assert unsafe(ESCAPE_NAME_SCRUBBED) == []
+        assert safe_message(ESCAPE_NAME) == ESCAPE_NAME_SCRUBBED
