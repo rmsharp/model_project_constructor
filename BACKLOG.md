@@ -54,7 +54,8 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Database text can put terminal control codes on the operator's screen | An error from the database, with escape characters in an object's name, is printed to stderr raw, so it can change a terminal's title or colours. The skipped-table note is safe (it is quoted); the failed-probe note, which is also saved in the file, is not. | **Small** — scrub control characters in `_safe_message`. |
-| The `typer` minimum version is too low | Both package files say `typer>=0.12`, but 0.12.0 to 0.12.3 cannot start this CLI at all. Nobody hits it, because the lock file pins 0.24.1. | **Small** — raise to `>=0.12.4` and refresh the lock. |
+| Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
+| The tests need Click 8.2 and nothing says so | Under Click 8.1, 18 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
 | A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
@@ -427,16 +428,47 @@ with a space before the whitespace flatten (`[\x00-\x1f\x7f-\x9f]`), and add a r
 neither the WARNING nor the note carries one. **Small**; `_safe_message` already scrubs rather than
 rejects.
 
-### The `typer>=0.12` floor is wrong
+### Only `typer`'s dependency floor has ever been measured — `langgraph>=0.2` cannot start the intake CLI
 
-**Found by Session 267's review; reproduced; pre-existing.** `pyproject.toml:24` and
-`packages/data-agent/pyproject.toml:17` both declare `typer>=0.12`, but typer 0.12.0 and 0.12.3 cannot
-build this CLI at all: `RuntimeError: Type not yet supported: str | None` from `typer/main.py`,
-because `run` has had a `str | None` option since long before Session 267 (reproduced at `2808473`
-too). 0.12.4 works, including the new `--request-context` callback. `uv.lock` resolves 0.24.1, so CI
-and ordinary installs never see it; only a user who pins `typer` to 0.12.0 to 0.12.3 does.
-**Fix:** raise both floors to `typer>=0.12.4` and refresh `uv.lock`. **Small**, and it tightens a
-floor that was never true, so it needs no ruling.
+**Found by Session 268's review while closing the `typer` floor; reproduced by a skeptic;
+pre-existing.** `uv.lock` pins every package far above the minimum the project declares, so no job
+ever installs a declared minimum. Session 268 measured `typer`'s (now `>=0.16.0`, held by
+`tests/test_dependency_floors.py`). Asked of the rest, on Python 3.11,
+`uv pip install --resolution lowest-direct '<repo>[agents]' '<repo>/packages/data-agent'`:
+**`langgraph>=0.2` resolves 0.2.0 and `model-intake-agent --help` dies with `ModuleNotFoundError: No
+module named 'langgraph.types'`** (`agents/intake/agent.py:17`, then `nodes.py:14`). Bisected over
+langgraph 0.2.0 to 0.2.76 with the lock's other pins held: the import first works at 0.2.47, but the
+website agent's graph still fails (`InvalidUpdateError: Expected node scaffold_analysis to update at
+least one of ...`) until **0.2.57**, where the intake, website and data-agent test directories pass.
+So the working floor is `>=0.2.57`, not the 0.2.47 a first bisect suggests. The other direct floors
+(pydantic 2.6.0, anthropic 0.94.0, sqlalchemy 2.0.0, httpx 0.27.0, sqlparse 0.5.0, pyyaml 6.0)
+installed and `model-data-agent` ran, but only `--help` was exercised, not the tests. Two limits on
+any such check: `pyyaml` 6.0 has no wheel for Python 3.12 and its source build fails
+(`cython_sources`), so lowest-direct installs only on 3.11 as the floors stand; and resolving every
+transitive package to its minimum (`--resolution lowest`) fails building a `greenlet` source
+distribution, independent of any floor here.
+**Fix, two sizes.** (1) **Small:** run the data agent's own tests at langgraph 0.2.0, then raise
+`langgraph` in `pyproject.toml:19` (and `packages/data-agent/pyproject.toml:13` if its tests need it)
+to `>=0.2.57`, with a drift guard shaped like the `typer` one. (2) **Operator call:** a CI job that
+installs `--resolution lowest-direct` on Python 3.11 and runs the CLI test files, which is the only
+thing that would have caught either floor; it adds a job and may need `pyyaml` raised to install on
+anything newer. The method that worked for `typer` is Session 268's harness: one isolated venv per
+candidate, the lock's exact pins for everything else, the real CLIs, `--help` and a real command.
+
+### The test suite needs Click 8.2 or later, and nothing declares it
+
+**Found by Session 268's matrix and review; reproduced by a skeptic; pre-existing.** (1) Under Click
+8.1.8, 18 of the 69 CLI tests fail for every Typer from 0.12.4 to 0.17.0, all
+`ValueError: stderr not separately captured`: they read `result.stderr`, and Click 8.1's `CliRunner`
+mixes stderr into stdout unless told otherwise. The CLIs themselves build and render `--help` there.
+(2) `tests/agents/intake/test_cli.py:10` does `import click` (used at `:21`, `click.unstyle`) while no
+`pyproject.toml` declares Click: it arrives through Typer up to 0.25, `uvicorn` (the `ui` extra) and
+`mkdocs` (the `docs` extra). **Typer 0.26 and later vendor Click and require none**, so when the
+lock's Typer (0.24.1) moves past 0.25, an environment synced with `--extra agents --extra dev` only,
+which is the CI decoupling job's shape and a developer's, has no Click and that file fails at
+collection. **Fix:** declare `click>=8.2` in the `dev` extra (it is a test dependency), or drop the
+direct import. **Small**; do both halves in one commit and re-run the three CLI test files under
+Click 8.1.8 to see what the declaration changes.
 
 ### No circuit breaker on a systematically-failing live sweep
 
