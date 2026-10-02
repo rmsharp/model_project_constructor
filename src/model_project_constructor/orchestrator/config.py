@@ -49,6 +49,11 @@ class PlatformSpec:
     adapter module inside the body, so importing this module stays
     ``httpx``-free — the registry pulls it only when an adapter is actually
     constructed.
+
+    The pipeline script validates nothing itself: the token reaches the adapter
+    through :attr:`adapter_factory`, so every adapter's constructor must call
+    ``validate_repo_token`` (``tests/agents/website/test_repo_token.py`` iterates
+    this registry and goes red for a host whose adapter does not).
     """
 
     default_api_url: str

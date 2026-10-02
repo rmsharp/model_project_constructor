@@ -36,6 +36,7 @@ from model_project_constructor.agents.website.nodes import (
 )
 from model_project_constructor.agents.website.protocol import (
     CommitInfo,
+    InvalidRepoTokenError,
     ProjectInfo,
     RepoClient,
     RepoClientError,
@@ -59,6 +60,7 @@ __all__ = [
     "RepoClient",
     "RepoClientError",
     "RepoNameConflictError",
+    "InvalidRepoTokenError",
     "ProjectInfo",
     "CommitInfo",
     "FakeRepoClient",
