@@ -53,9 +53,9 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
-| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw. | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
+| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw (Session 273's review showed that page can carry the access token itself when the host echoes request headers). | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
-| A website token ending in a carriage return or tab is printed in full | Found by Session 272's review. A token read from a file with Windows line endings (`--private-token "$(cat token.txt)"`) is refused by the HTTP library with an error that quotes the whole token. The website generator copies that error into its result, which is printed and written to `-o`. It does not depend on Typer. A token with a non-ASCII character crashes the same way and names its first such character. | **Small.** Reject such a token once at the command line with a fixed sentence. **Operator call** on rejecting versus trimming, since trimming silently edits a credential. |
+| An API key ending in a carriage return is quoted in the error chain | Found by Session 273's review, the sibling of the website-token item it closed. The language-model clients (Anthropic and Bedrock) put their key in an HTTP header, and the HTTP library refuses a key ending in a carriage return or line feed (a Windows-style `.env`) with a message that quotes the whole key. The SDK hides that message ("Connection error.") and the pipeline stores only that, so no report or checkpoint held the key (measured); but it sits in the exception's cause, so any log or traceback that prints the chain prints it (reproduced through the intake web UI's server log). The pipeline script also prints and saves a `MPC_HOST_URL` that carries a password or token. | **Small, a choice:** refuse such a key where it is read (the rule the website token now has), or give the SDK a client that withholds the library's message. |
 | Smaller follow-ups from the password fix | Five items the review of Session 271's fix left: the error does not tell the operator that an `@` in a password must be written `%40` (the usage guide now does); a much smaller design that withholds the driver's text exists and was declined; a reliably parsed password with a space is masked only up to the space; a non-string address raises; and SQLAlchemy 2.1 fails one test that CI never meets. | Each small. **The first two are the operator's call.** |
 | `redact_secrets` is slow on some text, and nothing limits how much text `safe_message` reads | A message made of thousands of `://x:` runs with no spaces takes seconds to minutes (4x longer each time the text doubles), and a 10-million-character message uses 1 to 2 GB. No database driver normally produces either. | **Small**, but a choice: a cap on the length shortens a very long `[SQL: ...]` that is now shown whole. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
@@ -472,18 +472,30 @@ Oracle or SQL Server.
    summary reached `analysis/02_data.qmd`, `analysis/06_implementation_plan.qmd` and
    `reports/data_report.md` (measured). **Fix:** either say the guarantee is the producer's, or a one-line
    sanitiser in the templates for report-derived strings, which makes the producer fixes defence in depth.
-7. **Repo-host failure text** (`website/nodes.py:110` and `:219-225`; `gitlab_adapter.py:183`,
-   `github_adapter.py:266`). A `RepoClientError` is built from the raw HTTP response body, becomes
-   `failure_reason`, and `scripts/run_pipeline.py:665` prints it unmodified (measured through the agent,
-   the `print` is a code citation). Server-controlled text, not database text. **Nit.**
+7. **Repo-host failure text** (`website/nodes.py:110` and `:219-225`; the `{response.text}` interpolations in
+   `gitlab_adapter.py` and `github_adapter.py`; `scripts/run_pipeline.py` prints it unmodified). A
+   `RepoClientError` is built from the raw HTTP response body, becomes `failure_reason`, and is printed. Server-
+   controlled text, not database text. **Session 273's review measured what it can carry, and it is no longer a
+   nit:** (a) **a valid access token.** A host or proxy that echoes the request headers in a non-2xx body (a debug
+   gateway, an echoing reverse proxy, a misconfigured firewall page) puts the token in `failure_reason`: through the
+   real website command the result JSON and the `-o` file held it (exit 0), and through the pipeline script the
+   `Failure:` line and `<checkpoint_dir>/<run_id>/RepoProjectResult.result.json` did. (b) **The same through a
+   malformed response:** `h11` quotes what the server sent (`illegal header line: bytearray(b'X-Echo PRIVATE-TOKEN:
+   ...')`), `httpx` raises `RemoteProtocolError`, and `RepoHttpClient` passes it through on purpose, so the token
+   is in the message. (c) **Terminal control codes**: a 500 body of ESC `[2J` and BEL reached the pipeline script's
+   terminal raw (the website CLI's JSON dump escapes them). The echoing party already holds the token, so the
+   exposure is the operator's terminal, CI logs and the checkpoint directory; GitLab's and GitHub's own 401 pages
+   do not echo headers. **Fix, small, no ruling:** one helper per adapter that builds the message from the status
+   and a truncated, control-stripped body and replaces the token (and `Bearer <token>`) with a placeholder; it
+   closes (a) to (c) at once. Session 273 closed the *client-side* half (a refused header value is never sent).
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
 and control codes this was about, and scrubbing them would split Persian and emoji sequences. Whether a
 given terminal reorders text on them was not measured.
 
-**Cost:** routes 5 and 2(b) are small and need no ruling; 6 is one decision then one function; 3 is an
-operator call; 1, 4 and 7 are nits.
+**Cost:** routes 5, 2(b) and 7 are small and need no ruling; 6 is one decision then one function; 3 is an
+operator call; 1 and 4 are nits.
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 
@@ -511,24 +523,25 @@ for the token:** measured Session 272, it masks `postgresql://bob:***@...` but l
 `(glpat-TOKENSECRET9f3k)` untouched, so the website agent needs the message withheld or a token pattern, not
 that call. `USAGE.md` says to pass the flag name. Test it through a real subprocess. **Small, with a choice.**
 
-### A website token with a trailing carriage return or tab is printed in full in the result and the `-o` file
+### An API key ending in a carriage return or line feed is quoted in the exception chain (the Anthropic and Bedrock clients)
 
-**Found by Session 272's review; the adapter route reproduced by Session 272 directly (CR and TAB); pre-existing;
-independent of Typer; a secrets matter.** `GitLabAdapter.__init__` (`gitlab_adapter.py:66-70`) puts the token in
-an `httpx.Client` header, and `h11` rejects a value ending in a carriage return or a tab at the first request
-with `Illegal header value b'glpat-…\r'`: **the whole token is in the exception text.** `create_project`
-interpolates it (`gitlab_adapter.py:84-88`; the matching `{exc}` sites at `:103`, `:131`, `:154` and throughout
-`github_adapter.py`), `website/nodes.py:107-111` stores `f"repo_error: {exc}"` as `failure_reason`, and the CLI
-prints the result JSON on stdout and writes it to `-o`. Reachable with `--private-token "$(cat token.txt)"`
-from a file with CRLF line endings (the shell strips the LF, not the CR). Measured by the review through the
-real CLI on Typer 0.16.0, 0.24.1 and 0.27.2, for a GitLab and a GitHub host; a trailing LF was reported too.
-Related and smaller (one of two skeptics rated it not a leak): a token holding a non-ASCII character raises an
-uncaught `UnicodeEncodeError` at `httpx.Client(...)` that names the first such character and its position,
-outside every `try`. **Fix, small:** reject a token with a control or non-ASCII character once, at the CLI,
-with a fixed sentence that does not repeat it; and stop interpolating `{exc}` for `httpx.LocalProtocolError`.
-**Operator call** only on strip versus reject (stripping trailing whitespace silently edits a credential).
-Route 7 of "Seven more routes can still put database, driver or exception text …" is the server-controlled half
-of the same sink.
+**Found by Session 273's review (the sinks and completeness lenses; reproduced by two skeptics each); the sibling
+of the website-token item that session closed; pre-existing; not touched by it, which changed only the website
+agent.** `ANTHROPIC_API_KEY` (`x-api-key`) and `AWS_BEARER_TOKEN_BEDROCK` (`Authorization: Bearer`) are credentials in
+`httpx` headers built by the Anthropic SDK: `anthropic.Anthropic()` at `agents/intake/anthropic_client.py:281` and
+the data agent's `anthropic_client.py:158`, and `AnthropicBedrockMantle` in both `bedrock_client.py` files (`:144`).
+A key read from a file with Windows line endings ends in a carriage return (the `.env` recipes in `docs/tutorial.md`,
+Options B and C, keep it), and `h11` refuses it with `Illegal header value b'<the key>\r'`. The SDK turns that into
+`APIConnectionError('Connection error.')`, so **`str(exc)` is clean, and the repository's own runners, which store
+`str(exc)`, printed and checkpointed nothing (measured through the pipeline)**. But the quoted key is the exception's
+`__cause__`: `traceback.format_exception` contained it for a trailing carriage return, line feed, space and tab, at
+the SDK level for both providers and through one shipped entry point, the intake web UI's server log
+(`ui/intake/app.py` catches only `InvalidPhaseError`, `:210` and `:218`). Anything that prints or logs the chain
+prints the key. **Fix, small, one choice:** refuse such a key where each provider reads it, with the rule the website
+token now has (`validate_repo_token`'s regular expression is not specific to repository hosts and would move to a
+shared module), or hand the SDK an `http_client` that withholds the library's message (`RepoHttpClient` is the shape).
+Also measured, a different credential route: **`MPC_HOST_URL` with userinfo or a query token** is printed verbatim by
+`scripts/run_pipeline.py` and saved in `RepoTarget.json`; `redact_db_url` has no counterpart for it.
 
 ### Smaller follow-ups from Session 271's review of the password fix
 
