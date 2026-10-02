@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S273
+date: 2026-10-01
+status: pending
+active_task: A website token ending in a carriage return or tab (or holding another control or non-ASCII character) is rejected once at the CLI with a fixed sentence that never repeats it, and the adapters stop interpolating the HTTP library's LocalProtocolError text (BACKLOG.md:514). Operator ruling at Phase 1: reject, never strip.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S272
 date: 2026-10-01
 status: complete

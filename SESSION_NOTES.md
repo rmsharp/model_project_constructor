@@ -93,6 +93,20 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 273 Did
+**Deliverable:** **a website token that ends in a carriage return or tab (or holds another control or non-ASCII
+character) is rejected once, at the CLI, with a fixed sentence that never repeats it — and the adapters stop
+interpolating the HTTP library's `LocalProtocolError` text** — `BACKLOG.md`'s item *"A website token with a trailing
+carriage return or tab is printed in full in the result and the `-o` file"* (`:514`). Today the whole token reaches
+the result JSON on stdout and the `-o` file (`gitlab_adapter.py:84-88`, `website/nodes.py:107-111`). Chosen by the
+operator at Phase 1 from a two-step picker (area: secrets still on screen; item: the website token). **Ruling
+(operator, by picker, Phase 1): reject, never strip** — stripping would edit a credential silently. (IN PROGRESS)
+**Started:** 2026-10-01
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 272 Did
 **Deliverable:** **none of the three Typer apps prints its parameters' values in a traceback — COMPLETE**, part (2)
 of `BACKLOG.md`'s item *"Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals"*.
