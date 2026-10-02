@@ -65,6 +65,9 @@ app = typer.Typer(
     name="model-data-agent",
     help="Standalone Data Agent — generate SQL, run QC, produce DataReport.",
     no_args_is_help=True,
+    # Typer 0.16-0.22 default to a locals box in every traceback frame, which prints
+    # ``db_url`` with its password; tests/test_typer_locals.py holds this.
+    pretty_exceptions_show_locals=False,
 )
 
 # Single-sourced from the factory's LLMProvider Literal so --help cannot drift

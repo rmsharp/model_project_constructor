@@ -35,7 +35,13 @@ from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import RepoTarget
 
-app = typer.Typer(add_completion=False, help="Website Agent CLI")
+app = typer.Typer(
+    add_completion=False,
+    help="Website Agent CLI",
+    # Typer 0.16-0.22 default to a locals box in every traceback frame, which prints
+    # ``private_token``; tests/test_typer_locals.py holds this.
+    pretty_exceptions_show_locals=False,
+)
 
 DEFAULT_NAMESPACE = "data-science/model-drafts"
 

@@ -24,7 +24,13 @@ import typer
 
 from model_project_constructor.agents.intake.agent import IntakeAgent
 
-app = typer.Typer(add_completion=False, help="Intake Agent CLI (Phase 3A)")
+app = typer.Typer(
+    add_completion=False,
+    help="Intake Agent CLI (Phase 3A)",
+    # Typer 0.16-0.22 default to a locals box in every traceback frame; this app takes no
+    # secret today, but tests/test_typer_locals.py holds every app to the same setting.
+    pretty_exceptions_show_locals=False,
+)
 
 
 @app.command()
