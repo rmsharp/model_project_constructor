@@ -27,6 +27,8 @@ from collections.abc import Callable
 from typing import Concatenate, ParamSpec, Protocol, TypeVar
 from urllib.parse import quote, quote_plus
 
+import httpx
+
 from model_project_constructor.agents.website.protocol import (
     RepoClientError,
     RepoNameConflictError,
@@ -108,6 +110,21 @@ def scrub_host_text(text: object, secret: str = "", *, limit: int = MAX_HOST_TEX
         return line
     except Exception:
         return UNPRINTABLE
+
+
+def response_text(response: httpx.Response) -> str:
+    """``response.text``, or the body as UTF-8 with replacement if its charset cannot decode it.
+
+    A reply that declares a charset its body is not in (``charset=utf-16`` on ASCII of odd length)
+    makes ``response.text`` raise ``UnicodeDecodeError``. The adapters read it while building the
+    message for a failure, so the error that results is not a ``RepoClientError``: it would leave
+    the adapter as a crash, past :func:`scrubbed_errors`, holding the body's bytes in its ``args``.
+    The adapters read a response body in no other way (a test holds that).
+    """
+    try:
+        return response.text
+    except (UnicodeDecodeError, LookupError):
+        return response.content.decode("utf-8", "replace")
 
 
 class _HoldsSecret(Protocol):

@@ -17,11 +17,13 @@ import traceback
 from collections.abc import Iterator
 from urllib.parse import quote, quote_plus
 
+import httpx
 import pytest
 
 from model_project_constructor.agents.website._host_text import (
     MAX_HOST_TEXT,
     REDACTED,
+    response_text,
     scrub_host_text,
     scrubbed_errors,
 )
@@ -217,3 +219,41 @@ class TestTheDecorator:
 
     def test_the_wrapped_method_keeps_its_name_and_docstring(self) -> None:
         assert _Adapter.works.__name__ == "works"
+
+
+class TestResponseText:
+    """``response.text`` raises when a reply declares a charset its body is not in, and the adapters
+    read it while building the message for a failure: the error that results is not a
+    ``RepoClientError``, so it would leave the adapter as a crash, past ``scrubbed_errors``, with
+    the body bytes in its ``args``."""
+
+    def test_an_ordinary_body_is_its_text(self) -> None:
+        assert response_text(httpx.Response(500, text="héllo")) == "héllo"
+        assert response_text(httpx.Response(204)) == ""
+
+    def test_a_declared_charset_the_body_is_not_in_does_not_raise(self) -> None:
+        body = b"PRIVATE-TOKEN: " + TOKEN.encode() + b"!"  # odd length: not valid UTF-16
+        response = httpx.Response(
+            500, content=body, headers={"content-type": "text/plain; charset=utf-16"}
+        )
+        with pytest.raises(UnicodeDecodeError):
+            response.text  # noqa: B018 - the premise: the library itself raises here
+        assert response_text(response) == body.decode("utf-8")
+
+    def test_bytes_that_are_not_utf8_either_come_back_replaced(self) -> None:
+        # Odd length (UTF-16 refuses it), no BOM, and not UTF-8 either.
+        response = httpx.Response(
+            500,
+            content=b"\xff oops \x80!",
+            headers={"content-type": "text/plain; charset=utf-16"},
+        )
+        with pytest.raises(UnicodeDecodeError):
+            response.text  # noqa: B018 - the premise
+        assert "oops" in response_text(response)
+        assert "\ufffd" in response_text(response)
+
+    def test_an_unknown_charset_name_does_not_raise(self) -> None:
+        response = httpx.Response(
+            500, content=b"boom", headers={"content-type": "text/plain; charset=no-such-codec"}
+        )
+        assert response_text(response) == "boom"
