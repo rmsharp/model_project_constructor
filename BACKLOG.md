@@ -53,7 +53,7 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
-| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw (Session 273's review showed that page can carry the access token itself when the host echoes request headers). | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
+| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274). | **Small** for the SQLAlchemy lines, the language-model text and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
 | An API key ending in a carriage return is quoted in the error chain | Found by Session 273's review, the sibling of the website-token item it closed. The language-model clients (Anthropic and Bedrock) put their key in an HTTP header, and the HTTP library refuses a key ending in a carriage return or line feed (a Windows-style `.env`) with a message that quotes the whole key. The SDK hides that message ("Connection error.") and the pipeline stores only that, so no report or checkpoint held the key (measured); but it sits in the exception's cause, so any log or traceback that prints the chain prints it (reproduced through the intake web UI's server log). The pipeline script also prints and saves a `MPC_HOST_URL` that carries a password or token. | **Small, a choice:** refuse such a key where it is read (the rule the website token now has), or give the SDK a client that withholds the library's message. |
 | Smaller follow-ups from the password fix | Five items the review of Session 271's fix left: the error does not tell the operator that an `@` in a password must be written `%40` (the usage guide now does); a much smaller design that withholds the driver's text exists and was declined; a reliably parsed password with a space is masked only up to the space; a non-string address raises; and SQLAlchemy 2.1 fails one test that CI never meets. | Each small. **The first two are the operator's call.** |
@@ -472,30 +472,43 @@ Oracle or SQL Server.
    summary reached `analysis/02_data.qmd`, `analysis/06_implementation_plan.qmd` and
    `reports/data_report.md` (measured). **Fix:** either say the guarantee is the producer's, or a one-line
    sanitiser in the templates for report-derived strings, which makes the producer fixes defence in depth.
-7. **Repo-host failure text** (`website/nodes.py:110` and `:219-225`; the `{response.text}` interpolations in
-   `gitlab_adapter.py` and `github_adapter.py`; `scripts/run_pipeline.py` prints it unmodified). A
-   `RepoClientError` is built from the raw HTTP response body, becomes `failure_reason`, and is printed. Server-
-   controlled text, not database text. **Session 273's review measured what it can carry, and it is no longer a
-   nit:** (a) **a valid access token.** A host or proxy that echoes the request headers in a non-2xx body (a debug
-   gateway, an echoing reverse proxy, a misconfigured firewall page) puts the token in `failure_reason`: through the
-   real website command the result JSON and the `-o` file held it (exit 0), and through the pipeline script the
-   `Failure:` line and `<checkpoint_dir>/<run_id>/RepoProjectResult.result.json` did. (b) **The same through a
-   malformed response:** `h11` quotes what the server sent (`illegal header line: bytearray(b'X-Echo PRIVATE-TOKEN:
-   ...')`), `httpx` raises `RemoteProtocolError`, and `RepoHttpClient` passes it through on purpose, so the token
-   is in the message. (c) **Terminal control codes**: a 500 body of ESC `[2J` and BEL reached the pipeline script's
-   terminal raw (the website CLI's JSON dump escapes them). The echoing party already holds the token, so the
-   exposure is the operator's terminal, CI logs and the checkpoint directory; GitLab's and GitHub's own 401 pages
-   do not echo headers. **Fix, small, no ruling:** one helper per adapter that builds the message from the status
-   and a truncated, control-stripped body and replaces the token (and `Bearer <token>`) with a placeholder; it
-   closes (a) to (c) at once. Session 273 closed the *client-side* half (a refused header value is never sent).
+7. **Repo-host failure text — CLOSED in Session 274** (commits `043af67`, `b4480e3`, `b5d7ee7`, `f18639d`, `0f3508b`).
+   A host or proxy that echoed the request headers in an error reply (a debug gateway, an echoing reverse proxy,
+   a misconfigured firewall page) put the access token in `failure_reason`, which the website command printed and
+   wrote to `-o` and the pipeline script printed and saved in `RepoProjectResult.result.json`; a malformed reply
+   did the same through `h11`'s quotation (`illegal header line: bytearray(b'PRIVATE-TOKEN glpat-...')`); a body
+   of ESC `[2J` and BEL reached the script's terminal raw; a megabyte body went in whole. Both adapters now leave
+   through `scrubbed_errors` (`agents/website/_host_text.py`): every `RepoClientError` that leaves
+   `create_project` or `commit_files` has the token removed by value (as written, and as a JSON body, `h11`'s
+   bytes repr, a Python `repr`, an HTML page and a URL write it, two levels deep), each control character turned
+   into a space, one line, at most 1,000 characters, and no exception chain behind it; and a body is read through
+   `response_text`, because a reply whose declared charset its body is not in made `response.text` raise
+   `UnicodeDecodeError` inside the message (Session 274's matrix of 80 replies found it). Held by
+   `tests/agents/website/test_host_text.py`, `test_host_failure_text.py` (every request of both adapters answered
+   in turn by five hostile replies on a real socket) and `test_host_failure_end_to_end.py` (the real command and
+   the real script; stdout, the `-o` file, the checkpoint directory). **Not closed, and not part of this route:**
+   the token a run before Session 274 already saved (`TROUBLESHOOTING.md` says how to find it and to rotate it); an
+   exception that is not a `RepoClientError` (a `KeyError` on a reply without `id`, `httpx.InvalidURL` for a
+   host-supplied project id) still escapes as a traceback, with no token and no body in any of the ones the scouts
+   measured; a `RepoClient` that is neither adapter is not covered, and the registry-wide test goes red for a
+   registered one that does not wrap its protocol methods.
+8. **The repository host's success values, printed raw.** *Found by Session 274's scouting workflow; measured by an
+   agent against a host that returned ESC in the project address and the commit id, not re-run by the session.*
+   The project address (`web_url` / `html_url`) and commit id come from the host's 2xx reply and are interpolated
+   unchecked into `cli.py:266,268` (`Project:`, `Commit:`), `scripts/run_pipeline.py:663` (`Project:`) and, on
+   `--resume` of a completed run, `:402`. The script's `print` put the ESC on piped stdout; the website command's
+   `click.echo` strips it when stdout is not a terminal and passes it under a pty; BEL passes either way. Not
+   failure text, not the token (a host would have to put it in its own success reply); the exposure is the
+   operator's terminal. **Fix, small, no ruling:** `scrub_host_text(value)` (no secret) in the adapters where
+   `ProjectInfo.url` and `CommitInfo.sha` are built, so every consumer gets a clean string, or at the three prints.
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
 and control codes this was about, and scrubbing them would split Persian and emoji sequences. Whether a
 given terminal reorders text on them was not measured.
 
-**Cost:** routes 5, 2(b) and 7 are small and need no ruling; 6 is one decision then one function; 3 is an
-operator call; 1 and 4 are nits.
+**Cost:** routes 5, 2(b) and 8 are small and need no ruling; 6 is one decision then one function; 3 is an
+operator call; 1 and 4 are nits. (Route 7 closed in Session 274; route 8 replaced it, so seven remain.)
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 

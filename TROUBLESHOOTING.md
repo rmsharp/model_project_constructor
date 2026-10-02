@@ -168,6 +168,28 @@ grep -rl 'Illegal header value' "$MPC_CHECKPOINT_DIR" <your -o files> <saved CI 
 Rotate any token that turns up, then delete or redact those files and logs. (A token with a
 non-ASCII character was not quoted whole: the error named the character and its position.)
 
+**A token the repository host echoed back, in a run before Session 274.** A host, gateway
+or proxy that sends the request headers back in an error reply (a debug gateway, an echoing
+reverse proxy, a misconfigured firewall page; GitLab's and GitHub's own error pages do not)
+put the valid token into `failure_reason`, in the same three places: the website CLI's JSON
+on stdout or in its `-o` file, the pipeline script's `Failure:` line, and
+`<checkpoint_dir>/<run_id>/RepoProjectResult.result.json`. The same happened when the host's
+reply was malformed and the HTTP library quoted it (`illegal header line:
+bytearray(b'PRIVATE-TOKEN glpat-...')`). Since Session 274 every failure message that leaves
+a repository adapter has the token replaced by `***`, control characters turned into spaces,
+and a cut at 1,000 characters (`... [N more characters not shown]`). Nothing is written to
+the old files again, and nothing rewrites the ones already on disk. To find an old leak,
+search for the first characters of your token, which a checkpoint directory has no other
+reason to hold:
+
+```bash
+grep -rlF 'glpat-' "$MPC_CHECKPOINT_DIR" <your -o files> <saved CI logs>   # or ghp_ / github_pat_
+```
+
+The party that echoed the headers already held the token, so the exposure is wherever the
+output went: the terminal, CI logs, the checkpoint directory. Rotate a token that turns up,
+then delete or redact those files and logs.
+
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).
 - If the project was partially created, delete the partial project on
@@ -220,5 +242,6 @@ The checkpoint files written before the crash are still on disk.
 | `ERROR: --private-token: a repository host token may contain only printable ASCII characters ...` (or the same sentence, as `InvalidRepoTokenError`, at the end of a traceback from `scripts/run_pipeline.py`) | The token has a trailing carriage return, line feed, tab or space, or a non-ASCII character. A CRLF file keeps its carriage return, and so do the `.env` loading recipes in `docs/tutorial.md` (Options B and C). Clean the value (`printf %s "$GITLAB_TOKEN" \| tr -d '\r\n '`) or convert the file to LF. This is a configuration error, not a bug. If a run **before Session 273** had such a token, see "A token leaked by a run before Session 273" under `FAILED_AT_WEBSITE`. |
 | Run completes but no project on host | Check `result.status` — it may be `FAILED_AT_WEBSITE` with a descriptive `failure_reason`. |
 | All checkpoints present but `status=FAILED` | Read `RepoProjectResult.result.json → failure_reason`. Usually a host-side permission issue. |
+| `failure_reason` (or the `Failure:` line) holds `***`, or ends `... [N more characters not shown]` | `***` is where your access token was: the repository host, or a proxy in front of it, sent the request headers back in its reply, and the agent removed the token before it reached the screen, the `-o` file or the checkpoint. The rest of the line is the host's own message, on one line and cut at 1,000 characters. Look at what sits between you and the host (a debug gateway, an echoing proxy), and rotate the token if that party is not yours. |
 | No checkpoint directory at all | The pipeline crashed before the first agent returned. Check the traceback and `agent.error` log events. |
 | Tests pass locally, CI fails | Check that CI has `uv` available and runs `uv sync --extra agents --extra dev` before `pytest`. See `.github/workflows/ci.yml`. |
