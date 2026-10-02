@@ -44,6 +44,7 @@ from typing import Any
 
 import httpx
 
+from model_project_constructor.agents.website._http import RepoHttpClient
 from model_project_constructor.agents.website.protocol import (
     CommitInfo,
     ProjectInfo,
@@ -80,7 +81,7 @@ class GitHubAdapter(RepoClient):
         host_url: str = "https://api.github.com",
     ) -> None:
         validate_repo_token(private_token)
-        self._client = httpx.Client(
+        self._client = RepoHttpClient(
             base_url=host_url.rstrip("/"),
             headers={
                 "Authorization": f"Bearer {private_token}",

@@ -32,6 +32,7 @@ from urllib.parse import quote
 
 import httpx
 
+from model_project_constructor.agents.website._http import RepoHttpClient
 from model_project_constructor.agents.website.protocol import (
     CommitInfo,
     ProjectInfo,
@@ -66,7 +67,7 @@ class GitLabAdapter(RepoClient):
         ssl_verify: bool = True,
     ) -> None:
         validate_repo_token(private_token)
-        self._client = httpx.Client(
+        self._client = RepoHttpClient(
             base_url=f"{host_url.rstrip('/')}/api/v4",
             headers={"PRIVATE-TOKEN": private_token},
             verify=ssl_verify,
