@@ -152,6 +152,22 @@ print(result["project_url"])       # may be set even on FAILED if the project wa
 - Timeout: the repo host was too slow. Check `duration_ms` in the
   `agent.end` or `agent.error` log event.
 
+**A token leaked by a run before Session 273.** If the token had a trailing carriage
+return, line feed, tab or space (or a NUL, vertical tab or form feed inside it), the HTTP
+library refused the request and quoted the whole token in its message, and the agent
+copied that into `failure_reason` as `repo_error: ... Illegal header value b'<the
+token>'`. The website CLI printed that on stdout and wrote it to its `-o` file;
+`scripts/run_pipeline.py` printed it in its `Failure:` line and saved it in
+`<checkpoint_dir>/<run_id>/RepoProjectResult.result.json`. Since Session 273 such a token
+is refused before any request and nothing is printed. To find an old leak:
+
+```bash
+grep -rl 'Illegal header value' "$MPC_CHECKPOINT_DIR" <your -o files> <saved CI logs>
+```
+
+Rotate any token that turns up, then delete or redact those files and logs. (A token with a
+non-ASCII character was not quoted whole: the error named the character and its position.)
+
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).
 - If the project was partially created, delete the partial project on
@@ -201,6 +217,7 @@ The checkpoint files written before the crash are still on disk.
 |---|---|
 | `ConfigError: GITLAB_TOKEN is required` | Set `GITLAB_TOKEN` in the environment or `.env` file. |
 | `ConfigError: MPC_HOST must be 'gitlab' or 'github'` | Check the `MPC_HOST` env var for typos. |
+| `ERROR: --private-token: a repository host token may contain only printable ASCII characters ...` (or the same sentence, as `InvalidRepoTokenError`, at the end of a traceback from `scripts/run_pipeline.py`) | The token has a trailing carriage return, line feed, tab or space, or a non-ASCII character. A CRLF file keeps its carriage return, and so do the `.env` loading recipes in `docs/tutorial.md` (Options B and C). Clean the value (`printf %s "$GITLAB_TOKEN" \| tr -d '\r\n '`) or convert the file to LF. This is a configuration error, not a bug. If a run **before Session 273** had such a token, see "A token leaked by a run before Session 273" under `FAILED_AT_WEBSITE`. |
 | Run completes but no project on host | Check `result.status` — it may be `FAILED_AT_WEBSITE` with a descriptive `failure_reason`. |
 | All checkpoints present but `status=FAILED` | Read `RepoProjectResult.result.json → failure_reason`. Usually a host-side permission issue. |
 | No checkpoint directory at all | The pipeline crashed before the first agent returned. Check the traceback and `agent.error` log events. |
