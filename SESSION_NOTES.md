@@ -94,18 +94,143 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 272 Did
-**Deliverable:** **Typer no longer prints the database address in a traceback's locals** — `BACKLOG.md`'s item
-*"Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals"* (`:487`),
-**part (2) only**: Typer 0.16 to 0.22 (which `typer>=0.16.0` admits) print `db_url = 'postgresql://bob:<password>@...'`
-in the locals box of any uncaught exception in `run` or `discover`; the lock's 0.24.1 does not. Part (1), the argument
-parser echoing an address typed without `--db-url`, needs a choice and stays open. The behaviour is measured on real
-Typer versions before it is fixed, and a test holds the fix. Chosen by the operator at Phase 1 from a two-step picker
-(area: secrets still on screen; item: Typer shows the address in tracebacks). (IN PROGRESS)
-**Started:** 2026-10-01
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **none of the three Typer apps prints its parameters' values in a traceback — COMPLETE**, part (2)
+of `BACKLOG.md`'s item *"Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals"*.
+Typer 0.16 to 0.22 (which `typer>=0.16.0` admits) printed `db_url` with its password in a locals box under every
+frame of an uncaught exception; **the website agent's `--private-token` leaked the same way and nobody had filed
+it**, so all three apps carry the fix (it is one argument per app, and the setting is per app). The item's other
+half stays open, retitled *"The argument parser prints a mistyped `--db-url` or `--private-token`, value and all"*.
+Chosen by the operator at Phase 1 from a two-step picker (area: secrets still on screen; item: Typer shows the
+address in tracebacks). **Ruling (operator, by picker, Phase 3):** push at close-out.
+**Started / completed:** 2026-10-01. **Commits: four** — `20cc72c` (claim, alone), `44d2029` (the fix and its test),
+`8dfa451` (docs) and this close-out. Each carries its own `CHANGELOG.md` entry; the push is recorded in the
+close-out's own entry.
+
+#### What changed
+- `pretty_exceptions_show_locals=False` on the three `typer.Typer(...)` calls: `packages/data-agent/.../cli.py:64`,
+  `src/.../intake/cli.py:27`, `src/.../website/cli.py:38`.
+- `tests/test_typer_locals.py` (238 lines, 5 tests). **Structural arm** (`_scan` `:79`; `test_every_known_app_is_found`
+  `:126`, `test_every_typer_app_hides_locals_in_a_traceback` `:131`): an AST scan of `src/`, `packages/`, `scripts/`
+  requiring the literal `False` on every `Typer(...)`, `typer.run(...)` and `Typer` subclass; it fails on the unfixed
+  code under the lock's Typer, which is what holds the fix in CI. **Behavioural arm** (one parametrized test `:229`):
+  the three real apps under `python -m`, an uncaught error forced while the secret is a local; it requires the named
+  exception and the app's own `run` frame, so a run that dies earlier cannot pass. The docstring lists what the scan
+  cannot see.
+- **Tests: 2,708 to 2,713 passed, 9 skipped, coverage 98.15%** (under `GITHUB_ACTIONS=true`); CI-scope `ruff` and
+  `uv run mypy` (68 files) clean. `BACKLOG.md` (item retitled and halved, one item and one index row added),
+  `PROJECT_LEARNINGS.md` #312-316, `CLAUDE.md` (count and size).
+
+#### Measured first, then built (the real apps under `python -m`, a Typer overlay per release)
+- **All 38 non-yanked, non-pre-release Typer releases from 0.16.0 to 0.27.2** (the filing had stopped at 0.24.1; the
+  range has no ceiling): unfixed, the 18 from 0.16.0 to 0.22.0 print a box and the 20 from 0.23.0 do not; **36 of 114
+  runs printed a secret (the data agent's password 18, the website's token 18) and 54 a box** (the intake agent,
+  which takes no secret, 18). Fixed: **0 of 114** printed a secret or a box, none failed to import, all still print a
+  traceback and exit 1. The review re-ran both sweeps from scratch: 0 differing rows. Long values are cut by rich, so
+  "printed the password" is exact for a 44-character address and conditional on length.
+- **A first probe read two of three apps as clean** (a single-command Typer app has no command name; both died on a
+  usage error). A two-release smoke run against a known leaker caught it before the sweep (learning #312).
+
+#### The checks, each finding what the last could not
+- **Red first, verified per surface.** With the fix reverted: the lock fails the structural arm only; 0.16.0, 0.21.0 and
+  0.22.0 fail four; 0.23.0 (the first clean release) fails the structural arm only. Fixed: 5 passed on 0.16.0, 0.21.0,
+  0.24.1 and 0.27.2, with and without `GITHUB_ACTIONS=true`. **The first version of the test failed whenever
+  `GITHUB_ACTIONS` was set, alone or in the suite** (I met it in the suite; the review corrected my "in the full suite"):
+  Typer forces terminal output there and style codes split the strings asserted on, which could also have hidden a
+  real leak (learning #313). Four mutants of the structural arm, all caught.
+- **The review** (3 lenses, 2 skeptics per non-nit finding: **21 agents, 0 errors, about 28 minutes, 1.76M subagent
+  tokens, 316 tool calls**): 9 non-nit findings, 8 not refuted by both skeptics (two of those split 1 to 1) and 1 refuted by both,
+  plus 9 nits. **It changed the test:** the behavioural arm **passed vacuously when the app died at an import** (reproduced on
+  unfixed code under 0.22.0: all three arms passed) **while its docstring claimed otherwise**; the intake arm passed on
+  leaking code when the child's stdout was not UTF-8; the structural arm missed an alias, a subclass, `typer.run`,
+  `scripts/` and a package without `src/`; and `TERMINAL_WIDTH`, source encoding, a dangling symlink and a missing
+  timeout were fixed as nits. Each was re-reproduced as caught. **It found a leak outside the diff:** a website token
+  ending in a carriage return or tab is printed in full (below). Re-running the reviewer's `LC_ALL=C` environment on
+  the finished test caught a regression my own hardening had introduced (the parent decoded the child's forced UTF-8
+  as ASCII), now fixed.
+- **Filed, not fixed** (`BACKLOG.md:488`, `:514`): the website token (reproduced by me directly against `GitLabAdapter`
+  for CR and TAB; the CLI chain and the LF case by the review) and the parser echo's three further shapes, with the
+  measured fact that **`redact_secrets` masks an address's password but not a bare token**.
+- **An error of mine, recorded in the ledger:** a failed `git stash push` (zsh does not split an unquoted variable)
+  was followed by an exit trap's `git stash pop`, which applied **a stash that is not this session's** (`stash@{0}`,
+  from Session 270's claim commit) and conflicted in two test files. I restored exactly those two files to `HEAD`
+  (neither was touched this session); the stash is intact. The checks were redone with saved copies and `cmp`.
+
+### Session 271 Handoff Evaluation (by Session 272)
+
+**Score: 8/10.**
+- **+** The first recommendation was the right deliverable and its pointer (`BACKLOG.md:487`) was exact. Gotcha 5 (use
+  `uv run --with ... python -m`, because the console script runs the project venv's copy) was used as written, and gotcha
+  6 (both guards before any commit touching `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`) was followed. The measured
+  baseline (2,708 tests, 98.15%) was right to the digit.
+- **−** **What was wrong, mildly:** "small, needs no ruling" understated it: it named one app where there are three (the
+  website agent's token leaked too), and "measured from 0.12.0 to 0.24.1" was stale: fourteen later releases existed.
+  **What was missing:** the `stash@{0}` left by Session 270 is not in "Observed, not filed", which listed the two
+  worktrees. A `git stash list` at orientation would have named it before it bit.
+- **ROI: high.** It saved the orientation, and the two unmeasured premises were cheap to re-measure.
+
+### Session 272 Self-Assessment
+
+**Score: 7/10.**
+- **+** Re-measured the filing instead of building on it (38 releases, three apps; found the unfiled website leak);
+  caught my own false-negative probe with a smoke run; wrote the test red first and verified it per surface, with the
+  fix reverted and restored byte for byte; an independent review that was proportionate (1.76M subagent tokens against
+  Session 271's 9.1M) and changed the test in four ways; reproduced the website-token leak myself before filing it;
+  every figure in the ledger was audited by a lens before it was written.
+- **−** **Three errors of mine of the kinds this project warns about:** I wrote a docstring claim ("asserts the failure is
+  the one provoked") with no assertion behind it, caught only by the review (#312); I ran an unchecked undo in a trap
+  and applied someone else's stash (#316); and my first hardening broke the parent's decode under `LC_ALL=C`, found only
+  by re-running the reviewer's environment (#313). Four "the user hasn't heard from you" prompts: the long
+  background waits and runs were not narrated.
+- **−** Scope judgment: I widened from the filed data agent to all three apps. It is the same one-argument fix and the
+  operator's picker named the area, but it is a judgment call; it is stated here and in the ledger.
+- **Decay term:** none removed except the closed half-item's text. `BACKLOG.md` 118,805 to 122,247 B (one item halved,
+  one added, one index row reworded, one added); `PROJECT_LEARNINGS.md` +5,103 B (five rows, now 361,984 B).
+
+**What's next** (sizes are estimates unless measured).
+1. **`BACKLOG.md:514`, the website token ending in a carriage return or tab.** A live secret in a shipped command's
+   output with a reproduction; small (validate once at the CLI with a fixed sentence, and stop interpolating `{exc}` for
+   `httpx.LocalProtocolError` at `gitlab_adapter.py:87,103,131,154` and in `github_adapter.py`). **Needs the operator's
+   ruling on rejecting versus trimming** (a one-question picker; reject is the recommendation, since trimming edits a
+   credential).
+2. **`BACKLOG.md:488`, the argument parser's echo.** Needs a choice (catch and mask, or take the address and token from an
+   environment variable). **Do not call `redact_secrets` on a token message: it leaves a bare token untouched** (measured).
+3. **Residue routes 2(b) and 5 of "Seven more routes ..."** (carried from Session 270's list): `safe_message(e)` at
+   `nodes.py:211` and `agent.py:54`, and the pool logger's filter. No ruling.
+4. **Two items still need no ruling:** the Click 8.2 declaration (31 of 87 CLI tests fail under Click 8.1, `BACKLOG.md:604`)
+   and the `langgraph` floor.
+5. **Rulings owed to the operator:** reject versus trim for the token; catch versus environment variable for the parser
+   echo; whether the connect error should say to percent-encode an `@`; whether to take the declined smaller design; and,
+   unchanged, `--db-url` option (c), one per channel for the three channels, the two guard-design calls, a CI job
+   installing the dependency minimums, whether the website should sanitise report text, the saved inventory names, and
+   whether `safe_message` should cap its input.
+6. **Observed, not filed:** `stash@{0}` ("WIP on (no branch): 022e6de", Session 270's claim commit; 360 lines of test
+   additions to `tests/agents/data/test_data_agent.py` and `tests/data_agent_package/test_cli.py`; provenance unrecorded;
+   I did not drop it and it is the operator's call); the root `methodology_dashboard.py` is v2.18.0 against canonical
+   v2.19.0 (`bin/sync`'s job); two clean worktrees remain that are not this session's (`.claude/worktrees/wf_5f96c807-d00-3`
+   and the branch `worktree-wf_c93ee390-506-3`); `tests/` is outside the mypy gate.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `packages/data-agent/src/model_project_constructor_data_agent/cli.py:64`, `src/model_project_constructor/agents/intake/cli.py:27`,
+  `src/model_project_constructor/agents/website/cli.py:38` (the three apps); `tests/test_typer_locals.py` (`:79`, `:126`,
+  `:131`, `:140` `_environment`, `:159` `_run`, `:229`); `BACKLOG.md:488` and `:514`; `PROJECT_LEARNINGS.md` #312-316;
+  `CHANGELOG.md` the S272 entries under `## 2026-10`. For the token leak: `gitlab_adapter.py:66-70` (the header),
+  `:83-88` (the `{exc}`), `website/nodes.py:107-111` (`failure_reason`), `website/cli.py:258-263` (the print; the file grew 6 lines when the
+  setting was added).
+
+**Gotchas.**
+1. **The behavioural arm cannot fail under the lock** (0.24.1's default is already off); the structural arm is what holds
+   the fix in CI. To watch the behavioural arm bite: save the three `cli.py` files, `git checkout HEAD --` them, and run
+   `uv run --no-sync --with typer==0.21.0 pytest tests/test_typer_locals.py --no-cov -q`, then copy the saved files back and
+   `cmp`. **Never `git stash` for this** (learning #316).
+2. **Run any output-asserting test with `GITHUB_ACTIONS=true`** (learning #313); `tests/test_typer_locals.py` strips the
+   style codes and pins `COLUMNS`, `TERMINAL_WIDTH`, UTF-8 and `TYPER_STANDARD_TRACEBACK`.
+3. **Single-command Typer apps (website, intake) take no command name**: `python -m ...website --intake ...`; only the data
+   agent has `run`. A probe that adds `run` dies on a usage error and reads as clean.
+4. `redact_secrets` masks a URL's userinfo, not a bare token (measured). `safe_message` is the database-text route.
+5. The sweep and matrix scripts were scratch and are gone; learning #315 gives the one-liner to rebuild the sweep.
+6. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that touches
+   `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this
+   session's did.
 
 ### What Session 271 Did
 **Deliverable:** **a password in a database address no longer reaches the connect error, the report or the
