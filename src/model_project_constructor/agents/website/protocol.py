@@ -94,6 +94,10 @@ class InvalidRepoTokenError(ValueError):
             "control characters and no non-ASCII characters. The value is not shown."
         )
 
+    def __reduce__(self) -> tuple[type[InvalidRepoTokenError], tuple[()]]:
+        # The default reduction rebuilds with ``cls(*args)``, and ``args`` holds the message.
+        return (type(self), ())
+
 
 _TOKEN_CHARACTERS = re.compile(r"[\x21-\x7e]+")
 

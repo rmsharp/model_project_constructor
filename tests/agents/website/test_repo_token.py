@@ -10,21 +10,21 @@ The same library accepts DEL and the controls U+0001-U+0008 and U+000E-U+001F an
 refuses a non-ASCII value at construction.
 
 The rule is defined here and not borrowed from the library: a token is one or more characters in
-U+0021-U+007E. That is a strict superset of what ``h11`` refuses, so a stricter ``h11`` cannot
-reopen the leak; ``test_every_accepted_character_reaches_the_wire_intact`` holds the other
-direction against the installed ``httpx``, ``httpcore`` and ``h11`` over a real socket.
-``httpx.MockTransport`` skips ``h11`` altogether, which is why no adapter test could ever see
-this.
+U+0021-U+007E. That refuses everything ``h11`` refuses today and more, and
+``test_every_accepted_character_reaches_the_wire_intact`` holds the other half against the
+installed ``httpx``, ``httpcore`` and ``h11`` over a real socket: a release of ``h11`` that began
+refusing a character the rule accepts would fail that test on the bump, and ``RepoHttpClient``
+withholds the text in the meantime. ``httpx.MockTransport`` skips ``h11`` altogether, which is why
+no adapter test could ever see this.
 """
 
 from __future__ import annotations
 
-import http.server
+import copy
+import pickle
 import subprocess
 import sys
-import threading
-from collections.abc import Callable, Iterator
-from dataclasses import dataclass
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -36,8 +36,13 @@ from model_project_constructor.agents.website.protocol import (
     InvalidRepoTokenError,
     validate_repo_token,
 )
+from model_project_constructor.orchestrator.config import REPO_PLATFORMS
+from tests.agents.website.loopback import Loopback
 
 SECRET = "glpat-SECRET9f3kQ7"
+
+# What an operator reads: the option's name, then the one fixed sentence.
+REFUSAL = f"ERROR: --private-token: {InvalidRepoTokenError()}"
 
 # NUL to U+02FF takes in the C0 and C1 controls, DEL, NBSP and Latin-1; the last two are a BMP
 # and an astral character.
@@ -104,7 +109,7 @@ def test_realistic_tokens_are_accepted(token: str) -> None:
     validate_repo_token(token)
 
 
-@pytest.mark.parametrize("token", ["", " ", "\t", "\r\n", " "])
+@pytest.mark.parametrize("token", ["", " ", "\t", "\r\n", "\xa0"])
 def test_an_empty_or_blank_token_is_rejected(token: str) -> None:
     assert not _accepts(token)
 
@@ -122,45 +127,18 @@ def test_the_error_is_one_fixed_sentence_that_cannot_carry_the_value() -> None:
     assert issubclass(InvalidRepoTokenError, ValueError)
 
 
+def test_the_error_survives_pickle_copy_and_deepcopy() -> None:
+    """Its constructor takes no argument, so the default reduction (``cls(*args)``) would fail:
+    a worker process or an exception-forwarding layer must still get the same refusal back."""
+    error = InvalidRepoTokenError()
+    for clone in (pickle.loads(pickle.dumps(error)), copy.copy(error), copy.deepcopy(error)):
+        assert type(clone) is InvalidRepoTokenError
+        assert str(clone) == str(error)
+
+
 # ---------------------------------------------------------------------------
 # A real socket: the rule is a subset of what the installed HTTP stack sends.
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class Loopback:
-    url: str
-    seen: list[dict[str, str]]
-
-
-@pytest.fixture(scope="module")
-def loopback() -> Iterator[Loopback]:
-    seen: list[dict[str, str]] = []
-
-    class Handler(http.server.BaseHTTPRequestHandler):
-        def _reply(self) -> None:
-            seen.append({k.lower(): v for k, v in self.headers.items()})
-            body = b"{}"
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        do_GET = _reply  # noqa: N815
-        do_POST = _reply  # noqa: N815
-
-        def log_message(self, format: str, *args: object) -> None:
-            """Keep the test output quiet."""
-
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    server.daemon_threads = True
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        yield Loopback(url=f"http://127.0.0.1:{server.server_address[1]}", seen=seen)
-    finally:
-        server.shutdown()
-        server.server_close()
 
 
 @pytest.mark.parametrize(
@@ -204,6 +182,17 @@ def test_an_adapter_refuses_a_bad_token_without_repeating_it(
     assert SECRET not in str(caught.value)
 
 
+@pytest.mark.parametrize("host", sorted(REPO_PLATFORMS))
+def test_every_registered_host_refuses_a_bad_token_without_repeating_it(host: str) -> None:
+    """The pipeline script builds its adapter from the registry and validates nothing itself, so
+    a host added there whose adapter forgets the check would reopen the leak: this goes red."""
+    with pytest.raises(InvalidRepoTokenError) as caught:
+        REPO_PLATFORMS[host].adapter_factory(
+            host_url="http://127.0.0.1:9", private_token=SECRET + "\r"
+        )
+    assert SECRET not in str(caught.value)
+
+
 # ---------------------------------------------------------------------------
 # The website CLI, in process and as the real command.
 # ---------------------------------------------------------------------------
@@ -216,7 +205,6 @@ def _everything_the_command_showed(printed: str, out: Path) -> str:
     would pass on the very leak this file exists for.
     """
     return printed + (out.read_text() if out.exists() else "")
-
 
 
 @pytest.mark.parametrize("host", ["gitlab", "github"])
@@ -250,7 +238,8 @@ def test_cli_rejects_a_bad_token_and_prints_none_of_it(
     shown = result.stdout + result.stderr
     assert SECRET not in _everything_the_command_showed(shown, out)
     assert result.exit_code == 2, shown
-    assert "--private-token" in shown
+    assert result.stdout == ""
+    assert result.stderr.strip() == REFUSAL
     assert not out.exists()
 
 
@@ -272,6 +261,19 @@ def test_cli_ignores_the_token_under_fake(
     )
     assert result.exit_code == 0, result.stdout
     assert SECRET not in result.stdout + result.stderr
+
+
+def test_cli_checks_the_token_before_reading_any_file(tmp_path: Path) -> None:
+    """A bad token is reported even when the report files are unreadable, so the check is not
+    behind the parsing that comes next."""
+    not_json = tmp_path / "not.json"
+    not_json.write_text("{ not json")
+    result = runner.invoke(
+        app,
+        ["--intake", str(not_json), "--data", str(not_json), "--private-token", SECRET + "\r"],
+    )
+    assert result.exit_code == 2, result.stdout + result.stderr
+    assert result.stderr.strip() == REFUSAL
 
 
 @pytest.mark.parametrize("suffix", ["\r", "\t", "\n"], ids=["carriage-return", "tab", "line-feed"])
@@ -309,5 +311,6 @@ def test_the_real_command_prints_none_of_a_bad_token_and_exits_2(
     shown = completed.stdout + completed.stderr
     assert SECRET not in _everything_the_command_showed(shown, out)
     assert completed.returncode == 2, shown
-    assert "--private-token" in shown
+    assert completed.stdout == ""
+    assert completed.stderr.strip() == REFUSAL
     assert not out.exists()
