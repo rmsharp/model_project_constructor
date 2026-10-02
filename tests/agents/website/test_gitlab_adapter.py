@@ -22,6 +22,10 @@ from model_project_constructor.agents.website.protocol import (
     RepoNameConflictError,
 )
 
+# A realistic token: the adapter removes its token from every error message, so a one-letter
+# stand-in would take letters out of the words around it.
+TOKEN = "glpat-TESTTOKEN0123456789"
+
 
 def _adapter_with_transport(
     handler: Callable[[httpx.Request], httpx.Response],
@@ -34,7 +38,7 @@ def _adapter_with_transport(
     """
 
     adapter = GitLabAdapter(
-        host_url="https://gitlab.example.com", private_token="t"
+        host_url="https://gitlab.example.com", private_token=TOKEN
     )
     adapter._client = httpx.Client(
         base_url=adapter._client.base_url,
@@ -69,10 +73,10 @@ class TestImport:
 
     def test_constructor_scopes_client_to_api_v4(self) -> None:
         adapter = GitLabAdapter(
-            host_url="https://gitlab.example.com/", private_token="t"
+            host_url="https://gitlab.example.com/", private_token=TOKEN
         )
         assert str(adapter._client.base_url) == "https://gitlab.example.com/api/v4/"
-        assert adapter._client.headers["private-token"] == "t"
+        assert adapter._client.headers["private-token"] == TOKEN
 
 
 class TestNameConflictSniffing:
@@ -206,7 +210,7 @@ class TestCreateProject:
                     request.url.raw_path.decode()
                     == "/api/v4/groups/data-science%2Fmodels"
                 )
-                assert request.headers["private-token"] == "t"
+                assert request.headers["private-token"] == TOKEN
                 return httpx.Response(200, json={"id": 42})
             assert request.url.path == "/api/v4/projects"
             payload = json.loads(request.content)

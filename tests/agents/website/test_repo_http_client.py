@@ -26,6 +26,9 @@ from model_project_constructor.agents.website.protocol import RepoClientError
 from tests.agents.website.loopback import Loopback
 
 SECRET = "glpat-SECRET9f3kQ7"
+# A realistic token: the adapter removes its token from every error message, so a one-letter
+# stand-in would take letters out of the words around it.
+TOKEN = "glpat-ADAPTERTOKEN0123456789"
 URL = "https://host.example/api"
 
 
@@ -155,7 +158,7 @@ def test_the_real_error_from_the_installed_stack_is_replaced(
 def test_the_adapters_build_their_client_from_it(
     adapter: type[GitLabAdapter] | type[GitHubAdapter],
 ) -> None:
-    built = adapter(host_url="https://host.example", private_token="t")
+    built = adapter(host_url="https://host.example", private_token=TOKEN)
     assert isinstance(built._client, RepoHttpClient)
 
 
@@ -163,7 +166,7 @@ def test_the_adapters_build_their_client_from_it(
 def test_an_adapter_never_repeats_the_quoted_value_in_its_error(
     adapter: type[GitLabAdapter] | type[GitHubAdapter],
 ) -> None:
-    built = adapter(host_url="https://host.example", private_token="t")
+    built = adapter(host_url="https://host.example", private_token=TOKEN)
     built._client = _refusing(f"Illegal header value b'{SECRET}\\r'")
     with pytest.raises(RepoClientError) as caught:
         built.create_project(namespace="g", name="n", visibility="private")

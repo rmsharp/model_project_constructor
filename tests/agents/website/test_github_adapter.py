@@ -23,6 +23,9 @@ from model_project_constructor.agents.website.protocol import (
     RepoNameConflictError,
 )
 
+# A realistic token: the adapter removes its token from every error message, so a one-letter
+# stand-in would take letters out of the words around it.
+TOKEN = "ghp_TESTTOKEN0123456789abcdefghijklmnop"
 PROJECT_ID = "acme/foo"
 BRANCH = "main"
 REPO_PATH = f"/repos/{PROJECT_ID}"
@@ -46,7 +49,7 @@ def _adapter_with_transport(handler: Handler) -> GitHubAdapter:
     the wire layer instead of the SDK layer.
     """
 
-    adapter = GitHubAdapter(host_url="https://api.github.com", private_token="t")
+    adapter = GitHubAdapter(host_url="https://api.github.com", private_token=TOKEN)
     adapter._client = httpx.Client(
         base_url=adapter._client.base_url,
         headers=adapter._client.headers,
@@ -130,9 +133,9 @@ class TestImport:
         )
 
     def test_constructor_scopes_client_to_default_host(self) -> None:
-        adapter = GitHubAdapter(host_url="https://api.github.com", private_token="t")
+        adapter = GitHubAdapter(host_url="https://api.github.com", private_token=TOKEN)
         assert str(adapter._client.base_url) == "https://api.github.com"
-        assert adapter._client.headers["authorization"] == "Bearer t"
+        assert adapter._client.headers["authorization"] == f"Bearer {TOKEN}"
         assert adapter._client.headers["accept"] == "application/vnd.github+json"
 
     def test_constructor_normalizes_trailing_slash_for_enterprise_host(self) -> None:
@@ -140,7 +143,7 @@ class TestImport:
         # double slash once httpx's own base_url normalization (which
         # always ends a non-empty path in "/") is applied.
         adapter = GitHubAdapter(
-            host_url="https://github.example.com/api/v3/", private_token="t"
+            host_url="https://github.example.com/api/v3/", private_token=TOKEN
         )
         assert str(adapter._client.base_url) == "https://github.example.com/api/v3/"
 
@@ -199,7 +202,7 @@ class TestNameConflictSniffing:
 class TestNestedNamespaceGuard:
     def test_nested_namespace_raises_client_error(self) -> None:
         # No transport needed — the guard fires before any request is sent.
-        adapter = GitHubAdapter(host_url="https://api.github.com", private_token="t")
+        adapter = GitHubAdapter(host_url="https://api.github.com", private_token=TOKEN)
         with pytest.raises(RepoClientError, match="nested namespace"):
             adapter.create_project(namespace="acme/sub", name="foo", visibility="private")
 
