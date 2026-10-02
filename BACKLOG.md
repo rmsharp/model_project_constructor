@@ -54,7 +54,8 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and a repository host's error page printed raw. | **Small** for the SQLAlchemy lines and the language-model text, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
-| Two more places print the raw database address | The argument parser's own error (an address typed without `--db-url` is echoed back as "unexpected extra argument", password and all) and Typer 0.16 to 0.22, which print the address in a traceback's local variables on any uncaught error. The lock's Typer is 0.24.1, which does not, so only an environment outside the lock sees the second. | **Small; a secrets matter.** The second is one argument; the first needs a choice (catch the error, or take the address from an environment variable). |
+| The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
+| A website token ending in a carriage return or tab is printed in full | Found by Session 272's review. A token read from a file with Windows line endings (`--private-token "$(cat token.txt)"`) is refused by the HTTP library with an error that quotes the whole token. The website generator copies that error into its result, which is printed and written to `-o`. It does not depend on Typer. A token with a non-ASCII character crashes the same way and names its first such character. | **Small.** Reject such a token once at the command line with a fixed sentence. **Operator call** on rejecting versus trimming, since trimming silently edits a credential. |
 | Smaller follow-ups from the password fix | Five items the review of Session 271's fix left: the error does not tell the operator that an `@` in a password must be written `%40` (the usage guide now does); a much smaller design that withholds the driver's text exists and was declined; a reliably parsed password with a space is masked only up to the space; a non-string address raises; and SQLAlchemy 2.1 fails one test that CI never meets. | Each small. **The first two are the operator's call.** |
 | `redact_secrets` is slow on some text, and nothing limits how much text `safe_message` reads | A message made of thousands of `://x:` runs with no spaces takes seconds to minutes (4x longer each time the text doubles), and a 10-million-character message uses 1 to 2 GB. No database driver normally produces either. | **Small**, but a choice: a cap on the length shortens a very long `[SQL: ...]` that is now shown whole. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
@@ -484,25 +485,50 @@ given terminal reorders text on them was not measured.
 **Cost:** routes 5 and 2(b) are small and need no ruling; 6 is one decision then one function; 3 is an
 operator call; 1, 4 and 7 are nits.
 
-### Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals
+### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 
 **Found by Session 271's completeness critic and sinks lens; reproduced on the locked versions;
-pre-existing; a secrets matter.** Neither goes through `redact_db_url` or `safe_message`, and no test can see
-either, because `CliRunner` tests pass the option correctly. (1) **A password-bearing address given without
-the flag name.** `uv run model-data-agent run -r request.json -o o.json --fake-llm
+pre-existing; a secrets matter. Its second half, Typer's locals box, closed in Session 272:** all three apps
+pass `pretty_exceptions_show_locals=False` and `tests/test_typer_locals.py` holds it (the website agent's
+`--private-token` leaked the same way; the CHANGELOG entry has the 38-release measurement). What is left goes
+through neither `redact_db_url` nor `safe_message`, and no test can see it, because `CliRunner` tests pass the
+option correctly. **A password-bearing address, or a token, given without its flag name is echoed.**
+`uv run model-data-agent run -r request.json -o o.json --fake-llm
 'postgresql://bob:Zq7Lm9Xt@db.internal/claims'` prints `Got unexpected extra argument
 (postgresql://bob:Zq7Lm9Xt@db.internal/claims)` (Typer 0.24.1, Click 8.3.2, the lock), and
-`scripts/run_pipeline.py`'s argparse prints `unrecognized arguments: <the address>`. **Fix:** catch
-`click.UsageError` around `app()` (`standalone_mode=False`) and print `redact_secrets(str(e))`, and override
-`argparse.ArgumentParser.error` the same way; or take the address from an environment variable so it is
-never on the command line (an added option: an operator ruling). `USAGE.md` now says to pass the flag
-name. Test it through a real subprocess. (2) **Typer 0.16 to 0.22**, which `typer>=0.16.0` admits, print
-`db_url = 'postgresql://bob:<password>@...'` in the *locals* box of any uncaught exception in `run` or
-`discover` (a malformed request file, an unwritable `--output`): `pretty_exceptions_show_locals` defaults to
-True before 0.23.0 and False in the lock's 0.24.1 (measured from 0.12.0 to 0.24.1; reproduced under 0.20.0 and
-0.21.0). **Fix:** `typer.Typer(..., pretty_exceptions_show_locals=False)` plus a test that asserts it, or
-raise the floor to `typer>=0.23.0` (`tests/test_dependency_floors.py` holds the floor). **Small**; (2)
-needs no ruling.
+`scripts/run_pipeline.py`'s argparse prints `unrecognized arguments: <the address>`. **Session 272's review
+reproduced three more shapes** on Typer 0.16.0, 0.24.1 and 0.27.2: the data agent given the address as its
+first word prints `No such command '<the address>'.` (Click's group resolution, a different branch from "extra
+argument", so a fix that matches only the latter misses it); the website agent given a bare token prints
+`Got unexpected extra argument (<token>)` (`argument(s)` on 0.27.2); and a value typed into the wrong
+slot is echoed by `Invalid value for '--intake': File '<token>' does not exist` and by the website's own
+`ERROR: --host must be one of [...] (got '<token>')` (`website/cli.py`, an app message, so a one-line fix).
+An option spelled wrongly (`--dburl=URL`, `--db_url URL`) echoes only the option's name. **Fix:** catch
+`click.UsageError` around `app()` (`standalone_mode=False`) and print a masked message, and override
+`argparse.ArgumentParser.error` the same way; or take the address and token from an environment variable so
+neither is ever on the command line (an added option: an operator ruling). **`redact_secrets` is not enough
+for the token:** measured Session 272, it masks `postgresql://bob:***@...` but leaves
+`(glpat-TOKENSECRET9f3k)` untouched, so the website agent needs the message withheld or a token pattern, not
+that call. `USAGE.md` says to pass the flag name. Test it through a real subprocess. **Small, with a choice.**
+
+### A website token with a trailing carriage return or tab is printed in full in the result and the `-o` file
+
+**Found by Session 272's review; the adapter route reproduced by Session 272 directly (CR and TAB); pre-existing;
+independent of Typer; a secrets matter.** `GitLabAdapter.__init__` (`gitlab_adapter.py:66-70`) puts the token in
+an `httpx.Client` header, and `h11` rejects a value ending in a carriage return or a tab at the first request
+with `Illegal header value b'glpat-…\r'`: **the whole token is in the exception text.** `create_project`
+interpolates it (`gitlab_adapter.py:84-88`; the matching `{exc}` sites at `:103`, `:131`, `:154` and throughout
+`github_adapter.py`), `website/nodes.py:107-111` stores `f"repo_error: {exc}"` as `failure_reason`, and the CLI
+prints the result JSON on stdout and writes it to `-o`. Reachable with `--private-token "$(cat token.txt)"`
+from a file with CRLF line endings (the shell strips the LF, not the CR). Measured by the review through the
+real CLI on Typer 0.16.0, 0.24.1 and 0.27.2, for a GitLab and a GitHub host; a trailing LF was reported too.
+Related and smaller (one of two skeptics rated it not a leak): a token holding a non-ASCII character raises an
+uncaught `UnicodeEncodeError` at `httpx.Client(...)` that names the first such character and its position,
+outside every `try`. **Fix, small:** reject a token with a control or non-ASCII character once, at the CLI,
+with a fixed sentence that does not repeat it; and stop interpolating `{exc}` for `httpx.LocalProtocolError`.
+**Operator call** only on strip versus reject (stripping trailing whitespace silently edits a credential).
+Route 7 of "Seven more routes can still put database, driver or exception text …" is the server-controlled half
+of the same sink.
 
 ### Smaller follow-ups from Session 271's review of the password fix
 
