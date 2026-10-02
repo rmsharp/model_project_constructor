@@ -94,18 +94,130 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 273 Did
-**Deliverable:** **a website token that ends in a carriage return or tab (or holds another control or non-ASCII
-character) is rejected once, at the CLI, with a fixed sentence that never repeats it — and the adapters stop
-interpolating the HTTP library's `LocalProtocolError` text** — `BACKLOG.md`'s item *"A website token with a trailing
-carriage return or tab is printed in full in the result and the `-o` file"* (`:514`). Today the whole token reaches
-the result JSON on stdout and the `-o` file (`gitlab_adapter.py:84-88`, `website/nodes.py:107-111`). Chosen by the
-operator at Phase 1 from a two-step picker (area: secrets still on screen; item: the website token). **Ruling
-(operator, by picker, Phase 1): reject, never strip** — stripping would edit a credential silently. (IN PROGRESS)
-**Started:** 2026-10-01
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a website token that is not printable ASCII is refused once, before it can reach a header, and the
+HTTP library's protocol-error text can no longer reach a message — COMPLETE**, closing `BACKLOG.md`'s item *"A website
+token with a trailing carriage return or tab is printed in full in the result and the `-o` file"* (removed). Chosen by
+the operator at Phase 1 from a two-step picker (area: secrets still on screen; item: the website token). **Rulings
+(operator, by picker):** reject, never strip (Phase 1); push at close-out (Phase 3).
+**Started:** 2026-10-01 23:40. **Completed:** 2026-10-02. **Commits: nine** — `132117c` (claim, alone), `1b9ab5e`,
+`5ce4241`, `eba2858` (the three fix layers), `11d4734`, `011ba17` (the review's fixes), `f1af728`, `185e12f` (docs) and
+this close-out. Each carries its own `CHANGELOG.md` entry (the four after midnight are dated 2026-10-02); the push is
+recorded in the close-out's own entry.
+
+#### What changed
+- **The rule.** `protocol.py:82` `InvalidRepoTokenError` (a `ValueError`; its constructor takes no argument, so it cannot
+  carry a value; `__reduce__` so it pickles), `:102` the regex `[\x21-\x7e]+`, `:105` `validate_repo_token` (`fullmatch`).
+  Called first by **both adapter constructors** (`gitlab_adapter.py:69`, `github_adapter.py:83`), the choke point for
+  **both** routes to a token: the website CLI and `scripts/run_pipeline.py` (`GITLAB_TOKEN`/`GITHUB_TOKEN` through
+  `REPO_PLATFORMS[host].adapter_factory`). `cli.py:211-219` checks first (`--fake` skips it) and prints
+  `ERROR: --private-token: <the sentence>` on stderr, exit 2.
+- **The second line.** `website/_http.py` `RepoHttpClient(httpx.Client)`: `send` runs under
+  `contextlib.suppress(httpx.LocalProtocolError)` and the fixed-text replacement is raised after the handler, so it has no
+  `__context__`; both adapters build it; `agents/website/__init__.py` exports the error.
+- **Tests: 2,713 to 2,788 passed, 9 skipped, coverage 98.16%** (under `GITHUB_ACTIONS=true`); CI-scope `ruff` and
+  `uv run mypy` (69 files) clean. `tests/agents/website/test_repo_token.py` (53), `test_repo_http_client.py` (20),
+  `loopback.py` + a `conftest.py` fixture (a real socket, proxies set aside), one pipeline-route test appended to
+  `tests/scripts/test_run_pipeline_adapter.py`.
+- **Docs.** `OPERATIONS.md`, `TROUBLESHOOTING.md` (a row, and **a rotate-and-scrub advisory: the pipeline route also saved
+  the token in the checkpoint file**), `BACKLOG.md` (item removed; Route 7 rewritten and no longer a nit; a new sibling
+  item for API keys), `PROJECT_LEARNINGS.md` #317-320, `CLAUDE.md`.
+
+#### Measured first, then built
+- Through the real adapters against a loopback server, every code point 0-255 (and two more) in three positions, both
+  header styles: `h11` refuses NUL, LF, VT, FF, CR anywhere and a space or tab at the ends, and **quotes the whole value**
+  (the filing named "carriage return or tab"); it accepts and sends U+0001-U+0008, U+000E-U+001F and DEL; non-ASCII fails at
+  construction. A sweep of **27 real httpx 0.27.0-0.28.1 x httpcore 1.0.0-1.0.9 x h11 0.13.0/0.14.0/0.16.0 combinations**
+  (21 requested pairs cannot be installed together): 0 of the accepted tokens refused, the refusal set identical.
+- **Red first:** 42 of the 70 tests run failed on a no-op validator, and **my first CLI tests passed the leak assertion**
+  (with `-o` the leak went to the file, which they never read): found by reading the failure, not the count (#319).
+
+#### The checks, each finding what the last could not
+- **Three mutation passes** (20, 6 and 10 mutants), all caught, files restored byte for byte.
+- **The review** (5 lenses, 2 skeptics per non-nit finding: **67 agents, 0 errors, about 26 minutes, 5.87M subagent tokens,
+  1,126 tool calls**): 31 judged, 20 confirmed, 10 contested, 1 refuted, **none high.** It changed: the replacement was raised
+  inside the handler, so the original quoting exception stayed on `__context__` (#320); the error could not be pickled; the
+  wire test failed under `HTTP_PROXY`; five CLI mutants survived; the client's kwargs were unpinned; **the docs were silent
+  and nothing told an operator that tokens an earlier run printed are still on disk**; and **five of my own ledger claims
+  were wrong** (fourteen sites, not fifteen; 20 mutants, not 19; 282 tokens, not 564; "a stricter `h11` cannot reopen the
+  leak" does not follow; the first commit's figures were a later tree's), all corrected in place.
+- **Found and filed, not fixed (pre-existing):** a host that echoes request headers puts a **valid** token in `failure_reason`
+  (Route 7 of `BACKLOG.md:421`, `:475`); API keys for Anthropic and Bedrock are quoted in the exception chain (`:526`);
+  `MPC_HOST_URL` with userinfo is printed and saved (inside `:526`).
+- The repository was checked clean after the review (the harness reported its safety classifier timed out for two
+  subagents): `HEAD`, the stash and the worktrees as before.
+
+### Session 272 Handoff Evaluation (by Session 273)
+
+**Score: 8/10.**
+- **+** The first recommendation was the right deliverable and its pointer (`BACKLOG.md:514`) was exact. Gotchas 1, 2, 5 and
+  6 were used as written (`GITHUB_ACTIONS=true`; learning #315's sweep one-liner; both guards before every commit that
+  touched `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`), and the measured baseline (2,713 tests, 98.15%) was right.
+- **−** **Understated:** "validate once at the CLI" — the route that matters is the adapter constructors, because the
+  pipeline script is a second route to the same sink; "a carriage return or tab" — line feed, space, NUL, vertical tab and
+  form feed leak too; "small" — it took three layers and a review. **Missing:** that the pipeline route *saved* the token in
+  a checkpoint, which is why a rotation advisory was owed. The `stash@{0}` warning was accurate and I left it alone.
+- **ROI: high.** The orientation was nearly free; the three understated points were each cheap to re-measure.
+
+### Session 273 Self-Assessment
+
+**Score: 7/10.**
+- **+** Measured the whole character space instead of building on the filing's example, and swept the admitted range, not the
+  lock (#315, #317, #318); red first, and read the red run closely enough to find a hole in my own test; three mutation
+  passes with byte-for-byte restores; a proportionate-to-the-stakes review that changed eight things and was triaged finding
+  by finding, with in-scope fixes made and out-of-scope ones filed with their reproductions; every correction of my own
+  claims made in place and recorded.
+- **−** **Five wrong claims in my own ledger entries** (above), all caught by the review's claims lens and not by me; the
+  `from None` design flaw (#320) and a proxy-sensitive test, both found only by the review. **I touched six files before
+  my first commit** (the cap is five per commit; I split the commits by file, but the tree held six). Several long
+  stretches without narration (five "the user hasn't heard from you" prompts). Scope: the rule covers the pipeline route
+  and library callers, wider than the filing said; stated in the ledger.
+- **Decay term:** removed one `BACKLOG.md` item and its row (net `BACKLOG.md` 122,247 to 124,312 B: Route 7 grew, a sibling
+  item was added); `PROJECT_LEARNINGS.md` +4,280 B (four rows, now 366,308 B). **`SESSION_NOTES.md` is 183,023 B against the
+  196,608 B trim trigger: the eleventh trim will probably fire at Session 274 or 275 (an estimate).**
+
+**What's next** (sizes are estimates unless measured).
+1. **Route 7 of `BACKLOG.md:421` (rewritten at `:475`): a repository host's error text is printed raw, and can carry a valid
+   token.** Small, no ruling: one helper per adapter that builds the message from the status and a truncated, control-stripped
+   body and replaces the token (and `Bearer <token>`); the sites are `gitlab_adapter.py:113,187`, `github_adapter.py:123,156,271`
+   and the `{exc}` ones beside them (a malformed response is `httpx.RemoteProtocolError`, which `RepoHttpClient` passes
+   through on purpose). Needs a real-socket test with a raw-socket server (the review's scripts are not kept: rebuild from
+   `tests/agents/website/loopback.py`).
+2. **`BACKLOG.md:526`, API keys quoted in the exception chain.** Small; **needs the operator's choice** (refuse such a key where
+   each provider reads it, moving the rule to a shared module, or hand the SDK a client that withholds the message).
+3. **Residue routes 2(b) and 5 of "Seven more routes ..."** (`safe_message(e)` at `nodes.py:211` and `agent.py:54`; the pool
+   logger's filter), and the two items that need no ruling: the Click 8.2 declaration (`BACKLOG.md`, "The test suite needs
+   Click 8.2") and the `langgraph` floor.
+4. **Rulings owed to the operator:** refuse versus client for the API keys; catch versus environment variable for the parser
+   echo; whether the connect error should say to percent-encode an `@`; whether to take the declined smaller design;
+   `--db-url` option (c), one per channel for the three channels, the two guard-design calls, a CI job installing the dependency
+   minimums, whether the website should sanitise report text, the saved inventory names, whether `safe_message` should cap its
+   input; and new: whether `docs/tutorial.md` Options B and C should strip a carriage return (they keep it; the refusal's row
+   in `TROUBLESHOOTING.md` says so).
+5. **Observed, not filed:** `stash@{0}` ("WIP on (no branch): 022e6de", Session 270's claim commit; provenance unrecorded; the
+   operator's call); `scripts/run_pipeline.py` shows a bad `GITLAB_TOKEN` as a traceback (exit 1) that names no variable, like
+   every `ConfigError` at that step (one of two skeptics refuted it as a defect); the root `methodology_dashboard.py` is v2.18.0
+   against v2.19.0 (`bin/sync`'s job); `.claude/worktrees/wf_5f96c807-d00-3` and the branch `worktree-wf_c93ee390-506-3` are not
+   this session's; `tests/` is outside the mypy gate.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `src/model_project_constructor/agents/website/protocol.py:82,102,105` (the rule); `_http.py` (the client); `cli.py:211-219`
+  (the check); `gitlab_adapter.py:69-70`, `github_adapter.py:83-84` (the constructors); `src/.../orchestrator/config.py`
+  (`PlatformSpec`'s docstring); `tests/agents/website/test_repo_token.py`, `test_repo_http_client.py`, `loopback.py`,
+  `conftest.py` (the `loopback` fixture); `TROUBLESHOOTING.md` (the row and "A token leaked by a run before Session 273");
+  `BACKLOG.md:421,475,526`; `PROJECT_LEARNINGS.md` #317-320; `CHANGELOG.md` the S273 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **A test that talks to a socket takes the `loopback` fixture, which clears the proxy variables** and sets `NO_PROXY`;
+   `httpx.MockTransport` cannot see anything in `h11` (#317).
+2. **Never `git stash`** (#316); use saved copies and `cmp` for a temporary revert. This session's mutation scripts did, and
+   restored every file byte for byte.
+3. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that touches
+   `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this
+   session's did.
+4. The rule is U+0021-U+007E, **not** "what `h11` accepts" (it accepts DEL and most controls): do not loosen it to match a
+   library, and do not move the check out of the adapter constructors without a registry-wide test (one exists).
+5. A review's claims lens found five wrong numbers in my entries: **re-derive a count before writing it** (`grep -c`, the
+   suite's delta), and write "run" and "new" separately.
 
 ### What Session 272 Did
 **Deliverable:** **none of the three Typer apps prints its parameters' values in a traceback — COMPLETE**, part (2)
