@@ -93,6 +93,20 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 274 Did
+**Deliverable:** **a repository host's error text can no longer put a valid access token, or raw terminal control codes, on
+a terminal, in the result JSON, in the `-o` file or in the pipeline checkpoint** — Route 7 of `BACKLOG.md`'s item *"Seven
+more routes can still put database, driver or exception text on a terminal or in a report"* (`:475`). One helper per
+adapter builds the failure message from the status and a truncated, control-stripped body and replaces the token (and
+`Bearer <token>`) with a placeholder; it is meant to close Route 7's (a) echoed token, (b) malformed-response quoting and
+(c) control codes at once. Chosen by the operator at Phase 1 from a two-step picker (area: secrets still on screen; item:
+Route 7). (IN PROGRESS)
+**Started:** 2026-10-02 17:31
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 273 Did
 **Deliverable:** **a website token that is not printable ASCII is refused once, before it can reach a header, and the
 HTTP library's protocol-error text can no longer reach a message — COMPLETE**, closing `BACKLOG.md`'s item *"A website

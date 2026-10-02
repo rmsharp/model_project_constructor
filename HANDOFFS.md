@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S274
+date: 2026-10-02
+status: pending
+active_task: A repository host's error text (Route 7 of BACKLOG.md:421, rewritten at :475) can no longer put a valid access token or raw terminal control codes on a terminal, in the result JSON, in the -o file or in the pipeline checkpoint; one helper per adapter builds the failure message from the status and a truncated, control-stripped, token-replaced body.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S273
 date: 2026-10-02
 status: complete
