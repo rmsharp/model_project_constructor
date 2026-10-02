@@ -12,6 +12,7 @@ of what *would* have been committed without needing credentials.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -76,3 +77,37 @@ class RepoNameConflictError(RepoClientError):
     def __init__(self, name: str):
         super().__init__(f"Project name already exists: {name!r}")
         self.name = name
+
+
+class InvalidRepoTokenError(ValueError):
+    """Raised when a repository host token is not one run of printable ASCII.
+
+    The message is one fixed sentence and the constructor takes no arguments, so the error cannot
+    carry the token it refused: ``h11`` quotes a header value it rejects, which put the whole
+    credential into the result JSON and the ``-o`` file.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            "a repository host token may contain only printable ASCII characters: no whitespace "
+            "(a token read from a file with Windows line endings ends in a carriage return), no "
+            "control characters and no non-ASCII characters. The value is not shown."
+        )
+
+
+_TOKEN_CHARACTERS = re.compile(r"[\x21-\x7e]+")
+
+
+def validate_repo_token(token: str) -> None:
+    """Refuse a token that is not one or more characters in U+0021-U+007E.
+
+    Defined here, not borrowed from the HTTP library. Of the characters outside that range ``h11``
+    refuses only some (NUL, CR, LF, VT and FF anywhere; a space or tab at either end) and sends the
+    rest, and ``httpx`` refuses a non-ASCII value at construction. Every adapter constructor calls
+    this, so every route to a token (the website CLI's ``--private-token``; ``GITLAB_TOKEN`` and
+    ``GITHUB_TOKEN`` through the pipeline script; a library caller) is checked once, before the
+    value is put in a header.
+    """
+
+    if _TOKEN_CHARACTERS.fullmatch(token) is None:
+        raise InvalidRepoTokenError

@@ -4,7 +4,8 @@ This is the production adapter for the Website Agent's GitLab path. It is
 intentionally thin:
 
 - The constructor builds an ``httpx.Client`` scoped to ``{host_url}/api/v4``
-  with a ``PRIVATE-TOKEN`` auth header. No network call happens at
+  with a ``PRIVATE-TOKEN`` auth header, after refusing a token that is not
+  printable ASCII (:func:`validate_repo_token`). No network call happens at
   construction time.
 - ``create_project`` resolves the target group, creates a project inside
   it, and translates name collisions to :class:`RepoNameConflictError` and
@@ -37,6 +38,7 @@ from model_project_constructor.agents.website.protocol import (
     RepoClient,
     RepoClientError,
     RepoNameConflictError,
+    validate_repo_token,
 )
 
 
@@ -63,6 +65,7 @@ class GitLabAdapter(RepoClient):
         private_token: str,
         ssl_verify: bool = True,
     ) -> None:
+        validate_repo_token(private_token)
         self._client = httpx.Client(
             base_url=f"{host_url.rstrip('/')}/api/v4",
             headers={"PRIVATE-TOKEN": private_token},

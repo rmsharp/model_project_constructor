@@ -6,7 +6,9 @@ intentionally thin:
 - The constructor builds an ``httpx.Client`` scoped to ``host_url``
   (default ``https://api.github.com``; pass a GitHub Enterprise API URL,
   e.g. ``https://github.example.com/api/v3``, for GHE) with a bearer-token
-  ``Authorization`` header. No network call happens at construction time.
+  ``Authorization`` header, after refusing a token that is not printable
+  ASCII (:func:`validate_repo_token`). No network call happens at
+  construction time.
 - ``create_project`` resolves the target owner (organization first, then
   the authenticated user — GitHub's API only allows creating a repo under
   an organization or the token's own account, never an arbitrary
@@ -48,6 +50,7 @@ from model_project_constructor.agents.website.protocol import (
     RepoClient,
     RepoClientError,
     RepoNameConflictError,
+    validate_repo_token,
 )
 
 
@@ -76,6 +79,7 @@ class GitHubAdapter(RepoClient):
         private_token: str,
         host_url: str = "https://api.github.com",
     ) -> None:
+        validate_repo_token(private_token)
         self._client = httpx.Client(
             base_url=host_url.rstrip("/"),
             headers={

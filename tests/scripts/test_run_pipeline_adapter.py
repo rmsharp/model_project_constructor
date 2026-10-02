@@ -467,3 +467,26 @@ def test_build_website_runner_live_threads_ci_host_config_from_env(
         base_image="registry.enterprise.example/python:3.11",
         action_prefix="enterprise-mirror",
     )
+
+
+@pytest.mark.parametrize(
+    ("host", "token_var"), [("gitlab", "GITLAB_TOKEN"), ("github", "GITHUB_TOKEN")]
+)
+def test_build_website_runner_live_refuses_a_bad_token_without_repeating_it(
+    run_pipeline_module, monkeypatch, host, token_var
+):
+    """The pipeline script is the second route to a host token (the environment, not
+    ``--private-token``) and ends at the same adapter constructors. A token from a ``.env`` file
+    with Windows line endings ends in a carriage return, which ``h11`` refuses while quoting the
+    whole value; the real adapter, not a stub, must refuse it first with a sentence that does
+    not."""
+    from model_project_constructor.agents.website.protocol import InvalidRepoTokenError
+
+    secret = "glpat-SECRET9f3kQ7"
+    monkeypatch.setenv("MPC_HOST", host)
+    monkeypatch.setenv(token_var, secret + "\r")
+    monkeypatch.delenv("MPC_HOST_URL", raising=False)
+
+    with pytest.raises(InvalidRepoTokenError) as caught:
+        run_pipeline_module.build_website_runner(host=host, live=True)
+    assert secret not in str(caught.value)
