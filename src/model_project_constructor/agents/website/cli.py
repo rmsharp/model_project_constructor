@@ -29,7 +29,11 @@ import typer
 from model_project_constructor.agents.website.agent import WebsiteAgent
 from model_project_constructor.agents.website.fake_client import FakeRepoClient
 from model_project_constructor.agents.website.governance_templates import CIHostConfig
-from model_project_constructor.agents.website.protocol import RepoClient
+from model_project_constructor.agents.website.protocol import (
+    InvalidRepoTokenError,
+    RepoClient,
+    validate_repo_token,
+)
 from model_project_constructor.orchestrator.config import REPO_PLATFORMS
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -203,6 +207,16 @@ def run(
             err=True,
         )
         raise typer.Exit(code=2)
+
+    if not fake:
+        # Before any file is read and before a request is made: the HTTP library quotes a header
+        # value it refuses, which printed the whole token in the result and the -o file.
+        assert private_token is not None  # narrowed by the guard above
+        try:
+            validate_repo_token(private_token)
+        except InvalidRepoTokenError as exc:
+            typer.echo(f"ERROR: --private-token: {exc}", err=True)
+            raise typer.Exit(code=2) from None
 
     resolved_host_url: str = (
         host_url if host_url is not None else REPO_PLATFORMS[host].default_api_url
