@@ -44,6 +44,10 @@ from typing import Any
 
 import httpx
 
+from model_project_constructor.agents.website._host_text import (
+    response_text,
+    scrubbed_errors,
+)
 from model_project_constructor.agents.website._http import RepoHttpClient
 from model_project_constructor.agents.website.protocol import (
     CommitInfo,
@@ -81,6 +85,10 @@ class GitHubAdapter(RepoClient):
         host_url: str = "https://api.github.com",
     ) -> None:
         validate_repo_token(private_token)
+        # Kept so that an error leaving this adapter can have the token removed from its message
+        # (``scrubbed_errors``): the host's own words reach that message, and a host that echoes
+        # the request headers has put the token in them.
+        self._secret = private_token
         self._client = RepoHttpClient(
             base_url=host_url.rstrip("/"),
             headers={
@@ -93,6 +101,7 @@ class GitHubAdapter(RepoClient):
     # RepoClient protocol
     # ------------------------------------------------------------------
 
+    @scrubbed_errors
     def create_project(
         self,
         *,
@@ -120,7 +129,7 @@ class GitHubAdapter(RepoClient):
                 raise RepoNameConflictError(name)
             raise RepoClientError(
                 f"create_project failed for {name!r}: "
-                f"{response.status_code} {response.text}"
+                f"{response.status_code} {response_text(response)}"
             )
         repo = _parse_json(response, f"create_project failed for {name!r}")
 
@@ -153,7 +162,7 @@ class GitHubAdapter(RepoClient):
         if response.status_code != 404:
             raise RepoClientError(
                 f"owner lookup failed for {namespace!r}: "
-                f"{response.status_code} {response.text}"
+                f"{response.status_code} {response_text(response)}"
             )
 
         try:
@@ -165,6 +174,7 @@ class GitHubAdapter(RepoClient):
         _ok_or_raise(response, f"owner lookup failed for {namespace!r}")
         return "/user/repos"
 
+    @scrubbed_errors
     def commit_files(
         self,
         *,
@@ -268,7 +278,7 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
     """
 
     if not _is_2xx(response):
-        raise RepoClientError(f"{context}: {response.status_code} {response.text}")
+        raise RepoClientError(f"{context}: {response.status_code} {response_text(response)}")
 
 
 def _parse_json(response: httpx.Response, context: str) -> dict[str, Any]:
@@ -304,7 +314,7 @@ def _is_name_conflict(response: httpx.Response) -> bool:
                 message = str(err.get("message", "")).lower()
                 if "already exists" in message:
                     return True
-    text = str(body) if body is not None else response.text
+    text = str(body) if body is not None else response_text(response)
     return "already exists" in text.lower()
 
 

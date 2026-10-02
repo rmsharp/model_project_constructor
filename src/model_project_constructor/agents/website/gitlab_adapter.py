@@ -32,6 +32,10 @@ from urllib.parse import quote
 
 import httpx
 
+from model_project_constructor.agents.website._host_text import (
+    response_text,
+    scrubbed_errors,
+)
 from model_project_constructor.agents.website._http import RepoHttpClient
 from model_project_constructor.agents.website.protocol import (
     CommitInfo,
@@ -67,6 +71,10 @@ class GitLabAdapter(RepoClient):
         ssl_verify: bool = True,
     ) -> None:
         validate_repo_token(private_token)
+        # Kept so that an error leaving this adapter can have the token removed from its message
+        # (``scrubbed_errors``): the host's own words reach that message, and a host that echoes
+        # the request headers has put the token in them.
+        self._secret = private_token
         self._client = RepoHttpClient(
             base_url=f"{host_url.rstrip('/')}/api/v4",
             headers={"PRIVATE-TOKEN": private_token},
@@ -77,6 +85,7 @@ class GitLabAdapter(RepoClient):
     # RepoClient protocol
     # ------------------------------------------------------------------
 
+    @scrubbed_errors
     def create_project(
         self,
         *,
@@ -110,7 +119,7 @@ class GitLabAdapter(RepoClient):
                 raise RepoNameConflictError(name)
             raise RepoClientError(
                 f"create_project failed for {name!r}: "
-                f"{response.status_code} {response.text}"
+                f"{response.status_code} {response_text(response)}"
             )
         project = _parse_json(response, f"create_project failed for {name!r}")
 
@@ -120,6 +129,7 @@ class GitLabAdapter(RepoClient):
             default_branch=str(project.get("default_branch") or "main"),
         )
 
+    @scrubbed_errors
     def commit_files(
         self,
         *,
@@ -184,7 +194,7 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
     """
 
     if not _is_2xx(response):
-        raise RepoClientError(f"{context}: {response.status_code} {response.text}")
+        raise RepoClientError(f"{context}: {response.status_code} {response_text(response)}")
 
 
 def _parse_json(response: httpx.Response, context: str) -> dict[str, Any]:
@@ -212,7 +222,7 @@ def _is_name_conflict(response: httpx.Response) -> bool:
         body: Any = response.json()
     except ValueError:
         body = None
-    text = str(body) if body is not None else response.text
+    text = str(body) if body is not None else response_text(response)
     lowered = text.lower()
     return "already been taken" in lowered or "already exists" in lowered
 
