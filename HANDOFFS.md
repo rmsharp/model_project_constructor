@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S272
+date: 2026-10-01
+status: pending
+active_task: Typer no longer prints the database address in a traceback's locals (BACKLOG.md:487, "Two more surfaces print the raw --db-url", part 2 only): typer 0.16 to 0.22, which typer>=0.16.0 admits, print db_url in the locals box of an uncaught exception in run or discover; the lock's 0.24.1 does not. Measured on real Typer versions, fixed, and held by a test.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S271
 date: 2026-10-01
 status: complete

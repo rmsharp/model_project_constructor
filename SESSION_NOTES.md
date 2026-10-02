@@ -93,6 +93,20 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 272 Did
+**Deliverable:** **Typer no longer prints the database address in a traceback's locals** — `BACKLOG.md`'s item
+*"Two more surfaces print the raw `--db-url`: the argument parser's error and Typer's locals"* (`:487`),
+**part (2) only**: Typer 0.16 to 0.22 (which `typer>=0.16.0` admits) print `db_url = 'postgresql://bob:<password>@...'`
+in the locals box of any uncaught exception in `run` or `discover`; the lock's 0.24.1 does not. Part (1), the argument
+parser echoing an address typed without `--db-url`, needs a choice and stays open. The behaviour is measured on real
+Typer versions before it is fixed, and a test holds the fix. Chosen by the operator at Phase 1 from a two-step picker
+(area: secrets still on screen; item: Typer shows the address in tracebacks). (IN PROGRESS)
+**Started:** 2026-10-01
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 271 Did
 **Deliverable:** **a password in a database address no longer reaches the connect error, the report or the
 dialect warning — COMPLETE**, closing `BACKLOG.md`'s item *"A password can still reach the connect error, the
