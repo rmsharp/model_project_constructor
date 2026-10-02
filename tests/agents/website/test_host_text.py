@@ -65,6 +65,15 @@ class TestTheSecret:
         out = scrub_host_text(f"Authorization: Bearer {TOKEN}", TOKEN)
         assert out == f"Authorization: Bearer {REDACTED}"
 
+    def test_a_non_ascii_secret_is_removed_in_the_form_h11_quotes_it(self) -> None:
+        """The validator admits only printable ASCII, where a bytes repr and a ``str`` repr are the
+        same text; the function takes any secret, and ``h11`` quotes non-ASCII bytes escaped."""
+        secret = "tök-é9"
+        quoted = repr(secret.encode("utf-8"))[2:-1]
+        assert quoted != secret and quoted != repr(secret)[1:-1]
+        out = scrub_host_text(f"illegal header line: bytearray(b'X {quoted}')", secret)
+        assert out == f"illegal header line: bytearray(b'X {REDACTED}')"
+
     def test_the_match_ignores_case(self) -> None:
         """A proxy that lower-cases what it echoes still gives away most of the token."""
         assert TOKEN.lower() not in scrub_host_text(f"x {TOKEN.lower()} y", TOKEN)
@@ -104,6 +113,12 @@ class TestTheShape:
         out = scrub_host_text(f"\x1b{TOKEN}\x07 and\n{TOKEN}\r\n", TOKEN)
         assert TOKEN not in out
         assert out == f"{REDACTED} and {REDACTED}"
+
+    def test_a_secret_that_only_matches_once_the_line_is_joined_is_removed_too(self) -> None:
+        """A secret holding a space is not a token the validator admits, but the function takes any
+        secret: here it appears in the text only after the control character is turned into one."""
+        out = scrub_host_text("x ab\x1bcd y", "ab cd")
+        assert out == f"x {REDACTED} y"
 
     def test_a_long_body_is_cut_and_says_so(self) -> None:
         out = scrub_host_text("500 " + "x" * 5000, TOKEN)
