@@ -94,20 +94,137 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 271 Did
-**Deliverable:** **a password in a database address no longer reaches the connect error, the report or a
-warning** — `BACKLOG.md`'s item *"A password can still reach the connect error, the report and a warning"*
-(`:486`): the two filed shapes, a password with an unencoded `@` (SQLAlchemy ends the password at the first
-`@` and the driver quotes the rest back as the host) and an address whose `://` is mistyped (`make_url`
-fails and the whole address, password included, is echoed). Each shape is measured before it is fixed, and
-URL-borne-password cases are added to the route tests, none of which has one. The item's other half, the slow
-masker and the unbounded input (`:518`), stays open: it needs the operator's ruling on a length cap. Chosen by
-the operator at Phase 1 from a two-step picker (area: passwords in database text; item: the password-leak item
-only). (IN PROGRESS)
-**Started:** 2026-10-01
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a password in a database address no longer reaches the connect error, the report or the
+dialect warning — COMPLETE**, closing `BACKLOG.md`'s item *"A password can still reach the connect error, the
+report and a warning"* (removed; the four S271 ledger entries are the record). `redact_db_url` reads an address
+SQLAlchemy cannot be trusted to have split as the operator typed it; `safe_message(url=)` removes the password's
+tokens from the RAW driver text. The residue is filed. Chosen by the operator at Phase 1 from a two-step picker
+(area: passwords in database text; item: the password-leak item only; the slow-masker item needs a ruling on a
+length cap and stays open). **Ruling (operator, by picker, Phase 3):** push at close-out.
+**Started / completed:** 2026-10-01. **Commits: seven** — `73837b2` (claim, alone), `9b936f0` (the redaction),
+`c70a076` (13 route tests), `26cac7b` (a mutation pass), `cf65f58` (the review's fixes), `028eae8` (docs) and
+this close-out. (The push question said eight; it is seven.) Each carries its own `CHANGELOG.md` entry.
+
+#### What changed
+- `db.py`: `redact_db_url` (`:208`); the trigger `_untrusted_userinfo` (`:184`): the address does not parse, or
+  holds an `@` the parse does not account for (`_unaccounted_at` `:155`: not the userinfo separator, a user name,
+  a password, or a query value after a host); SQLite is exempt only with no user or password; a `URL` object is
+  read as the string it renders. `_split_userinfo` (`:131`) masks from the user's colon to the LAST `@`.
+  `_password_patterns` (`:241`) and `_scrub_address_password` (`:293`): ASCII and Unicode alphanumeric tokens, chains
+  of up to six with a gap of up to six non-alphanumerics, the tails after the first four `@`, a bytes-repr form for
+  non-ASCII; `safe_message(url=)` (`:370`) scrubs RAW text before it flattens; `connect` (`:595`) and the dialect
+  warning (`:538`, now `safe_message`) pass the address. `_USERINFO_URL` is gone. `redact_secrets` is as before.
+- **Tests: 2,432 to 2,708 passed, 9 skipped, coverage 98.15%** (under `GITHUB_ACTIONS=true`); CI-scope `ruff`
+  and `uv run mypy` (68 files) clean. `tests/data_agent_package/test_db_url_secrets.py` (263), `tests/hostile_text.py`
+  (`EchoingDialect` = `fakeecho`, which echoes every field SQLAlchemy parsed, and the `leaked_run` oracle), 13 route
+  tests (`test_cli.py:1277,1296`, `test_data_agent.py:1177`). `USAGE.md`: how to write a password (percent-encode).
+
+#### Measured first, then built (real unless marked)
+- Fifteen driver setups in throwaway environments: the unencoded-`@` password reaches the connect error as
+  `failed to resolve host 'ssw0rdXYZ@127.0.0.1'` and in `redact_db_url`'s own output. **Two routes the item did
+  not name:** an `@` and a `:` make `make_url` raise `invalid literal for int() ... '123@h:5'`, and **SQLAlchemy
+  2.0.40, which `sqlalchemy>=2.0,<3` admits, puts the whole address in its parse error** (2.0.41 and later do not;
+  the lock's 2.0.49 hides it from CI).
+- The real console script, a real psycopg 3, a refused port, before and after: **2, 3, 2 and 3 lines containing the
+  password (error line, report, warning) became 0, 0, 0, 0**. The error is one line and still names the host.
+- **The design departs from the item once:** it said print a fixed `<unparseable URL>`; Session 260's
+  `test_connect_error_names_the_cause_without_the_password` requires the host and `$DB_PORT` (learning #308).
+
+#### The checks, each finding what the last could not
+- **Prototype + five attackers** (a workflow: 1.25M subagent tokens, every claim run) changed the design three
+  times: a raw `@` count over-fired (`bob:***@nightly`); typed-text matching failed on 168 of 2,484 driver rows
+  (re-escape, bracket, strip, comma, `#`), so it matches tokens; the first scrub was cubic. I implemented in a
+  separate worktree so their baseline stayed still.
+- **My own enumeration and fuzz** found four more (a one-slash-scheme skip that printed `bob:/pw`; a chain
+  outranking the whole password; short-segment passwords; a `://` inside a password). **A mutation pass** left 23 of 46
+  mutants alive after 157 tests; the final pass is 59 of 59 killed.
+- **The review** (5 lenses, 2 skeptics per finding, a critic: **96 agents, 0 errors, 80 minutes, 9.1M tokens**):
+  45 lens findings, 29 confirmed by both skeptics, 16 partly or mixed, **0 refuted**, plus 4 from the critic (all
+  outside the diff). It changed the code: non-ASCII passwords leaked (three lenses), a `sqlite+pysqlcipher`
+  passphrase leaked past the SQLite exemption, a short token before punctuation leaked, **two bounds I deleted as
+  "redundant" were not (an address of 100,000 `@` took 8.6 s)**, a URL object bypassed the trigger, and a raw
+  `odbc_connect` lost its host. **Both mutants I had argued "equivalent" were not** (learning #305).
+- **Final measurements:** real-driver matrix 0 leaking rows of 1,242 (899 today); the 4-to-6-character enumeration
+  0 except 81 scheme-less passwords that begin `//`; 59,977 random passwords x 6 templates, 0 in the plain class
+  (one oracle artifact: `hoSt` in `host`).
+- **Declined:** the simplicity lens's smaller design (withhold driver text when the parse is untrusted). **Filed:**
+  the argument parser prints a mistyped `--db-url`; Typer 0.16 to 0.22 print it in a traceback's locals; the
+  message does not say to percent-encode (`USAGE.md` does); SQLAlchemy 2.1 fails one older test.
+
+### Session 270 Handoff Evaluation (by Session 271)
+
+**Score: 7/10.**
+- **+** The first recommendation was the right deliverable and every line number it gave was right when read.
+  Gotcha 1 (apply `safe_message` once; the masker mangles a composed message) and gotcha 3 (re-measure before
+  trusting a server's wording) were followed, and learning #300's fake-dialect technique was reused as written.
+  The backlog item named both shapes with a reproduction.
+- **−** **What was wrong:** the item's recommended fix, a fixed `<unparseable URL>`, contradicts a standing test
+  (Session 260); and "small, no ruling" sized a deliverable that took the whole session. **What was missing:** two
+  more routes in the same item (the `@`-and-`:` port error and SQLAlchemy 2.0.40's whole-address echo), and that
+  `redact_db_url`'s tests had no password-bearing case of any kind beyond the `$DB_PORT` ones.
+- **ROI: high.** It saved the orientation; it did not save the discovery.
+
+### Session 271 Self-Assessment
+
+**Score: 7/10.**
+- **+** Measured every route on real drivers before writing a fix, found three routes the item did not name, and
+  ran a before/after on the real console script. Tests red first at each layer; **four staged snapshots verified in
+  a clean worktree with the passed-test count predicted first (2,589, 2,602, 2,644, 2,708: all matched).** An
+  attack before the build (design changed three times), then four different checks after it; the review found
+  five real leaks and I fixed them all with a test each. 59 of 59 mutants killed. Corrected my own claims by ledger
+  entry, except one figure I amended into an unpushed commit.
+- **−** **I committed two wrong "equivalent" arguments** and **deleted two live bounds as redundant**; both were
+  caught only by the review (learnings #305, #310). **I wrote unsupported figures into the ledger three times** ("14
+  decisions" for 17, "28 decisions", "333,000 passwords" for 59,977; each corrected by a later entry). My first
+  trigger and first scrub were each redesigned by someone else's measurement. The push question said eight commits.
+- **−** It was a long session: about 10.4M subagent tokens in two workflows (1.25M, then 9.12M), for a change whose
+  shipped size is `db.py` +252 −20 and 939 lines of tests. The yield (five leaks, two corrected claims) justified the
+  review; the first workflow, the attack on a prototype, was cheaper per finding.
+- **Decay term:** none removed except the closed item. `BACKLOG.md` 117,729 to 118,805 B (one item and one row
+  out, two items and two rows in); `PROJECT_LEARNINGS.md` +6,266 B (seven rows, now 356,881 B).
+
+**What's next** (sizes are estimates; the previous handoff's "small" was not).
+1. **`BACKLOG.md`'s "Two more surfaces print the raw `--db-url`".** Part (2), Typer 0.16 to 0.22 printing `db_url` in
+   a traceback's locals, is one argument (`pretty_exceptions_show_locals=False`) and a test, needs no ruling, and
+   is a secrets matter. Part (1), the argument parser echoing an address typed without `--db-url`, needs a choice
+   (catch the error, or take the address from an environment variable).
+2. **Residue routes 2(b) and 5 of "Seven more routes can still ..."** (S270's list): a `safe_message(e)` at
+   `nodes.py:211` and `agent.py:54`, and the pool logger's filter.
+3. **Two items still need no ruling:** the Click 8.2 declaration (now 31 of 87 CLI tests fail under Click 8.1) and
+   the `langgraph` floor.
+4. **Rulings owed to the operator:** whether the connect error should say to percent-encode an `@` (a fixed
+   sentence when `_untrusted_userinfo` fires), and whether to take the declined smaller design (both in "Smaller
+   follow-ups"); and, unchanged, `--db-url` option (c), one per channel for the three channels, the two guard-design
+   calls, a CI job installing the dependency minimums, whether the website should sanitise report text, the saved
+   inventory names, and whether `safe_message` should cap its input.
+5. **Observed, not filed:** the root `methodology_dashboard.py` is v2.18.0 against canonical v2.19.0 (`bin/sync`'s
+   job); two clean worktrees remain that are not this session's (`.claude/worktrees/wf_5f96c807-d00-3`, Session
+   269's, and a branch `worktree-wf_c93ee390-506-3`); `tests/` is outside the mypy gate.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `db.py:75` `_USERINFO_TEXT`; `:108-130` the constants and their bounds; `:131` `_split_userinfo`; `:155`
+  `_unaccounted_at`; `:184` `_untrusted_userinfo`; `:208` `redact_db_url`; `:241` `_password_patterns`; `:293`
+  `_scrub_address_password` (its docstring is the specification: the limits, the order); `:370` `safe_message`;
+  `:538` the warning; `:595` `connect`.
+- `tests/data_agent_package/test_db_url_secrets.py`; `tests/hostile_text.py` (`EchoingDialect`, `leaked_run`);
+  `test_cli.py:1277,1296`; `test_data_agent.py:1177`. `BACKLOG.md` the two new items above "`redact_secrets` is
+  quadratic ..."; `PROJECT_LEARNINGS.md` #305-311; `CHANGELOG.md` the S271 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **The scrub removes by value ONLY when the parse is untrusted.** A correctly parsed password is never removed
+   from driver text: no measured driver echoes one, and an unconditional scrub turns `user "postgres"` into
+   `user "***"` for `postgres:postgres`. Do not widen it.
+2. **The scrub runs on RAW text, before the flatten.** After it, `ab<TAB>c` leaves `ab`; a test holds the exact output.
+3. **Read `_scrub_address_password`'s docstring before touching a threshold.** The limits are measured and
+   written there; tokens are ASCII and Unicode; a chain's gap is six non-alphanumerics. The mutation harness
+   (59 mutants) and the attack scripts were scratch and are gone; learnings #305-311 say how to rebuild them.
+4. **SQLAlchemy 2.0.40 echoes the whole address in a parse error and the lock hides it**; the tests simulate it
+   by monkeypatching. Run new tests under `uv run --no-project --with sqlalchemy==X` for the range's edges.
+5. **`uv run --with 'psycopg[binary]' model-data-agent` runs the project venv's script, which has no overlay.**
+   Use `uv run --with ... python -m model_project_constructor_data_agent`; I compared the wrong objects once.
+6. `tests/hostile_text.py` registers both `fakeesc` and `fakeecho` on import. `uv run pytest tests/test_read_budget.py
+   tests/test_session_notes_census.py --no-cov` before every commit that touches `SESSION_NOTES.md`, `CLAUDE.md` or
+   `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 270 Did
 **Deliverable:** **database and driver text reaches the operator's terminal and the report only through one
