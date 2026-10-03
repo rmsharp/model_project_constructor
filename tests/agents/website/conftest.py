@@ -11,18 +11,9 @@ from model_project_constructor.agents.website.fake_client import FakeRepoClient
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import RepoTarget
-from tests.agents.website.loopback import Loopback, serving
+from tests.agents.website.loopback import PROXY_VARIABLES, Loopback, serving
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
-
-PROXY_VARIABLES = (
-    "HTTP_PROXY",
-    "http_proxy",
-    "HTTPS_PROXY",
-    "https_proxy",
-    "ALL_PROXY",
-    "all_proxy",
-)
 
 
 @pytest.fixture(scope="module")

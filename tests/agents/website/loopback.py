@@ -8,17 +8,46 @@ it answers every request with ``200 {}`` and records the request headers it rece
 from __future__ import annotations
 
 import http.server
+import os
 import socketserver
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from unittest import mock
+
+# ``httpx.Client`` honours these, which is the normal setup on an enterprise machine: with one set,
+# a request to 127.0.0.1 goes to the proxy and a test about what a socket sent fails for a reason
+# that has nothing to do with the subject.
+PROXY_VARIABLES = (
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+)
+
+# ``serve_forever`` polls for a shutdown request every 0.5 s by default, and ``shutdown()`` waits
+# for the poll: a test that starts a server per request position spent most of its time idle.
+POLL_INTERVAL = 0.01
 
 
 @dataclass
 class Loopback:
     url: str
     seen: list[dict[str, str]]
+    errors: list[BaseException] = field(default_factory=list)
+
+
+@contextmanager
+def without_proxies() -> Iterator[None]:
+    """Proxy variables set aside and ``NO_PROXY`` set for the loopback address, then restored."""
+    with mock.patch.dict(os.environ):
+        for name in PROXY_VARIABLES:
+            os.environ.pop(name, None)
+        os.environ["NO_PROXY"] = os.environ["no_proxy"] = "127.0.0.1"
+        yield
 
 
 @contextmanager
@@ -43,7 +72,9 @@ def serving() -> Iterator[Loopback]:
 
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     server.daemon_threads = True
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": POLL_INTERVAL}, daemon=True
+    ).start()
     try:
         yield Loopback(url=f"http://127.0.0.1:{server.server_address[1]}", seen=seen)
     finally:
@@ -60,8 +91,15 @@ def serving_raw(reply: Callable[[bytes], bytes]) -> Iterator[Loopback]:
     or a reply no HTTP server would, such as a header line without a colon, which is what makes
     ``h11`` quote what it read. The connection is closed after one reply; ``seen`` holds the
     request headers, lower-cased, in arrival order.
+
+    The proxy variables are set aside while it runs (the client is built inside the ``with``, which
+    is when ``httpx`` reads them). An exception raised by ``reply`` in the handler's thread would
+    otherwise be swallowed by ``socketserver`` and show up as the client's ``Server disconnected
+    without sending a response``; it is recorded and raised when the block exits, so the cause is
+    the failure. A connection the client dropped first is not one.
     """
     seen: list[dict[str, str]] = []
+    errors: list[BaseException] = []
 
     class Handler(socketserver.StreamRequestHandler):
         def handle(self) -> None:
@@ -83,16 +121,31 @@ def serving_raw(reply: Callable[[bytes], bytes]) -> Iterator[Loopback]:
                     break
                 body += chunk
             seen.append(headers)
-            self.request.sendall(reply(header_block + b"\r\n\r\n" + body))
+            try:
+                self.request.sendall(reply(header_block + b"\r\n\r\n" + body))
+            except ConnectionError:
+                pass  # the client closed first: its business
+            except Exception as error:
+                errors.append(error)
+                raise
 
     class Server(socketserver.ThreadingTCPServer):
         allow_reuse_address = True
         daemon_threads = True
 
-    server = Server(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    try:
-        yield Loopback(url=f"http://127.0.0.1:{server.server_address[1]}", seen=seen)
-    finally:
-        server.shutdown()
-        server.server_close()
+    with without_proxies():
+        server = Server(("127.0.0.1", 0), Handler)
+        threading.Thread(
+            target=server.serve_forever, kwargs={"poll_interval": POLL_INTERVAL}, daemon=True
+        ).start()
+        try:
+            yield Loopback(
+                url=f"http://127.0.0.1:{server.server_address[1]}", seen=seen, errors=errors
+            )
+        finally:
+            server.shutdown()
+            server.server_close()
+            if errors:
+                # Raised from the ``finally`` on purpose: when the test body is already failing
+                # with the client's "Server disconnected", this puts the cause in front of it.
+                raise RuntimeError(f"the raw server's handler raised {errors[0]!r}") from errors[0]

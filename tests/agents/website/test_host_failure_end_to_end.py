@@ -21,8 +21,7 @@ import pytest
 from typer.testing import CliRunner
 
 from model_project_constructor.agents.website.cli import app
-from tests.agents.website.conftest import PROXY_VARIABLES
-from tests.agents.website.loopback import Loopback, serving_raw
+from tests.agents.website.loopback import PROXY_VARIABLES, Loopback, serving_raw
 
 TOKEN = "glpat-SECRET9f3kQ7xZ2mW"
 REPO_ROOT = Path(__file__).resolve().parents[3]
