@@ -54,6 +54,8 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274). | **Small** for the SQLAlchemy lines, the language-model text and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
+| A website stage that fails oddly leaves no result, so `--resume` makes a second project | If the repository host answers in a shape the code did not expect (a reply without an `id`, JSON nested 100,000 deep, `{"errors": 5}`), the website agent crashes instead of recording a failure. The project may already exist on the host and no result file is saved, so `--resume` runs the website stage again and creates a second project; a normal failure saves a FAILED result and `--resume` refuses to retry until you delete it. An interrupt (Ctrl-C) during the commit step does the same. Found by Session 274's review. | **Small; a choice** of where to catch: in the agent's nodes, or in the orchestrator's website stage. |
+| CI tests one Python, and it is not the one sessions run | CI uses whatever Python `ubuntu-latest` has (3.12.3 at the last run); this machine runs 3.13.5; the project says 3.11 or later and pins none. A standard-library error class differs between them, and 7 of Session 274's new tests would have gone red on the first push for that reason. | **Small; operator call:** pin 3.12, or test 3.11, 3.12 and 3.13 (a matrix triples the CI minutes). |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
 | An API key ending in a carriage return is quoted in the error chain | Found by Session 273's review, the sibling of the website-token item it closed. The language-model clients (Anthropic and Bedrock) put their key in an HTTP header, and the HTTP library refuses a key ending in a carriage return or line feed (a Windows-style `.env`) with a message that quotes the whole key. The SDK hides that message ("Connection error.") and the pipeline stores only that, so no report or checkpoint held the key (measured); but it sits in the exception's cause, so any log or traceback that prints the chain prints it (reproduced through the intake web UI's server log). The pipeline script also prints and saves a `MPC_HOST_URL` that carries a password or token. | **Small, a choice:** refuse such a key where it is read (the rule the website token now has), or give the SDK a client that withholds the library's message. |
 | Smaller follow-ups from the password fix | Five items the review of Session 271's fix left: the error does not tell the operator that an `@` in a password must be written `%40` (the usage guide now does); a much smaller design that withholds the driver's text exists and was declined; a reliably parsed password with a space is masked only up to the space; a non-string address raises; and SQLAlchemy 2.1 fails one test that CI never meets. | Each small. **The first two are the operator's call.** |
@@ -422,8 +424,10 @@ choice between the two, so an operator call.**
 
 **Routes 1 to 3 of Session 269's list closed in Session 270** (the connect error `discover` let escape as a
 traceback; the "database unreachable" concern; the quality-check and baseline SQL errors): all go through
-`db.safe_message` now, and the review of that change filed the rest. **Each was reproduced by a lens and
-re-checked by two skeptics; none is fixed.** What each was reproduced on: a real SQLite file where the
+`db.safe_message` now, and the review of that change filed the rest. **Each of routes 1 to 7 was
+reproduced by a lens and re-checked by two skeptics and none was fixed when filed; since then route 1's secrets half
+closed (Session 271) and route 7 closed (Session 274). Route 8 was found by Session 274's scouting workflow and
+measured by one agent, not re-run.** What each was reproduced on: a real SQLite file where the
 route allows it, otherwise a **simulated** driver (a fake SQLAlchemy dialect whose DBAPI error carries what
 PostgreSQL echoes of a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
 Oracle or SQL Server.
@@ -472,7 +476,8 @@ Oracle or SQL Server.
    summary reached `analysis/02_data.qmd`, `analysis/06_implementation_plan.qmd` and
    `reports/data_report.md` (measured). **Fix:** either say the guarantee is the producer's, or a one-line
    sanitiser in the templates for report-derived strings, which makes the producer fixes defence in depth.
-7. **Repo-host failure text — CLOSED in Session 274** (commits `043af67`, `b4480e3`, `b5d7ee7`, `f18639d`, `0f3508b`).
+7. **Repo-host failure text — CLOSED in Session 274** (commits `043af67`, `b4480e3`, `b5d7ee7`, `f18639d`,
+   `0f3508b`, then the review's fixes `32292f0`, `69303d1`, `58b21ba`).
    A host or proxy that echoed the request headers in an error reply (a debug gateway, an echoing reverse proxy,
    a misconfigured firewall page) put the access token in `failure_reason`, which the website command printed and
    wrote to `-o` and the pipeline script printed and saved in `RepoProjectResult.result.json`; a malformed reply
@@ -480,27 +485,37 @@ Oracle or SQL Server.
    of ESC `[2J` and BEL reached the script's terminal raw; a megabyte body went in whole. Both adapters now leave
    through `scrubbed_errors` (`agents/website/_host_text.py`): every `RepoClientError` that leaves
    `create_project` or `commit_files` has the token removed by value (as written, and as a JSON body, `h11`'s
-   bytes repr, a Python `repr`, an HTML page and a URL write it, two levels deep), each control character turned
-   into a space, one line, at most 1,000 characters, and no exception chain behind it; and a body is read through
-   `response_text`, because a reply whose declared charset its body is not in made `response.text` raise
-   `UnicodeDecodeError` inside the message (Session 274's matrix of 80 replies found it). Held by
-   `tests/agents/website/test_host_text.py`, `test_host_failure_text.py` (every request of both adapters answered
-   in turn by five hostile replies on a real socket) and `test_host_failure_end_to_end.py` (the real command and
-   the real script; stdout, the `-o` file, the checkpoint directory). **Not closed, and not part of this route:**
-   the token a run before Session 274 already saved (`TROUBLESHOOTING.md` says how to find it and to rotate it); an
-   exception that is not a `RepoClientError` (a `KeyError` on a reply without `id`, `httpx.InvalidURL` for a
-   host-supplied project id) still escapes as a traceback, with no token and no body in any of the ones the scouts
-   measured; a `RepoClient` that is neither adapter is not covered, and the registry-wide test goes red for a
-   registered one that does not wrap its protocol methods.
+   bytes repr, a Python `repr` and the repr of a longer message, an HTML page and a URL write it, two levels
+   deep), each control character turned into a space, one line, cut to 1,000 characters (a one-line notice of
+   about 40 more follows a cut), and no exception chain behind it; and a body is read through `response_text`,
+   because `response.text` raises on a body that is not in its declared charset (a plain `UnicodeError` on Python
+   3.11 and 3.12, which CI runs, and `UnicodeDecodeError` on 3.13) and on a charset that is not a text codec
+   (`undefined`, `rot13`, `hex`, `zlib`, `idna`...): the matrix of 80 replies found the first, the review the
+   rest and that CI's Python differs from the one the work was done on. Held by
+   `tests/agents/website/test_host_text.py`, `test_host_failure_text.py` (every request of GitLab's sequence and of
+   GitHub's two, organisation and personal account, answered in turn by eight hostile replies on a real socket,
+   plus a transport error in three classes) and `test_host_failure_end_to_end.py` (the real command and the real
+   script; stdout, the `-o` file, the checkpoint directory). **Not closed, and not part of this route:** the
+   token a run before Session 274 already saved (`TROUBLESHOOTING.md` says how to find it and to rotate it); an
+   echo the host altered (cut short, characters inserted, only some escaped, base64 or a hash: the party that
+   echoes already holds the token, so this is the limit of an innocent echo); a second credential (userinfo in
+   the host URL travels as `Authorization: Basic base64(user:password)`; see the API-key item below); an
+   exception that is not a `RepoClientError`, which leaves no result and lets `--resume` create a second project
+   (its own item, below); and a `RepoClient` that is neither adapter, though the registry-wide test goes red for a
+   registered one whose protocol methods do not carry `scrubbed_errors`'s marker.
 8. **The repository host's success values, printed raw.** *Found by Session 274's scouting workflow; measured by an
    agent against a host that returned ESC in the project address and the commit id, not re-run by the session.*
    The project address (`web_url` / `html_url`) and commit id come from the host's 2xx reply and are interpolated
    unchecked into `cli.py:266,268` (`Project:`, `Commit:`), `scripts/run_pipeline.py:663` (`Project:`) and, on
-   `--resume` of a completed run, `:402`. The script's `print` put the ESC on piped stdout; the website command's
-   `click.echo` strips it when stdout is not a terminal and passes it under a pty; BEL passes either way. Not
-   failure text, not the token (a host would have to put it in its own success reply); the exposure is the
-   operator's terminal. **Fix, small, no ruling:** `scrub_host_text(value)` (no secret) in the adapters where
-   `ProjectInfo.url` and `CommitInfo.sha` are built, so every consumer gets a clean string, or at the three prints.
+   `--resume` of a completed run, `:403`. The script's `print` put the ESC on piped stdout; the website command's
+   `click.echo` strips ANSI CSI sequences (`ESC [ ... letter`) when stdout is not a terminal, but an OSC title
+   sequence (`ESC ] ... BEL`) and `ESC c` pass either way, and everything passes under a pty (the review ran
+   this). `ProjectInfo.id` and `default_branch` come from the same reply: an id with a control character makes
+   `httpx.InvalidURL` escape from `commit_files`. Not failure text, not the token (a host would have to put it in
+   its own success reply); the exposure is the operator's terminal. **Fix, small, no ruling, one choice:**
+   `scrub_host_text(value)` (no secret) in the adapters where `ProjectInfo` and `CommitInfo` are built, so every
+   consumer gets a clean string, or at the three prints; it also cuts to 1,000 characters and appends a notice,
+   which a URL or a sha may not want.
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
@@ -509,6 +524,33 @@ given terminal reorders text on them was not measured.
 
 **Cost:** routes 5, 2(b) and 8 are small and need no ruling; 6 is one decision then one function; 3 is an
 operator call; 1 and 4 are nits. (Route 7 closed in Session 274; route 8 replaced it, so seven remain.)
+
+### A website stage that raises something other than a `RepoClientError` saves no result, so `--resume` creates a second project
+
+**Found by Session 274's review (the exit lens; reproduced by two skeptics, one of whom also reproduced it with an
+honest host and an interrupt); pre-existing and identical at `2b99f9d`.** `nodes.py` and `agent.py` record a failure only
+for a `RepoClientError`. Anything else leaves the adapter as an exception and the website stage saves nothing:
+`KeyError` from a 2xx reply without `id`, `RecursionError` from a 100,000-deep JSON array in `_is_name_conflict`'s
+`response.json()` (its `except ValueError` does not catch it), `TypeError` from GitHub's `{"errors": 5}`, `httpx.InvalidURL`
+for a host-supplied project id holding a control character. Measured with `scripts/run_pipeline.py --live` against a
+loopback host that answers `POST /projects` 201 and then fails the commit stage that way: run 1 exits 1 with a traceback,
+**one project exists on the host and no `RepoProjectResult.result.json` is saved**; `--resume r1` then prints `RESUMED
+from: website` and **a second project is created**. With a `RepoClientError` (a 500) a FAILED result is saved and
+`--resume` stops at "Delete ... to retry"; that guard exists because the stage has irreversible side effects. An
+interrupt (SIGINT) during the commit step does the same with an honest host. No token and no host text was in any of
+the escaping exceptions (checked on 17 types). **Fix, small, a choice of where to catch:** `except Exception` in the
+nodes, recording FAILED with the exception's type name and no message; or in the orchestrator's website stage, saving a
+FAILED result for any exception (which also covers an interrupt).
+
+### CI tests one Python, and it is not the one sessions run
+
+**Found by Session 274's review.** `.github/workflows/ci.yml` runs `uv sync` with no interpreter pin (CPython 3.12.3 on
+`ubuntu-latest` at the last run); `pyproject.toml` says `requires-python = ">=3.11"`; there is no `.python-version`; this
+machine's project environment is 3.13.5. A stdlib exception class differs between them (`UnicodeError` on 3.11 and 3.12,
+`UnicodeDecodeError` on 3.13, for a UTF-16 body with no byte-order mark), and 7 of Session 274's 66 new tests would have
+been red on the first push for that reason alone; learning #303 already says to run the tests on the other interpreters
+you have. **Fix, small, an operator call:** a `.python-version` of 3.12 (what CI uses), or a CI matrix over 3.11, 3.12 and
+3.13 (the suite takes about 75 s on CI, so a matrix triples the minutes).
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 
@@ -554,7 +596,11 @@ prints the key. **Fix, small, one choice:** refuse such a key where each provide
 token now has (`validate_repo_token`'s regular expression is not specific to repository hosts and would move to a
 shared module), or hand the SDK an `http_client` that withholds the library's message (`RepoHttpClient` is the shape).
 Also measured, a different credential route: **`MPC_HOST_URL` with userinfo or a query token** is printed verbatim by
-`scripts/run_pipeline.py` and saved in `RepoTarget.json`; `redact_db_url` has no counterpart for it.
+`scripts/run_pipeline.py` and saved in `RepoTarget.json`; `redact_db_url` has no counterpart for it. **And a host
+that echoes request headers sends it back:** `httpx` turns userinfo in the host URL into `Authorization: Basic
+base64(user:password)`, which Session 274's scrub (`agents/website/_host_text.py`) does not remove, because it
+knows only the access token (a review skeptic reproduced it through a mock host that echoed its headers: `'authorization':
+'Basic Ym9iOmh1bnRlcjJwdw=='` in the `RepoClientError`).
 
 ### Smaller follow-ups from Session 271's review of the password fix
 
@@ -592,7 +638,9 @@ The new password scrub is linear and has its own size tests, but `safe_message` 
 first `://x:` matters and it pairs with the last `@` in that token: a per-token `rfind('@')`, or skip
 tokens with no `@`); and a cap on the text `safe_message` processes (8 to 64 KB with a visible
 `...[truncated]`) before it redacts, which also bounds the quadratic case. A cap changes what a long
-`[SQL: ...]` shows, which is why it is a choice.
+`[SQL: ...]` shows, which is why it is a choice. (Session 274's `scrub_host_text` in the website agent already
+cuts to 1,000 characters with a visible notice, `... [N more characters not shown]`, after removing a secret: a cap
+here should use the same figure and notice, so the two do not diverge.)
 
 ### Only `typer`'s dependency floor has ever been measured — `langgraph>=0.2` cannot start the intake CLI
 
