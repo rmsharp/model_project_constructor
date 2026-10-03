@@ -94,18 +94,125 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 274 Did
-**Deliverable:** **a repository host's error text can no longer put a valid access token, or raw terminal control codes, on
-a terminal, in the result JSON, in the `-o` file or in the pipeline checkpoint** — Route 7 of `BACKLOG.md`'s item *"Seven
-more routes can still put database, driver or exception text on a terminal or in a report"* (`:475`). One helper per
-adapter builds the failure message from the status and a truncated, control-stripped body and replaces the token (and
-`Bearer <token>`) with a placeholder; it is meant to close Route 7's (a) echoed token, (b) malformed-response quoting and
-(c) control codes at once. Chosen by the operator at Phase 1 from a two-step picker (area: secrets still on screen; item:
-Route 7). (IN PROGRESS)
-**Started:** 2026-10-02 17:31
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a repository host's failure text can no longer put the access token, a terminal control code or an
+unbounded body on a terminal, in the result JSON, in the `-o` file or in the pipeline checkpoint — COMPLETE**, Route 7 of
+`BACKLOG.md`'s item *"Seven more routes can still put database, driver or exception text on a terminal or in a report"*
+(marked closed; Route 8 filed beside it). Chosen by the operator at Phase 1 from a two-step picker (area: secrets still on
+screen; item: Route 7). **Ruling (operator, by picker):** push at close-out (asked while the review ran).
+**Started:** 2026-10-02 17:31. **Completed:** 2026-10-02. **Commits: twelve** — `2b99f9d` (claim, alone); the build,
+`043af67`, `b4480e3`, `b5d7ee7`, `f18639d`, `0f3508b`, `32292f0`; `a50fe6b` (docs); the review's fixes `69303d1`, `58b21ba`;
+`d1098dc` (docs) and this close-out. Each carries its own `CHANGELOG.md` entry; the push is recorded in the close-out's.
+
+#### What changed
+- **The design: scrub where an error leaves, not where its message is built.** Route 7 had 21 message-building sites in two
+  adapters (16 interpolate an exception, 5 a response body; counted at `2b99f9d`). `agents/website/_host_text.py` (new):
+  `scrub_host_text(text, secret, *, limit)` removes the secret by value (case-insensitive; as written, and as JSON, `h11`'s
+  `bytearray(b'...')`, the repr of a longer message, HTML and percent encoding, two levels deep, longest first), turns each
+  control character into a space, makes one line, cuts to 1,000 characters plus a notice, and fails closed (`<unprintable>`);
+  `scrubbed_errors` decorates `create_project` and `commit_files` of both adapters and re-raises a `RepoClientError` scrubbed,
+  **after the handler**, so nothing is behind it (#320); `response_text` reads a body without a crash. The adapters keep
+  `self._secret` (`gitlab_adapter.py`, `github_adapter.py`).
+- **Tests: 2,788 to 2,894 passed, 9 skipped, coverage 98.20%** at CI scope (`GITHUB_ACTIONS=true uv run pytest`, Python 3.13.5);
+  the same suite on 3.12.13 and 3.11.15: 2,894 passed, 9 skipped and 98.20% on each (the 3.12 run is CI's interpreter). +106: `test_host_text.py` 53, `test_host_failure_text.py` 43 (every request of
+  GitLab's sequence and of GitHub's two, organisation and personal account, answered in turn by eight hostile replies on a
+  real socket, plus a transport error in three classes, plus two registry-wide gates), `test_host_failure_end_to_end.py` 10
+  (the real command and the real script; stdout, `-o`, the checkpoint directory). `loopback.py` gains `serving_raw`.
+- **Docs.** `BACKLOG.md` (Route 7 closed, Route 8 filed, two new items: a non-`RepoClientError` in the website stage leaves no
+  result so `--resume` makes a second project; CI tests one Python and not the one sessions run), `TROUBLESHOOTING.md` (an
+  advisory for a token a host echoed in an earlier run, what the removal does not cover, a table row, and the leak-hunt
+  commands corrected: the script does not read `MPC_CHECKPOINT_DIR`), `PROJECT_LEARNINGS.md` #321-326, `CLAUDE.md`.
+
+#### Measured first, then built
+- **Three read-only scouts** (sinks, an 80-reply httpx matrix against a raw-socket server, the existing tests' expectations):
+  one string, `failure_reason`, reaches exactly three places; only `RemoteProtocolError` was seen to quote server bytes; every
+  adapter-message test pins a prefix only, and the one-letter test token `"t"` would have put a replaced letter inside 34 of the
+  75 message assertions. The matrix also found a crash no one had thought of: `response.text` raising inside the message.
+- **Red first, read:** 15 then 16 of 25 tests failed on a no-op stub (one toothless test found: `json.dumps` escapes a surrogate to
+  ASCII); 10 of 17 adapter tests failed on the unwired adapters, each for the leak it was written to catch, and my first
+  malformed-header reply failed on the chain, not the token (`h11` quotes only the FIRST illegal line).
+
+#### The checks, each finding what the last could not
+- **Two mutation passes** (32, then 43 live mutants; the second on Python 3.12): all caught after two survivors were dealt with
+  (the second replace pass had no test; the `str`-repr escaper was dead code for ASCII and was removed).
+- **The review** (6 lenses, 2 skeptics per non-nit finding: **98 agents, 0 errors, 66 minutes, 9.3M subagent tokens, 2,022 tool
+  calls**): 46 findings, 32 confirmed by both skeptics, 6 by one, 8 by none; none rated high. **It found what I could not:**
+  CI runs CPython 3.12.3 and I worked on 3.13.5, where a UTF-16 body with no BOM raises a plain `UnicodeError` and not
+  `UnicodeDecodeError`, so **7 of my 66 new tests were red on CI and the crash they guard stayed open there** (reproduced on a
+  scratch 3.12 environment; #325); nine more codecs raise other classes, so my "total function" was not; the registry gate
+  accepted any `functools.wraps` decorator; no test covered the C1 controls; 48 of the files' 54 s was idle shutdown waiting;
+  the new tests did not clear proxy variables; and the leak-hunt command in `TROUBLESHOOTING.md` (and Session 273's) grepped a
+  variable the script never reads. All fixed or filed. **Found and filed, not fixed (pre-existing):** the resume duplicate above;
+  host-URL userinfo is a second credential an echo returns as base64; Route 8.
+
+### Session 273 Handoff Evaluation (by Session 274)
+
+**Score: 8/10.**
+- **+** The first recommendation was the right deliverable, correctly sized ("small, no ruling") and pointed at exactly: the
+  sites named were right, and "rebuild from `loopback.py`" was the right instruction. Gotchas 1 to 3 and 5 were used as written
+  (the `loopback` fixture, never `git stash`, both guards before every commit, re-derive a count) and the measured baseline
+  (2,788 tests, 98.16%) was right.
+- **−** **Missing, and it cost the most:** that CI runs Python 3.12.3 while the work is done on 3.13.5 (learning #303 said to run
+  the other interpreters; nothing said which one CI has). **Understated:** "small" took nine commits and a review. The loopback
+  fixture clears proxies, but a new helper has to do it itself.
+- **ROI: high.** Orientation was nearly free.
+
+### Session 274 Self-Assessment
+
+**Score: 6/10.**
+- **+** Scouted before designing and chose the exit over 21 sites; red first against a stub and read for which assertion failed;
+  a real-socket test at every request position, derived from the happy run; two mutation passes; a proportionate review whose
+  findings were triaged one by one, with in-scope ones fixed and the rest filed with reproductions; every correction of my own
+  claims made in place and recorded.
+- **−** **I shipped a fix that did not work on CI's interpreter and only the review caught it**, with learning #303 in the repo;
+  "total function" and "answered in turn" were over-claims; wrong figures of mine: 19 sites (21), "about 30" assertions (34 of 75
+  flagged), 34 confirmed findings (32), 11 GitHub requests (10), a worked example that dropped the second `t`, and a ledger
+  sentence about which gap the second replace pass was. Fixture mistakes (even-length parity inside a server thread). Tests that
+  took 50 s. Long stretches without narration (the harness prompted me repeatedly).
+- **Decay term:** nothing was removed from a mandated-read file: `BACKLOG.md` grew 124,312 to 131,511 B (Route 7 rewritten, Route 8
+  and two items added), `PROJECT_LEARNINGS.md` +7,625 B (373,933 B now). `SESSION_NOTES.md` is 195,311 B against the 196,608 B trim
+  trigger: just under it, so **the eleventh trim is due as soon as the next record lands** (Session 275's claim stub and record will pass the trigger; an estimate).
+
+**What's next** (sizes are estimates unless measured).
+1. **The resume duplicate (`BACKLOG.md:528`): a website stage that raises something other than a `RepoClientError` saves no result,
+   and `--resume` then creates a second project on the host.** Small, one choice (catch in the nodes, or in the orchestrator's website
+   stage, which also covers an interrupt). It is the item with a real side effect, which is why it is first; the Route 8 pointer
+   below is the quieter one. Reproduce with `scripts/run_pipeline.py --live` against `serving_raw` (`tests/agents/website/loopback.py`):
+   answer `POST /projects` 201 and the commit with `201 {}`.
+2. **Route 8 (`BACKLOG.md:506`): the host's project address, commit id, project id and default branch are printed raw** (`cli.py:266,268`,
+   `run_pipeline.py:663,403`). Small, no ruling, one choice: `scrub_host_text(value)` in the adapters where `ProjectInfo` and
+   `CommitInfo` are built (it also cuts to 1,000 characters and adds a notice).
+3. **`SESSION_NOTES.md` is 195,311 B against the 196,608 B trigger: the eleventh trim is due as soon as the next record lands. It is its own deliverable per `CLAUDE.md` (claim, trim, close out: two commits and no record edit in the trim commit), so say at Phase 0 whether to do it first.**
+4. **Rulings owed to the operator:** where to catch for the resume duplicate; pin Python 3.12 or add a matrix (`BACKLOG.md:545`); refuse
+   a host URL with a password or scrub its base64 form (`BACKLOG.md`, the API-key item); and the standing list in Session 273's record
+   (refuse versus client for the API keys; catch versus environment variable for the parser echo; `--db-url` option (c); the two
+   guard-design calls; a CI job installing the dependency minimums; the saved inventory names; whether `safe_message` should cap).
+5. **Observed, not filed:** `stash@{0}` ("WIP on (no branch): 022e6de", Session 270's claim commit; the operator's call), and the branch
+   `worktree-wf_c93ee390-506-3` with `.claude/worktrees/wf_5f96c807-d00-3`, not this session's; the root `methodology_dashboard.py` is
+   v2.18.0 against v2.19.0 (`bin/sync`'s job); `test_a_password_of_many_short_tokens_does_not_stall_the_scrub` took 5.6 s against its 5.0 s
+   bound once, with three agents running, and 3 s alone (it passed in all four full runs since); `tests/` is outside the mypy gate.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `src/model_project_constructor/agents/website/_host_text.py:99,128,155,184` (`scrub_host_text`, `response_text`, `scrubbed_errors`,
+  `_scrubbed_message`; the docstring of the module and of `response_text` are the specification), `:56` `_ESCAPERS`, `:70` `_rewrites`;
+  `gitlab_adapter.py:77,88,132` and `github_adapter.py:91,104,177` (the secret, the two decorated methods).
+- `tests/agents/website/test_host_text.py`, `test_host_failure_text.py` (`REQUESTS` `:110`, `HOSTILE` `:188`, the two gates `:382,:401`),
+  `test_host_failure_end_to_end.py`, `loopback.py:44,86` (`without_proxies`, `serving_raw`).
+- `BACKLOG.md:423` (the item), `:479` Route 7 closed, `:506` Route 8, `:528` the resume duplicate, `:545` CI's Python;
+  `TROUBLESHOOTING.md` ("A token the repository host echoed back", "What the removal does not cover", the table row);
+  `PROJECT_LEARNINGS.md` #321-326; `CHANGELOG.md` the S274 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **Run new tests on CI's interpreter before pushing** (#325): `UV_PROJECT_ENVIRONMENT=<scratch>/venv312 uv sync --frozen --python 3.12
+   --extra agents --extra ui --extra dev`, then `<scratch>/venv312/bin/python -m pytest`. 3.11 and 3.12 raise `UnicodeError` where 3.13
+   raises `UnicodeDecodeError`.
+2. **The registry gate looks for `__scrubs_host_text__`, not `__wrapped__`.** A new adapter, a new protocol method or a new request in
+   an adapter's sequence turns `test_host_failure_text.py` red on purpose (its routers and `REQUESTS` are pinned): update them.
+3. `serving_raw` sets proxy variables aside itself and raises a handler's exception from its `finally` with the client's error as
+   context; a premise belongs in a plain test, not in the handler.
+4. Never `git stash` (#316); the mutation scripts used saved copies and `cmp`. The scouts' and the review's scripts are in the session
+   scratchpad and are not kept.
+5. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that touches
+   `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 273 Did
 **Deliverable:** **a website token that is not printable ASCII is refused once, before it can reach a header, and the
