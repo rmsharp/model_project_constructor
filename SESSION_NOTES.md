@@ -93,6 +93,19 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 275 Did
+**Deliverable:** **a website stage that raises something other than a `RepoClientError` no longer leaves `--resume` free to
+create a second project on the repository host** — the item *"A website stage that raises something other than a
+`RepoClientError` saves no result, so `--resume` creates a second project"* (`BACKLOG.md:528`, found by Session 274's
+review). Where to catch (in `nodes.py`/`agent.py`, or in the orchestrator's website stage, which also covers an interrupt)
+is the one open choice and is put to the operator before any code. Chosen by the operator at Phase 1 from the Phase 0
+picker (item: the resume duplicate). (IN PROGRESS)
+**Started:** 2026-10-02 20:53
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 274 Did
 **Deliverable:** **a repository host's failure text can no longer put the access token, a terminal control code or an
 unbounded body on a terminal, in the result JSON, in the `-o` file or in the pipeline checkpoint — COMPLETE**, Route 7 of

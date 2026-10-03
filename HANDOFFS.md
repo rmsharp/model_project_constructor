@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S275
+date: 2026-10-02
+status: pending
+active_task: A website stage that raises something other than a RepoClientError no longer leaves --resume free to create a second project on the repository host (BACKLOG.md:528, found by Session 274's review); where to catch is put to the operator before any code.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S274
 date: 2026-10-02
 status: complete
