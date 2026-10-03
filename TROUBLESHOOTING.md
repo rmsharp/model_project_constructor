@@ -32,8 +32,10 @@ Regardless of which stage failed, start here:
    `duration_ms`. It does not include what the exception said: that text
    can carry a host's reply or a token, so it is never logged (see
    `OPERATIONS.md` §3.1). For the text, see the traceback the caller's
-   own error handler prints, or, for a failure an agent reported itself
-   (a `FAILED_AT_*` status), the `failure_reason` it saved.
+   own error handler prints (an intake or data crash reaches it), or, for
+   a failure an agent reported itself (a `FAILED_AT_*` status), the
+   `failure_reason` it saved. A website-stage `unexpected_error:` keeps
+   neither: see that entry above.
 
 4. **Check metrics.** If you used `MetricsRegistry`, call
    `registry.snapshot()` to see the status distribution and per-agent
@@ -172,8 +174,12 @@ creating the project. **Treat the project as possibly existing**: look in the
 target namespace for a project named after the target's `project_name_hint`
 before you re-run. `--resume` refuses (exit 2, "Delete ... to retry the website
 stage"); that refusal is what stops a second project being made. The
-`agent.error` log event has the class and, in its `context`, the message, if
-your logging shows the context (`OPERATIONS.md` section 3.1).
+`agent.error` log event has the class and the duration, not the message
+(Session 276: see `OPERATIONS.md` section 3.1), so the text of this
+exception is recorded nowhere. To see it, run the website stage by itself
+(`OPERATIONS.md` §4.1–§4.3) against a scratch namespace: that command does
+not go through the pipeline and lets an unexpected exception reach the
+command line as a traceback.
 
 **`failure_reason: interrupted: KeyboardInterrupt (...)`** (or `SystemExit`).
 The run was stopped (Ctrl-C, or a `sys.exit`) while the website stage ran. The

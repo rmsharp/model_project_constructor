@@ -100,20 +100,29 @@ returns a wrapped callable that emits three event types via stdlib
 | `agent.end` | INFO | plus `duration_ms`, `status` |
 | `agent.error` | ERROR | plus `duration_ms`, `error_type` |
 
-`error_type` is the exception's class name (a class built at run time
-whose name is not a short ASCII identifier is shown as `<unprintable>`).
+`error_type` is the exception's class name (a class whose name is not a
+short ASCII identifier, or cannot be read, is shown as `<unprintable>`).
 **What the exception said is deliberately not logged**, and there is no
 `error_message` field (it existed until Session 276; a log processor that
-read it now finds it absent). An exception's text is whatever the
-repository host, a database driver or a model's client put in it —
-`httpx.InvalidURL` quotes the URL it refused, and a host can echo the
-access token as a project id — and the JSON formatter below writes the
-whole context, so a message in the context is a token in the log file.
+read it now finds it absent). An exception's text is whatever the code
+that raised it put in it — a pydantic validation error quotes the input it
+refused, a database driver can echo the connection back, a gateway's error
+page can echo a header — and the JSON formatter below writes the whole
+context, so a message in the context can put a token in the log file.
 Nothing that needs no secret can find a bare token in free text, so the
-wrapper does not read the text at all, and attaches no traceback (which
-would print it). The wrapper re-raises the exception unchanged, so the
-code that called the pipeline can print or scrub it with what that code
-knows.
+wrapper does not read the text at all, attaches no traceback (which would
+print it), and emits the event after it has left its `except` block (a log
+handler that fails while writing would otherwise have the exception
+chained to its own failure, and `logging` prints that chain).
+
+The wrapper re-raises the exception unchanged, so for an intake or data
+crash the code that called the pipeline can print or scrub it with what
+that code knows. **A website-stage crash is different:** `run_pipeline`
+catches it and saves a FAILED result that names the class and nothing it
+said (`TROUBLESHOOTING.md`, `unexpected_error:`), so that text is recorded
+nowhere. To see it, run the website stage by itself (§4.1–§4.3), which
+does not go through `run_pipeline` and lets an unexpected exception reach
+the command line as a traceback, against a scratch namespace.
 
 All structured fields land on the log record's `extra={"context": ...}`
 dict. To produce JSON logs, install a JSON formatter on the
