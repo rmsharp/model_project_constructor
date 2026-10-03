@@ -54,7 +54,8 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274). | **Small** for the SQLAlchemy lines, the language-model text and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
-| A website stage that fails oddly leaves no result, so `--resume` makes a second project | If the repository host answers in a shape the code did not expect (a reply without an `id`, JSON nested 100,000 deep, `{"errors": 5}`), the website agent crashes instead of recording a failure. The project may already exist on the host and no result file is saved, so `--resume` runs the website stage again and creates a second project; a normal failure saves a FAILED result and `--resume` refuses to retry until you delete it. An interrupt (Ctrl-C) during the commit step does the same. Found by Session 274's review. | **Small; a choice** of where to catch: in the agent's nodes, or in the orchestrator's website stage. |
+| A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
+| The run log records the full text of any exception a runner raises | `make_logged_runner` writes `str(exc)` into the `agent.error` event's context, unscrubbed. With no handler that shows the context (the default) nothing prints it; with the JSON handler `OPERATIONS.md` section 3.1 recommends, an exception whose message quotes what the host sent (`httpx.InvalidURL` quotes the URL, which can hold a host-supplied project id that is the access token echoed) lands in the log file. Found by Session 275's review; it predates Session 275 and the new handler does not change it. | **Small**: log the class name only, or run the text through a redaction that needs no secret. |
 | CI tests one Python, and it is not the one sessions run | CI uses whatever Python `ubuntu-latest` has (3.12.3 at the last run); this machine runs 3.13.5; the project says 3.11 or later and pins none. A standard-library error class differs between them, and 7 of Session 274's new tests would have gone red on the first push for that reason. | **Small; operator call:** pin 3.12, or test 3.11, 3.12 and 3.13 (a matrix triples the CI minutes). |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
 | An API key ending in a carriage return is quoted in the error chain | Found by Session 273's review, the sibling of the website-token item it closed. The language-model clients (Anthropic and Bedrock) put their key in an HTTP header, and the HTTP library refuses a key ending in a carriage return or line feed (a Windows-style `.env`) with a message that quotes the whole key. The SDK hides that message ("Connection error.") and the pipeline stores only that, so no report or checkpoint held the key (measured); but it sits in the exception's cause, so any log or traceback that prints the chain prints it (reproduced through the intake web UI's server log). The pipeline script also prints and saves a `MPC_HOST_URL` that carries a password or token. | **Small, a choice:** refuse such a key where it is read (the rule the website token now has), or give the SDK a client that withholds the library's message. |
@@ -500,8 +501,8 @@ Oracle or SQL Server.
    echo the host altered (cut short, characters inserted, only some escaped, base64 or a hash: the party that
    echoes already holds the token, so this is the limit of an innocent echo); a second credential (userinfo in
    the host URL travels as `Authorization: Basic base64(user:password)`; see the API-key item below); an
-   exception that is not a `RepoClientError`, which leaves no result and lets `--resume` create a second project
-   (its own item, below); and a `RepoClient` that is neither adapter, though the registry-wide test goes red for a
+   exception that is not a `RepoClientError`, which left no result and let `--resume` create a second project
+   (**closed in Session 275**: the orchestrator saves a FAILED result for any exception, and for an interrupt); and a `RepoClient` that is neither adapter, though the registry-wide test goes red for a
    registered one whose protocol methods do not carry `scrubbed_errors`'s marker.
 8. **The repository host's success values, printed raw.** *Found by Session 274's scouting workflow; measured by an
    agent against a host that returned ESC in the project address and the commit id, not re-run by the session.*
@@ -511,7 +512,8 @@ Oracle or SQL Server.
    `click.echo` strips ANSI CSI sequences (`ESC [ ... letter`) when stdout is not a terminal, but an OSC title
    sequence (`ESC ] ... BEL`) and `ESC c` pass either way, and everything passes under a pty (the review ran
    this). `ProjectInfo.id` and `default_branch` come from the same reply: an id with a control character makes
-   `httpx.InvalidURL` escape from `commit_files`. Not failure text, not the token (a host would have to put it in
+   `httpx.InvalidURL` escape from `commit_files` (since Session 275 the pipeline saves that as a FAILED
+   `unexpected_error: InvalidURL` result; the website command alone, which keeps no checkpoint, still ends in a traceback). Not failure text, not the token (a host would have to put it in
    its own success reply); the exposure is the operator's terminal. **Fix, small, no ruling, one choice:**
    `scrub_host_text(value)` (no secret) in the adapters where `ProjectInfo` and `CommitInfo` are built, so every
    consumer gets a clean string, or at the three prints; it also cuts to 1,000 characters and appends a notice,
@@ -525,22 +527,59 @@ given terminal reorders text on them was not measured.
 **Cost:** routes 5, 2(b) and 8 are small and need no ruling; 6 is one decision then one function; 3 is an
 operator call; 1 and 4 are nits. (Route 7 closed in Session 274; route 8 replaced it, so seven remain.)
 
-### A website stage that raises something other than a `RepoClientError` saves no result, so `--resume` creates a second project
+### A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded
 
-**Found by Session 274's review (the exit lens; reproduced by two skeptics, one of whom also reproduced it with an
-honest host and an interrupt); pre-existing and identical at `2b99f9d`.** `nodes.py` and `agent.py` record a failure only
-for a `RepoClientError`. Anything else leaves the adapter as an exception and the website stage saves nothing:
-`KeyError` from a 2xx reply without `id`, `RecursionError` from a 100,000-deep JSON array in `_is_name_conflict`'s
-`response.json()` (its `except ValueError` does not catch it), `TypeError` from GitHub's `{"errors": 5}`, `httpx.InvalidURL`
-for a host-supplied project id holding a control character. Measured with `scripts/run_pipeline.py --live` against a
-loopback host that answers `POST /projects` 201 and then fails the commit stage that way: run 1 exits 1 with a traceback,
-**one project exists on the host and no `RepoProjectResult.result.json` is saved**; `--resume r1` then prints `RESUMED
-from: website` and **a second project is created**. With a `RepoClientError` (a 500) a FAILED result is saved and
-`--resume` stops at "Delete ... to retry"; that guard exists because the stage has irreversible side effects. An
-interrupt (SIGINT) during the commit step does the same with an honest host. No token and no host text was in any of
-the escaping exceptions (checked on 17 types). **Fix, small, a choice of where to catch:** `except Exception` in the
-nodes, recording FAILED with the exception's type name and no message; or in the orchestrator's website stage, saving a
-FAILED result for any exception (which also covers an interrupt).
+**Residue of Session 275, which closed *"A website stage that raises something other than a `RepoClientError` saves
+no result, so `--resume` creates a second project"* (`36a4172`, `2f5dea7`, `6d989ee`; `CHANGELOG.md`).** The
+orchestrator's website stage now saves a FAILED `RepoProjectResult` for any exception (`unexpected_error: <ClassName>
+(the website stage may already have created a project on the repository host)`, exit 1) and for an interrupt
+(`interrupted: <ClassName> (...)`, saved and re-raised), so `--resume` refuses to run the stage again. The operator chose
+the shape (answering `1` to the two options put to them: orchestrator only; convert an ordinary exception into a
+clean exit 1; the reason names the class and never the message). A 30-agent review found no defect above low in
+the change and these gaps beside it. Two skeptics checked each finding: only the first below was confirmed by both;
+the others were rated nit or low, and some were refuted as defects of *this change*. They are filed because they are
+real in the code, not because any is urgent. **The scoping below (the `--resume` message, hard kills) was
+Session 275's own and was not put to the operator.**
+
+1. **No stack survives.** *(Confirmed by both skeptics.)* The conversion removed the traceback, so after a crash
+   nothing on screen, in the result or in the checkpoint says which file, function or line raised. The log's
+   `agent.error` context has the message (see the log item) and the class, no frame. **Operator call, because it
+   reopens the ruling on what `failure_reason` holds:** add the innermost frame (`module:function:line`; chosen by
+   code, never by the host) to the reason, or log the traceback at DEBUG (`exc_info`, so it prints only under an
+   operator's own configuration). Neither prints a message by default.
+2. **`--resume` refuses without saying why.** `_handle_already_complete` (`scripts/run_pipeline.py`, the
+   "Delete ... to retry" message) prints the status and the path, not the saved `failure_reason` or `project_url`, so
+   the operator who has only run `--resume` does not read that a project may exist. The reason was on the first run's
+   `Failure:` line and is in the file. **Small:** print both. (Left out of Session 275 as a separate change; the operator was not asked.)
+3. **The write of the result is neither atomic nor guarded** (`checkpoints.py:82`, `path.write_text`, after the
+   irreversible step). A second Ctrl-C inside the window (about 80 microseconds, as measured by the review) or a full disk leaves no
+   file, which is the old duplicate, or a half-written one, which makes `--resume` crash with `JSONDecodeError`
+   instead of refusing. In the interrupt branch the save runs inside the handler, so a failing save replaces the
+   interrupt (the new tests pin that the disk error surfaces with the interrupt as its context). **Small:** write to a
+   temporary file and `os.replace`, and have `_handle_already_complete` treat an unreadable file as a refusal.
+4. **A hard kill leaves nothing.** SIGKILL, SIGTERM, an out-of-memory kill or power loss between the project being
+   created and the file being written. Left out of Session 275 (my scoping; the operator was not asked). Only a marker written **before** the
+   runner covers it; a placeholder `PARTIAL` result needs no change to `determine_resume_point` but makes `--resume`
+   print `status='PARTIAL'` and breaks `TestWebsiteSaveOrdering`. **Operator call.**
+5. **Running again with the same `--run-id` and no `--resume`** reaches the website stage with no guard (the script
+   checks only that a `--resume` directory exists), makes a second project and overwrites the saved result.
+   *(Found by the review's completeness lens; predates Session 275.)* **Small, operator call:** refuse when the
+   run's directory already holds a website result, or warn.
+6. **The docs.** `docs/wiki/model_project_constructor/Monitoring-and-Operations.md:48-49` still describes
+   `FAILED_AT_WEBSITE` and the resume table as they were; `TROUBLESHOOTING.md` and `OPERATIONS.md` were updated in
+   Session 275. Any commit that touches `docs/wiki/` publishes it, so it waits for a decision to publish.
+
+### The run log records the full text of any exception a runner raises
+
+**Found by Session 275's review (its secrets and completeness lenses; pre-existing, not changed by Session 275).**
+`orchestrator/logging.py:94-105`: `make_logged_runner` emits `agent.error` with `"error_message": str(exc)` for
+every `Exception` a runner raises, before re-raising. Python's default handler does not print a record's `context`, so
+nothing shows it by default. `OPERATIONS.md` section 3.1 recommends installing a JSON formatter that renders the
+`context` extra, and with that installed the message is in the log file, unscrubbed. An exception whose message quotes
+what a host sent carries it: Session 275's end-to-end test has a host echo the access token as a project id and
+`httpx.InvalidURL` quotes it. The adapters scrub only the `RepoClientError` they raise. **Fix, small:** log
+`error_type` only, or run the text through a redaction that needs no secret (`db.safe_message` is the model); a test
+that installs the JSON formatter and a hostile host would hold it.
 
 ### CI tests one Python, and it is not the one sessions run
 
@@ -550,7 +589,9 @@ machine's project environment is 3.13.5. A stdlib exception class differs betwee
 `UnicodeDecodeError` on 3.13, for a UTF-16 body with no byte-order mark), and 7 of Session 274's 66 new tests would have
 been red on the first push for that reason alone; learning #303 already says to run the tests on the other interpreters
 you have. **Fix, small, an operator call:** a `.python-version` of 3.12 (what CI uses), or a CI matrix over 3.11, 3.12 and
-3.13 (the suite takes about 75 s on CI, so a matrix triples the minutes).
+3.13 (the suite takes about 75 s on CI, so a matrix triples the minutes). Session 275's end-to-end test for a
+100,000-deep JSON reply is skipped on a Python that parses it: 3.14 raises `JSONDecodeError` instead of
+`RecursionError`, so a matrix that adds 3.14 would meet that skip and nothing else of Session 275's.
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 

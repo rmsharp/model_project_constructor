@@ -1,13 +1,13 @@
 """A website stage that raises is a recorded failure, so ``--resume`` makes no second project.
 
-``BACKLOG.md``, *"A website stage that raises something other than a ``RepoClientError`` saves no
-result"*. The website stage creates a project on the repository host and cannot undo it, so the
-only thing standing between a failed run and a duplicate project is the saved
-``RepoProjectResult.result.json``: ``determine_resume_point`` reads that one file and, when it is
-there, tells the operator to delete it before retrying. A ``RepoClientError`` is turned into a
-FAILED result by the agent. Anything else (a ``KeyError`` from a reply with no ``id``, a
-``RecursionError``, an interrupt) used to leave the runner as an exception, before the save, and
-the next ``--resume`` ran the whole stage again.
+Session 275, closing the ``BACKLOG.md`` item *"A website stage that raises something other than a
+``RepoClientError`` saves no result"* (see ``CHANGELOG.md``). The website stage creates a project
+on the repository host and cannot undo it, so the only thing standing between a failed run and a
+duplicate project is the saved ``RepoProjectResult.result.json``: ``determine_resume_point`` reads
+that one file and, when it is there, tells the operator to delete it before retrying. A
+``RepoClientError`` is turned into a FAILED result by the agent. Anything else (a ``KeyError``
+from a reply with no ``id``, a ``RecursionError``, an interrupt) used to leave the runner as an
+exception, before the save, and the next ``--resume`` ran the whole stage again.
 
 These tests drive ``run_pipeline`` with a runner that raises, so they hold whatever the exception
 is and whichever runner raises it. ``tests/scripts/test_run_pipeline_website_crash_resume.py``

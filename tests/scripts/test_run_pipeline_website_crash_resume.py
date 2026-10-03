@@ -1,12 +1,13 @@
 """A crash in the website stage does not let ``--resume`` create a second project.
 
-``BACKLOG.md``, *"A website stage that raises something other than a ``RepoClientError`` saves no
-result"*, measured by Session 274's review and reproduced here before the fix: the host answers
-``POST /projects`` with a ``201`` and then something the adapter cannot read, run 1 dies with a
-traceback and saves nothing, and ``--resume`` prints ``RESUMED from: website`` and creates the
-project again. Every test drives the real script as a subprocess at a real socket and counts the
-``POST /api/v4/projects`` the host received; ``tests/orchestrator/test_pipeline_website_failure.py``
-holds the same behaviour for every exception kind without the socket.
+Session 275, closing the ``BACKLOG.md`` item *"A website stage that raises something other than a
+``RepoClientError`` saves no result"* (see ``CHANGELOG.md``), measured by Session 274's review and
+reproduced here before the fix: the host answers ``POST /projects`` with a ``201`` and then
+something the adapter cannot read, run 1 dies with a traceback and saves nothing, and ``--resume``
+prints ``RESUMED from: website`` and creates the project again. Every test drives the real script
+as a subprocess at a real socket and counts the ``POST /api/v4/projects`` the host received;
+``tests/orchestrator/test_pipeline_website_failure.py`` holds the same behaviour for every
+exception kind without the socket.
 """
 
 from __future__ import annotations
