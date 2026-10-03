@@ -94,16 +94,137 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 276 Did
-**Deliverable:** **the run log no longer records an exception's message** — `BACKLOG.md`'s item *"The run log records the full text
-of any exception a runner raises"* (`BACKLOG.md:572`; `orchestrator/logging.py:94-105`, `make_logged_runner` writes
-`"error_message": str(exc)` into the `agent.error` context, unscrubbed). Found by Session 275's review; a host-echoed token can
-reach a log file with the JSON formatter `OPERATIONS.md` section 3.1 recommends. Chosen by the operator at Phase 1 from the
-Phase 0 picker (first option, recommended). (IN PROGRESS)
-**Started:** 2026-10-02 23:14
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **`agent.error` now carries the exception's class and never what it said — COMPLETE**, closing `BACKLOG.md`'s item
+*"The run log records the full text of any exception a runner raises"* (removed; its residue and two further findings filed).
+Chosen by the operator at Phase 0 from a picker (first option, labelled "Run-log redaction"). **The choice inside it, drop the
+message rather than redact it, was mine** (the default Session 275 had already ruled for the website stage's `failure_reason`,
+and a redaction that needs no secret cannot find a bare token); it was not put to the operator. **Push at close-out** and **the
+wiki stays filed, not corrected now** were put to the operator (picker). **Started:** 2026-10-02 23:14. **Completed:** 2026-10-02.
+**Commits: seven** — `15d59b6` (claim, alone), `4dc186f` (the fix), `04bb807` (operator guides), `bd6f71f` (BACKLOG), `97cd878` (the
+review's code and test findings), `29e2f46` (the review's doc corrections) and this close-out. Each carries its own `CHANGELOG.md`
+entry; the push is recorded in the close-out's.
+
+#### What changed
+- **The fix (`orchestrator/logging.py`).** `make_logged_runner`'s `agent.error` context is `agent`, `run_id`, `correlation_id`,
+  `duration_ms`, `error_type`: no `error_message`, no `exc_info`, and the exception's text, repr and arguments are never read.
+  `_class_name` (`:58`) is the rule `_website_failure` applies (a name that is not a short ASCII identifier, or is over 100
+  characters, becomes `<unprintable>`) and is stricter in two ways: it fails closed if reading the name raises, and it requires an
+  exact `str`. The event is emitted **after** the `except` block (`:125-159`, `failure = exc` … `raise failure`), because a log
+  handler that fails while writing has the exception being handled chained to its own failure and `logging` prints the chain.
+- **Tests: 2,940 to 3,006 passed, 9 skipped, coverage 98.21%** at CI scope (`GITHUB_ACTIONS=true uv run pytest`, Python 3.13.5;
+  `logging.py` 100%); `tests/orchestrator` and the end-to-end file, 362 passed on 3.12.13 (CI's interpreter). +66: the new file
+  `tests/orchestrator/test_logging_error_text.py` (12 kinds of exception that hold text in the message, a filename, a cause, a
+  context, a group, a repr, a real pydantic error and a real `httpx` port error; an exception that cannot print; a 2,000,000-character
+  message; six odd class names and two hostile metaclasses; a failing log sink; the cause, context and traceback left alone; the script's
+  own `make_measured_runner` + `make_logged_runner` composition inside `run_pipeline`; a test that the capture reaches `DEBUG` records
+  on any logger; the premise of the real-exception cases). One assertion in `test_logging.py` changed.
+- **Docs.** `OPERATIONS.md` section 3.1 and `TROUBLESHOOTING.md` (the structured-logs step, the unhandled-exception bullet, and Session
+  275's own `unexpected_error:` entry, which said the log has the message); `BACKLOG.md` (item closed; residue item; a second item
+  for `MPC_LOG_LEVEL`; a third for two older routes the review found; Session 275's residue corrected and given points 7 and 8);
+  `PROJECT_LEARNINGS.md` #333-338; `CLAUDE.md` (the count). **The wiki is not edited** (a commit under `docs/wiki/` publishes it).
+
+#### Measured first, then built
+- **Scouted inline, no sub-agents** (the surface was one function): the callers (`scripts/run_pipeline.py::instrument`), the docs that
+  name `error_message` (`OPERATIONS.md`, `TROUBLESHOOTING.md`, two wiki pages), and that **nothing installs a log handler**: `MPC_LOG_LEVEL`
+  is parsed into `settings.log_level` and read by nothing (filed). With no handler Python prints only the bare words `agent.error`.
+- **Red first, read:** 32 of the first 49 tests failed on the unchanged handler, each for the leak it was written to catch (the other
+  17 pin what must not change; one, `_CannotBePrinted`, shows the old handler let a raising `__str__` replace the runner's exception).
+
+#### The checks, each finding what the last could not
+- **Mutation, two passes: 23, then 35 mutants, all caught** — after one survivor of the second pass, `raise failure from None`, which
+  overwrites the exception's own `__cause__` and passed every identity check; three tests now pin cause, context and traceback.
+- **The review** (4 lenses, 2 skeptics per non-nit finding: **38 agents, 0 errors, 11.6 minutes, 3.18M tokens, 564 tool calls**): 26
+  findings, 17 non-nit, **16 confirmed by both skeptics, 1 refuted by both; none rated above medium by a skeptic.** It found what my
+  tests could not: **(1)** the emit inside the `except` block leaked the runner's message through `logging`'s own failure report when a
+  handler could not write (reproduced); **(2)** `_class_name` could itself raise (a metaclass `__name__`) and accepted a `str`
+  subclass; **(3)** my fixture watched one logger at `INFO`, so a `DEBUG` record, the root logger, `stderr`, `print` and
+  `warnings.warn` all survived (#336); **(4)** two probes read the checkout path; **(5)** Session 275's `unexpected_error:` entry in
+  `TROUBLESHOOTING.md` and its BACKLOG point 1 still said the log has the message, and "the caller's traceback" is not true of a website
+  crash; and **(6) the premise was false**: `httpx.InvalidURL` does not quote a project id placed in a URL path (it quotes a refused host
+  or port), so Session 275's `echoed-id` case never had the token in the exception's text and I had repeated the claim in six places
+  (#333). **Fixed** in `97cd878` and `29e2f46`. **Filed, not fixed:** two older routes (`scripts/run_pipeline.py:206` writes a raw intake
+  exception into a saved report; the data agent's probe logs a model failure through a masker that cannot see a bare token),
+  `_website_failure`'s unguarded name read, and the website crash's text now being recorded nowhere.
+- **Runtime smoke (3E):** the real script in its no-credentials mode, through the real `instrument()`, ran the pipeline to completion
+  (five checkpoint files); the real `instrument()` with a JSON handler installed as `OPERATIONS.md` section 3.1 shows, around a runner that
+  raises, logged `agent.error` with `error_type` only, and the exception propagated with its message intact.
+
+### Session 275 Handoff Evaluation (by Session 276)
+
+**Score: 7/10.**
+- **+** The first recommendation was the right deliverable and its lines were exact (`BACKLOG.md:572`, `logging.py:94-105`). The
+  gotchas I used: CI's interpreter and its command (#325: I built the 3.12 environment from it), never `git stash`, both guards before
+  each commit. The decay-term disclosure that the eleventh trim is due was accurate. Its test helpers (the odd class names, `_intake()`)
+  were reused for the parity test.
+- **−** **A premise it handed me was false.** The item, and the `echoed-id` case's comment, said `httpx.InvalidURL` quotes the URL, so
+  a host-echoed token reaches the message. It does not for a path (measured, 0.28.1 and 0.27.0); I took it from the handoff and wrote
+  it into six places. "Small, no ruling" held for the code but the item hid a real choice (drop or redact). Gotcha 3 ("the
+  `agent.error` log context has the message") was made false by this very change, and so were Session 275's `TROUBLESHOOTING.md`
+  entry and BACKLOG point 1, which said the same. "Small" understated again: seven commits, a review and two mutation passes.
+- **ROI: high.**
+
+### Session 276 Self-Assessment
+
+**Score: 7/10.**
+- **+** Scouted proportionately (inline, for one function), red first and read, a real-socket-free but real-composition test, two
+  mutation passes, a review whose findings were triaged one by one (what belonged to the change fixed, the rest filed with the line and
+  the reproduction), the false premise corrected everywhere it was written including in Session 275's artifacts, tests run on CI's
+  interpreter, a runtime smoke through the real script, and the two outward-facing questions (push, wiki) asked rather than assumed.
+- **−** **I repeated an unchecked premise into six places before a skeptic ran one line of `httpx`** (#333). **I wrote #329 last session
+  and did not apply it to my own fixture** (#336). My first hostile-name test crashed pytest itself (#335). I committed the BACKLOG
+  filing while the review was still reading the tree, so it reviewed a tree I was still changing. A wrong figure again, caught on
+  re-measuring: `BACKLOG.md` 139,515 B written, 139,616 B true at that commit (corrected in the ledger). "Redaction", in the picker's
+  label, was my word for a choice that turned out to be a removal; the operator chose the item, not the removal.
+- **Decay term:** nothing removed from a mandated-read file except the closed item. `BACKLOG.md` 136,624 to 143,640 B,
+  `PROJECT_LEARNINGS.md` 379,328 to 384,494 B, `SESSION_NOTES.md` 206,863 to 220,549 B against the 196,608 B trigger.
+  **The eleventh trim is due, for a second session.**
+
+**What's next** (sizes and effort are estimates unless measured).
+1. **The eleventh `SESSION_NOTES.md` trim is due** (its own deliverable: claim, trim, close out; two commits and no record edit in the
+   trim commit). Say at Phase 0 whether to do it first; the guards are green, so nothing is red, and the file is under the 262,144 B
+   refusal ceiling by about 50 KB, which is roughly four more closing records.
+2. **`scripts/run_pipeline.py:206` writes a raw intake exception into the saved report and the printed `Failure:` line**
+   (`BACKLOG.md:614`, point 1; two skeptics confirmed, medium). Small: class name only, with a test through the real script. The first
+   of the small ones, because a secret can reach disk and the screen with a live model.
+3. **Small leftovers, each filed with its line:** `_website_failure`'s unguarded class-name read (`BACKLOG.md:574`); the saved reason and
+   project URL printed when `--resume` refuses, and an atomic `CheckpointStore.save_result` (`BACKLOG.md:532`, points 2 and 3).
+4. **Rulings owed:** publish the wiki correction (`BACKLOG.md:587`, point 1; it publishes on commit); wire `MPC_LOG_LEVEL` or stop
+   documenting it (`BACKLOG.md:633`); a caller-supplied scrubber on `make_logged_runner` (`BACKLOG.md:587`, point 2); a frame in the
+   failure reason; a hard-kill marker; a repeated `--run-id`; a Python 3.12 pin or a matrix; and the standing list in Session 273's record.
+5. **Observed, not filed:** `stash@{0}` (Session 270's claim commit; the operator's call); the branch `worktree-wf_c93ee390-506-3` and
+   `.claude/worktrees/wf_5f96c807-d00-3` (both still present); the root `methodology_dashboard.py` is v2.18.0 against v2.19.0 (`bin/sync`'s
+   job); `uv run ruff format --check` was reported by Session 275 to reformat 14 of 20 test files in the touched directories and
+   was not re-measured here (CI runs `ruff check` only).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `src/model_project_constructor/orchestrator/logging.py:58` (`_class_name`; its docstring is the specification of the rule), `:83`
+  (`make_logged_runner`; its docstring says what `agent.error` never carries), `:125-159` (`wrapped`: `failure = exc` at `:136`,
+  `raise failure` at `:159`).
+- `tests/orchestrator/test_logging_error_text.py:204` (the `log` fixture: root logger at `DEBUG`, `capfd`, recorded warnings),
+  `:417` (`_caught`), `:318` (cause, context, traceback), `:452` (the failing sink), `:494` (the premise of the real-exception cases),
+  `:512` (the script's composition inside `run_pipeline`).
+- `OPERATIONS.md:101-125` (section 3.1, what is and is not logged); `TROUBLESHOOTING.md:165-182` (`unexpected_error:`) and the
+  structured-logs step at `:28`; `BACKLOG.md:532` (Session 275's residue, points 7 and 8 at `:574`, `:580`), `:587` (this session's
+  residue), `:614` (two older routes), `:633` (`MPC_LOG_LEVEL`); `PROJECT_LEARNINGS.md` #333-338; `CHANGELOG.md` the S276 entries under
+  `## 2026-10`.
+
+**Gotchas.**
+1. **Do not "simplify" the wrapper back to a bare `raise` inside the `except`.** The failing-sink test
+   (`TestAFailingLogSink`) pins the placement and a mutant for it is in the session scratchpad's harness (not kept). `raise failure`
+   outside the block keeps cause, context and traceback; `raise failure from None` would not (three tests).
+2. **A website crash's text is recorded nowhere now** (the log carries the class, `run_pipeline` saves the class). Session 275's gotcha
+   3 ("the `agent.error` log context has the message") is false; so is the same sentence in its `HANDOFFS.md` receipt. To see one, run
+   the website stage by itself against a scratch namespace.
+3. **`_class_name` and `_website_failure` agree only for ordinary classes** (the parity test); the website copy does not guard a raising
+   `__name__` (filed).
+4. **A test with a hostile exception class must catch the exception itself** (`_caught`): pytest formats a failure with `type.__name__`
+   and an `INTERNALERROR` ends the run (#335).
+5. **Check a library's message before writing it into a doc** (#333): `httpx.URL` quotes a refused host or port and not a path;
+   a pydantic `ValidationError` quotes its input. `TestTheRealExceptionsHoldTheToken` pins both, so a release that changes either fails
+   there with a name instead of making the other cases pass vacuously.
+6. A `( cmd ) &` inside a `run_in_background` call completes at once (#338). Never `git stash` (#316).
+   `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that touches
+   `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 275 Did
 **Deliverable:** **a website stage that raises, or is interrupted, now leaves a saved FAILED result, so `--resume` refuses instead of
