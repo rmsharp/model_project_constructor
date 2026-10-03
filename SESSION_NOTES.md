@@ -95,12 +95,150 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 277 Did
-**Deliverable:** **the eleventh trim of `SESSION_NOTES.md`** — the file passed the 196,608 B trigger at Session 275's
-close-out and stands at 220,549 B. Chosen by the operator at Phase 0 from a picker (first option, recommended). (IN PROGRESS)
-**Started:** 2026-10-03
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until
-close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **the eleventh trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 269 → 258 (twelve records, 1,702 lines,
+126,395 B, a pure byte slice) are in
+[`docs/architecture-history/SESSION_NOTES-S269-through-S258.md`](docs/architecture-history/SESSION_NOTES-S269-through-S258.md)
+(1,754 lines, 129,691 B) beside its proof. The live file fell from 221,099 B to 94,821 B and keeps this record plus seven
+non-stub ones (276 → 270). The front-matter table gained a row, and the previous row's pending marker resolved to `49d23b7`.
+The proof adds **no** assertion (ruling F) and ships 109 mutants, none new. Chosen by the operator at Phase 0 from a picker
+(first option, recommended). **The operator also decided, at the commit gate (a two-question picker):** the eight-file commit
+is acknowledged (it is over `SAFEGUARDS.md`'s cap of five; a shard proof reads its prose at its own commit, so no subset is
+green), and **push at close-out**. **Mine, and not put to the operator:** the cut point (the fewest-records rule the ninth and
+tenth used), taking the derived back half over the prototype's, running the coverage loops instead of carrying the tenth's
+figures, and filing rather than fixing what the review found outside the trim. **Started:** 2026-10-03 14:18.
+**Completed:** 2026-10-03. **Commits: four** — `01a39dd` (claim, alone), `b461d7d` (the trim, **no record edit, eight
+files**), `1259116` (the review's filings, `BACKLOG.md` only) and this close-out. Each carries its own `CHANGELOG.md` entry;
+the push is recorded in the close-out's.
+
+#### The cut, and the ledger
+The byte rule fired at 221,099 B (220,549 B before the claim stub: this stub's own first line said the second figure, the
+proof's L11 line prints the first, and both are true of different states). Keeping Session 269 lands at 106,141 B before the
+front-matter edits, over the 98,304 B stop, so the fewest-records cut is 269 → 258: twelve headings, none an abandoned stub
+this time (the tenth moved one). Front matter 7,569 B → 7,686 B (limit 8,192; the read-budget guard's own model leaves it
+about 318 B, so **roughly two more trims** before it binds: an estimate from the guard's constants and the growth per trim).
+Probe: an explicit whole-file `Read` of the new shard reports **50,371 tokens** against the 25,000-token cap, so a default
+`Read` truncates; the figure is in `BACKLOG.md`'s read-cap item beside the tenth's.
+**The sweep, published as a dated fact** (CLAUDE.md asks for it, never the old sentence repeated): at `b461d7d`,
+`git grep -l 'SESSION_NOTES-[A-Za-z0-9-]*\.md'` returns **35** files (eleven shards, eleven proofs, two collapse proofs, the
+four prose files, this ledger, `PROJECT_LEARNINGS.md`, two planning documents, the census guard, and the two append-only logs
+`CHANGELOG.md` and `HANDOFFS.md`); the broad `SESSION_NOTES-` form returns **37**, the extra two being `.github/workflows/ci.yml`
+and `docs/architecture-history/evolution-page-plan.md`. Session 266 published 32 and 34; the new shard and proof are two of the
+difference and `HANDOFFS.md`, which names the tenth shard in its own receipt, is the third. The seventh re-derivation found no
+fifth prose file. `ci.yml` and `evolution-page-plan.md` are outside every proof's reach and the census guard; `ci.yml` states
+Session 253's counts in the present tense (filed already, `BACKLOG.md:87`).
+
+#### The proof: carried forward, nothing added, coverage re-measured
+Every function but `self_test` is AST-identical to the tenth's (one docstring, `compose_row`'s, was re-dated; measured with
+`ast.dump`, 33 functions each). What changed is declaration: the cut key, the routing table, the tenth proof added to
+`ANCESTOR_PROOFS` frozen at `49d23b7`, the sizes, the row, the span sentences, the tenth shard's figures in `L14` (44 literals
+carrying 63 figures), four front-matter substitutions each anchored on text the tenth trim wrote, and the banner. 0 of the
+tenth proof's 111 declared literals were absent at the claim commit; 26 stop matching under this cut (19 required prose strings,
+2 size literals, 1 lineage literal, 4 front-matter), exactly the re-declaration worklist.
+**The coverage harness, which the proof's header says is described here.** It copies the proof file, neuters ONE statement in
+the copy and runs `bash <copy> --self-test` in a clone whose artifacts do not change for the run: (a) each of the fifteen
+`fails += Ln(...)` statements in the main flow becomes `pass`; (b) each of the 68 failure-emitting statements inside `L0`-`L14`,
+located with `ast` (an `out.append(...)` expression statement, or a `return [...]` of a non-empty list literal), becomes `pass`
+or `return []` (type-preserving: learning #191). Every run's exit code must be 0 (every mutant caught) or 2 (survivors, named on
+`SURVIVED` lines); anything else is a broken run, never a clean one (learning #190). A mutant that survives a neutered statement
+is one that statement alone catches. **It was validated on the tenth proof first**: its fifteen whole-assertion lists matched the
+tenth header's published ones exactly. Result for this proof: the same lists, and arm for arm the same 68 arms, **48 with a sole
+catcher and 20 without**, 166 runs on the two proofs, none broken. The script is about 80 lines and is not in the repo.
+
+#### Two workflows, and what they found
+- **Map** (six read-only scouts, one per surface: 1.59M tokens, 438 tool calls, 40 min, 0 errors). Every FACT I gave was
+  confirmed (one trivial miscount: the proof diff is 606 changed lines, not 604). One scout built a whole prototype of the cut in
+  a scratch clone although it was told to map; another derived the proof's back half independently. **Diffing the two found a
+  false comment in the prototype that no test could see** (#339), and I took the derived one. I rebuilt the chain myself
+  with the real prose and measured figures rather than using the prototype's analog placeholders.
+- **Review** (five lenses, two skeptics per non-nit finding: 37 agents, 0 errors, 57 min, 3.77M tokens, 980 tool calls): 24
+  findings, 8 of them nits; 16 non-nit verified (6 confirmed by both skeptics, 6 refuted by both, 4 split); **none above low after
+  verification, no blocker**; 83 clean checks, including a byte-for-byte recomputation of the cut, about fifty perturbations of
+  the amended trim commit (each red for the expected arm, except holes already filed or filed below), and a rehearsal of the
+  real application (eight files, all 13 proofs in both modes, the full suite). **What it found that mattered:** three comments in the new header were wrong (a count of
+  differing labels was 14 not 13 because I measured it before my own label fix; an M58 comparison called "in reverse" that is the
+  same direction at the tenth; a carried sentence crediting this trim's review with the tenth's finding): **fixed before the
+  commit** (#340). Three `BACKLOG.md` sentences this trim made stale and a quotation item whose records are now archived:
+  **fixed in `1259116`**. One gap, **inherited and filed**: `L10`'s hand-typed list of ancestor proofs is checked against
+  nothing, so dropping the newest proof's entry leaves every proof and guard green (#342; an operator call, since it adds an
+  assertion).
+
+#### Verification
+All 13 proofs in both modes green in committed mode in the real tree (the new proof prints `source : the trim commit b461d7d`);
+both guards 82 passed; the full suite on a clone of the committed tree, `GITHUB_ACTIONS=true`, Python 3.13.5 with the `agents`,
+`ui` and `dev` extras: **3,006 passed, 9 skipped**. `ruff` and `mypy` were not run: no code changed. **Runtime smoke (3E): n/a,
+docs and ledger only**; the proofs and guards are this deliverable's runtime and were run above.
+
+### Session 276 Handoff Evaluation (by Session 277)
+
+**Score: 8/10.**
+- **+** The first recommendation was the right deliverable, with the figure that triggered it (220,549 B) exact and the
+  instruction to say at Phase 0 whether to do it first, which became the picker. The gotchas I used: never `git stash`, both
+  guards before each commit that touches the ledger, the shell is zsh, and the observed-not-filed list (the stash, the worktree
+  branch and directory, and the stale dashboard copy were all still true at this Orient).
+- **−** One wrong figure: it said the file sat under the 262,144 B refusal ceiling by "about 50 KB, roughly four more closing
+  records"; the measured margin was 41,595 B, about three records. It also did not say what a trim costs (a full session with a
+  mapping and a review workflow); Session 266's record did, and I used that instead.
+- **ROI: high.**
+
+### Session 277 Self-Assessment
+
+**Score: 8/10.**
+- **+** Claimed first and ran both guards at the claim state (green). Mapped with parallel scouts before building, then built in
+  a scratch clone from scripts, never by hand-editing a write-once file, and applied to the real tree only after a review.
+  Validated the coverage harness against a published result before trusting it. Verified committed mode in the real tree, and
+  asked the operator at the two gates (the cap, the push) rather than assuming the tenth's answer.
+- **−** The review caught three defects in text I wrote or carried into a header (#340): one figure measured before my own last
+  edit, one comparison I took from a scout without checking it against the tenth proof, one sentence copied verbatim. I also
+  wrote the header's pointer to this record before the description existed, the tenth's unkept promise repeated (#341): I
+  caught it only because a lens did. The mapping scouts were told to stay read-only and one built a prototype anyway (benign:
+  scratch only, and it served as the cross-check).
+- **Decay term:** this is the first close-out in some time that removed something from a mandated-read file: `SESSION_NOTES.md`
+  221,099 B to 94,821 B at the trim, then this record. `BACKLOG.md` grew 143,640 B to about 146 KB and `PROJECT_LEARNINGS.md`
+  384,494 B to 387,823 B. **A twelfth trim is not due:** after this record the live file is roughly 107 KB against the
+  196,608 B trigger, about seven more closing records at 12-13 KB (an estimate), and the 262,144 B refusal ceiling is 155 KB away.
+
+**What's next** (sizes and effort are estimates unless measured).
+1. **`scripts/run_pipeline.py:206` writes a raw intake exception into the saved report and the printed `Failure:` line**
+   (`BACKLOG.md:619`, point 1 of the item at `:614`; two skeptics confirmed it last session, medium). Small: class name only,
+   with a test through the real script. Still the one place a secret can reach disk and the screen with a live model.
+2. **Rulings owed**, none blocking: `L10`'s completeness gap (`BACKLOG.md:885`, filed this session); publish the wiki
+   correction (`BACKLOG.md:587`, point 1); wire or stop documenting `MPC_LOG_LEVEL` (`BACKLOG.md:633`); and the standing list
+   in Session 273's record. **Decide whether the coverage harness should be committed**: it is described above and exists
+   only in this session's scratchpad.
+3. **Observed, not filed:** a `gitleaks detect` of the whole history reports **9 findings** (measured here: 676 commits), all
+   fake token fixtures in tests that Sessions 273-276 added (`glpat-` and generic-key shapes under `tests/`); none is from
+   this trim. Worth settling (an allowlist, or fixtures that do not match a scanner's shapes) before any scan the
+   enterprise-migration plan relies on. Also unchanged: `stash@{0}` (Session 270's claim commit; the operator's call), the
+   branches `worktree-wf_5f96c807-d00-3` and `worktree-wf_c93ee390-506-3` and the directory `.claude/worktrees/wf_5f96c807-d00-3`,
+   the root `methodology_dashboard.py` at v2.18.0 against v2.19.0 (`bin/sync`'s job), and `ruff format --check` not re-measured.
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `docs/architecture-history/SESSION_NOTES-S269-through-S258.md.verify.sh`: `:140-141` (the cut key), `:174` (`REACH`), `:247`
+  (`ANCESTOR_PROOFS`), `:285` (`WORDS`, which stops at twelve), `:321` (`LINEAGE_CENSUS`), `:393` (`BANNER`), `:450`
+  (`FRONT_SUBST`), `:1319` (`self_test`), `:1574` (M58's derived floor). Read its header first.
+- `BACKLOG.md:885` (collapse-proof item, now with the `L10` list gap), `:919` (the quotation item), `:946` (table rows
+  after the eighth), `:614` (the two older routes), `:633` (`MPC_LOG_LEVEL`).
+- `PROJECT_LEARNINGS.md` #339-342. `CHANGELOG.md` the S277 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **How the twelfth trim should be built** (the scripts are not kept; this is the recipe): claim; map with scouts (surfaces: the
+   proof's declarations, its mutants, the prose copies, the guards, the working-tree readers, the sweep); build in a scratch
+   clone from scripts (shard and live file; the prose edits with every anchor asserted unique; the proof by transforming the
+   eleventh's declarations, then its back half, then its header); measure every figure the header and prose state **after the
+   last edit**; run both modes of every proof, both guards and the full suite in a clone of the committed tree; review; apply.
+2. **The twelfth's four front-matter substitutions must be anchored on text this trim wrote:** the write-once ordinal sentence,
+   the bequest addressee, the trim count, and the newest table row's pending marker. All four occur exactly once now.
+3. **`WORDS` stops at twelve and this cut archived exactly twelve.** A cut of thirteen or more needs the table extended (a
+   declaration in the proof's front half) or the size check reports a figure nobody derived.
+4. **M58 has zero slack whenever exactly one claim stub is retained**; a second retained stub fails its assertion loudly. Its floor
+   must stay derived (non-stub count plus one), never typed.
+5. **A record must not quote the newest table row word for word** (four guard tests go red: measured by the review), nor any of
+   the older rows or the heading paragraph of the front matter (the collapse proofs count occurrences across the whole file).
+   This record paraphrases. Quoting the first 60 characters of a row is green.
+6. **The trim commit is eight files by necessity;** ask the operator at the commit gate as this session did.
+7. Never `git stash` (#316). `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every
+   commit that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.**
+   None of this session's did.
 
 ### What Session 276 Did
 **Deliverable:** **`agent.error` now carries the exception's class and never what it said — COMPLETE**, closing `BACKLOG.md`'s item
