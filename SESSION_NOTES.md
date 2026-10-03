@@ -94,17 +94,116 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 275 Did
-**Deliverable:** **a website stage that raises something other than a `RepoClientError` no longer leaves `--resume` free to
-create a second project on the repository host** — the item *"A website stage that raises something other than a
-`RepoClientError` saves no result, so `--resume` creates a second project"* (`BACKLOG.md:528`, found by Session 274's
-review). Where to catch (in `nodes.py`/`agent.py`, or in the orchestrator's website stage, which also covers an interrupt)
-is the one open choice and is put to the operator before any code. Chosen by the operator at Phase 1 from the Phase 0
-picker (item: the resume duplicate). (IN PROGRESS)
-**Started:** 2026-10-02 20:53
-**Status:** Session claimed. Work beginning.
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
-3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
-reconcile.
+**Deliverable:** **a website stage that raises, or is interrupted, now leaves a saved FAILED result, so `--resume` refuses instead of
+creating a second project on the host — COMPLETE**, closing `BACKLOG.md`'s item *"A website stage that raises something other than a
+`RepoClientError` saves no result"* (removed; its residue and a log item filed). Chosen by the operator at Phase 0 from a picker (the
+resume duplicate). **The operator's choices (a two-question picker, then a typed `1`, which I read as option 1 of each; not two
+separate rulings):** catch in the orchestrator only; convert an ordinary exception into a clean exit 1. **Push at close-out** (picker).
+**Started:** 2026-10-02 20:53. **Completed:** 2026-10-02. **Commits: seven** — `738f836` (claim, alone), `36a4172` (the fix),
+`2f5dea7` (the real script against a real socket), `6d989ee` (the review's code and test findings), `13d30c8`, `c5765b9` (docs) and this
+close-out. Each carries its own `CHANGELOG.md` entry; the push is recorded in the close-out's.
+
+#### What changed
+- **The fix (`orchestrator/pipeline.py:476-505`, `_website_failure` `:644`).** The runner call in the website stage is wrapped.
+  `except Exception` builds a FAILED `RepoProjectResult` (`unexpected_error: <ClassName> (the website stage may already have created a
+  project on the repository host)`) and falls into the normal save and `FAILED_AT_WEBSITE` halt (exit 1). `except BaseException`
+  (`KeyboardInterrupt`, `SystemExit`) saves `interrupted: <ClassName> (...)` and **re-raises**, so Ctrl-C still stops the run. The
+  reason names the class and never the message; a class name that is not a short ASCII identifier becomes `<unprintable>`; id, URL and
+  commit are empty; governance fields come from the intake report. Nothing before the website stage is caught.
+- **Tests: 2,894 to 2,940 passed, 9 skipped, coverage 98.21%** at CI scope (`GITHUB_ACTIONS=true uv run pytest`, Python 3.13.5); the same
+  2,940 and 9 on 3.12.13 (CI's interpreter). +46: `tests/orchestrator/test_pipeline_website_failure.py` 41 (seven exception kinds, odd
+  class names, two interrupt kinds, saved once and after the runner, the screen and the log captured, a disk-full save) and
+  `tests/scripts/test_run_pipeline_website_crash_resume.py` 5 (the real script against a socket: three crashes, a host that echoes the
+  token as the project id, a real SIGINT; each then `--resume`, which exits 2 with the host's `POST /projects` count unchanged).
+- **Docs.** `TROUBLESHOOTING.md` (`unexpected_error:` and `interrupted:` entries), `OPERATIONS.md` section 5, `BACKLOG.md` (item closed;
+  residue and a log item filed; Route 7 and 8 text; the 3.14 note), `PROJECT_LEARNINGS.md` #327-332, `CLAUDE.md` (the count).
+
+#### Measured first, then built
+- **Four read-only scouts** (the website agent, the orchestrator and resume, the tests, a reproduction; 630,630 tokens): reproduced on
+  the unchanged tree. Run 1 exits 1, no result file, one project; `--resume` prints `RESUMED from: website` and makes project 1002 (with
+  real GitLab naming, `-v2`: three POSTs); the SIGINT variant is the same; a `RepoClientError` saves FAILED and `--resume` refuses.
+  They also showed that a catch in the nodes cannot cover the scaffold nodes, `build_repo_project_result` (it can fail after a
+  successful commit) or an interrupt, and that `determine_resume_point` reads that one file.
+- **Red first, read:** 28 of 32 unit tests failed on the unchanged tree (the exception escaped; no file), the other 4 pin behaviour that
+  must not change; all 4 end-to-end tests failed on it as well (on the traceback assertion, which is *earlier* than the token one: see #328).
+
+#### The checks, each finding what the last could not
+- **Mutation, two passes: 27 mutants, all caught** (17 on the handler; 10 on the leak channels and the class-name guard). A first M16 was
+  an equivalent mutant of my own making (`None or ...`) and was redone. Files restored byte for byte (`cmp`).
+- **The review** (4 lenses, 2 skeptics per non-nit finding: **30 agents, 0 errors, 25 minutes, 2.84M tokens, 555 tool calls**): 16
+  findings (13 checked, 3 nits), **4 confirmed by both skeptics, none above low.** It found what my tests could not: a handler edit that
+  `print`ed or logged the exception passed every test (the tests never captured the screen or the log), the end-to-end token assertions
+  could not fail (no vector carried the token), the Ctrl-C test waited 120 s for a child that had died, the raw `\x1b` check on a JSON file
+  could not fail, and the 100,000-deep JSON case fails on Python 3.14. **Fixed** (`6d989ee`) with the class-name guard, which two skeptics
+  rated a nit and I added anyway: the docstring said "a class name is chosen by code" and nothing enforced it. **Filed, not fixed:** the
+  stack is gone (confirmed), the non-atomic result write, a hard kill, a repeated `--run-id`, the log context (pre-existing).
+
+### Session 274 Handoff Evaluation (by Session 275)
+
+**Score: 8/10.**
+- **+** The first recommendation was the right deliverable and its line numbers were exact (`:528`, `:506`, `:545`). The decay-term
+  disclosure of `SESSION_NOTES.md`'s size (195,311 B) was accurate and let me say at Phase 0 that the trim is due. Gotcha 1 (CI's
+  interpreter, with the command) was used verbatim and paid off twice; gotchas 4 (never `git stash`; saved copies and `cmp`) and 5 (both
+  guards before each commit) were used as written.
+- **−** "Small" understated: the change is about 50 lines, but it needed four scouts, a decision, six commits and a review. The
+  reproduction recipe omitted that the host must also answer the group lookup and `GET /projects/<id>`, or the commit step fails as a
+  `RepoClientError` and the bug is masked. Key files named no file for the fix (`orchestrator/pipeline.py`, `determine_resume_point`); the
+  scouts found them in minutes. **Estimate wrong:** the claim stub alone did not pass the trim trigger (196,270 B); the record does.
+- **ROI: high.**
+
+### Session 275 Self-Assessment
+
+**Score: 7/10.**
+- **+** Scouted before designing, put the one real choice to the operator with a recommendation, red first and read, a real-socket test at
+  the real script including a real SIGINT, two mutation passes, a review whose findings were triaged one by one (fixed what belonged to
+  the change, filed the rest with reproductions), new tests run on CI's interpreter, and my own mistakes corrected in place.
+- **−** **I wrote "operator rulings" in the review prompt for two of my own scoping choices (hard kills; the `--resume` message) and the
+  label reached `BACKLOG.md` and the ledger before a re-read caught it** (#332, FM #16). **My first leak assertions could not fail**
+  (#328; the same mistake as Session 273's #319, and the review, not I, found it). Wrong figures of mine, again: "eight" commits in the
+  push question (seven), 3 confirmed findings (4), 13 reported (16), a test count of 59 (46); all corrected. I read a bare `1` as option 1
+  of two questions without asking. Long stretches without narration (the harness prompted me four times).
+- **Decay term:** nothing removed from a mandated-read file except the closed item, and the files grew: `BACKLOG.md` 131,511 to
+  136,624 B, `PROJECT_LEARNINGS.md` 373,933 to 379,328 B, `SESSION_NOTES.md` 195,311 to 206,863 B against the 196,608 B trigger.
+  **The eleventh trim is due.**
+
+**What's next** (sizes are estimates unless measured).
+1. **The run log writes `str(exc)` unscrubbed (`BACKLOG.md:572`, `orchestrator/logging.py:94-105`).** Small, no ruling; first because a
+   secret can reach a file today with the JSON formatter `OPERATIONS.md` section 3.1 recommends (Session 275's host-echoes-the-token
+   vector reproduces the message). Log the class name only, or redact; a test that installs the formatter against that host holds it.
+2. **The unruled small parts of the residue item (`BACKLOG.md:530`, points 2 and 3):** print the saved `failure_reason` and
+   `project_url` in `_handle_already_complete` (`scripts/run_pipeline.py`), and make `CheckpointStore.save_result` atomic
+   (`checkpoints.py:82`) with an unreadable result file treated as a refusal. Then Route 8 (`BACKLOG.md:~513`).
+3. **The eleventh `SESSION_NOTES.md` trim is due** (its own deliverable: claim, trim, close out; two commits and no record edit in the
+   trim commit). Say at Phase 0 whether to do it first.
+4. **Rulings owed:** where the exception was raised (a frame in the reason, or a DEBUG log; `BACKLOG.md:530` point 1, which reopens what
+   `failure_reason` holds), a hard-kill marker (point 4), a repeated `--run-id` (point 5), Python 3.12 pin or a matrix (now with a 3.14
+   note), a host URL with a password, and the standing list in Session 273's record.
+5. **Observed, not filed:** `stash@{0}` (Session 270's claim commit; the operator's call); the branch `worktree-wf_c93ee390-506-3` and
+   `.claude/worktrees/wf_5f96c807-d00-3`; the root `methodology_dashboard.py` is v2.18.0 against v2.19.0 (`bin/sync`'s job);
+   `uv run ruff format --check` would reformat 14 of 20 test files in the touched directories (CI runs `ruff check` only).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `src/model_project_constructor/orchestrator/pipeline.py:400` (`run_pipeline`), `:476-505` (the website block; its comment, `:476-488`, is the
+  specification of the choice), `:644` (`_website_failure`; its docstring is the specification of the reason), `determine_resume_point` (reads one file).
+- `tests/orchestrator/test_pipeline_website_failure.py:200,309,386` (the three classes); `tests/scripts/
+  test_run_pipeline_website_crash_resume.py:38` (`BOOT`), `:46` (the 3.14 probe), `:67` (`Host`), `:214,:241` (the two tests).
+- `BACKLOG.md:57-58` (index rows), `:530` the residue, `:572` the log item, `:584` CI's Python; `TROUBLESHOOTING.md:159` (the new entries),
+  `:254`; `OPERATIONS.md:342`; `PROJECT_LEARNINGS.md` #327-332; `CHANGELOG.md` the S275 entries under `## 2026-10`.
+
+**Gotchas.**
+1. **The end-to-end router must answer the group lookup, `POST /projects`, `GET /projects/<id>` and the commit.** Leave one out and the
+   commit step fails as a `RepoClientError`, the agent saves FAILED, and a test that only checked for a saved file would pass for the
+   wrong reason; the `unexpected_error:` prefix assertion is what prevents it.
+2. **Do not "fix" the asymmetry.** The `Exception` branch saves after the handler (the disk error has no `__context__`; pinned by
+   `test_a_result_that_cannot_be_saved_is_not_hidden`), the interrupt branch saves inside it (the context is the interrupt; pinned).
+3. **A website crash reports only the class.** To debug one: the `agent.error` log context has the message (if a handler shows it), or
+   reproduce with `scripts/run_pipeline.py --live` against `serving_raw`.
+4. **Run new tests on CI's interpreter** (#325): `UV_PROJECT_ENVIRONMENT=<scratch>/venv312 uv sync --frozen --python 3.12 --extra agents
+   --extra ui --extra dev`. This session's scratch environment is not kept. The deep-JSON end-to-end case skips itself on 3.14.
+5. Never `git stash` (#316); the mutation harness (saved copy, one anchor per mutant, `cmp` after) and the review's scripts are in the
+   session scratchpad and are not kept.
+6. `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit that touches
+   `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. **Any commit that touches `docs/wiki/` publishes it.** None of this session's did.
 
 ### What Session 274 Did
 **Deliverable:** **a repository host's failure text can no longer put the access token, a terminal control code or an
