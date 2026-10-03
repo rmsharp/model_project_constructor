@@ -55,6 +55,22 @@ def _emit(
     logger.log(level, event, extra={"context": context})
 
 
+def _class_name(error: BaseException) -> str:
+    """The exception's class name, or ``<unprintable>`` when it is not a short ASCII identifier.
+
+    A class name is chosen by code, never by the repository host or a database driver, so it is
+    safe to carry; a class built at run time (``type(name, ...)``) can be named anything, and a
+    name that is not a plain identifier is replaced rather than carried. The same rule
+    ``orchestrator.pipeline._website_failure`` applies to the reason it saves; a test holds the
+    two in step.
+    """
+
+    name = type(error).__name__
+    if not (name.isascii() and name.isidentifier() and len(name) <= 100):
+        return "<unprintable>"
+    return name
+
+
 def make_logged_runner(
     runner: Callable[..., T],
     *,
@@ -72,11 +88,23 @@ def make_logged_runner(
       and (if the result carries a ``status`` attribute) the result's
       status.
     - Emits ``agent.error`` at level ``ERROR`` if the runner raises,
-      capturing ``error_type``, ``error_message``, and ``duration_ms``,
-      then re-raises the original exception.
+      capturing ``error_type`` (the exception's class name) and
+      ``duration_ms``, then re-raises the original exception.
 
     All records include the bound context ``{"agent", "run_id",
     "correlation_id"}`` on the ``context`` extra.
+
+    ``agent.error`` never carries what the exception said. An exception's
+    text is whatever a repository host, a database driver or a model's
+    client put in it (``httpx.InvalidURL`` quotes the URL it refused, and a
+    host can echo the access token as a project id), and a JSON formatter
+    renders the whole ``context``. Nothing that needs no secret can find a
+    bare token in free text, so the message is not read at all: the record
+    has no ``error_message``, no ``exc_info`` (a traceback prints the
+    message and the chain behind it), and the wrapper cannot be replaced by
+    an exception whose own ``__str__`` raises. To see the text, catch the
+    exception where it is raised and scrub it with what that code knows
+    (the adapters do, for the ``RepoClientError`` they raise).
     """
 
     log = logger or get_logger()
@@ -100,8 +128,7 @@ def make_logged_runner(
                 {
                     **base_ctx,
                     "duration_ms": duration_ms,
-                    "error_type": type(exc).__name__,
-                    "error_message": str(exc),
+                    "error_type": _class_name(exc),
                 },
             )
             raise

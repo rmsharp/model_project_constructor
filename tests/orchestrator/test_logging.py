@@ -173,7 +173,9 @@ class TestMakeLoggedRunnerError:
         assert err_ctx["run_id"] == "run_err"
         assert err_ctx["correlation_id"] == "corr_err"
         assert err_ctx["error_type"] == "RuntimeError"
-        assert err_ctx["error_message"] == "boom"
+        # The class name is carried; what the exception said is not (see
+        # ``test_logging_error_text.py``).
+        assert "error_message" not in err_ctx
         assert isinstance(err_ctx["duration_ms"], float)
 
     def test_error_event_is_logged_at_error_level(
