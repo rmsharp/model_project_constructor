@@ -44,6 +44,7 @@ from model_project_constructor.schemas.v1.data import (
 )
 from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import (
+    GovernanceManifest,
     RepoProjectResult,
     RepoTarget,
 )
@@ -472,8 +473,26 @@ def run_pipeline(
     # prior) BEFORE the runner; persist the terminal RepoProjectResult via
     # save_result (NOT _save — un-enveloped, distinct method) AFTER. Ordering
     # pinned by TestWebsiteSaveOrdering.
+    #
+    # The saved result is also the ONLY thing that stops ``--resume`` from running
+    # this stage again (``determine_resume_point`` reads that one file), and the
+    # stage creates a project it cannot undo. So a runner that raises must not
+    # leave the file unwritten: an ``Exception`` becomes a FAILED result and halts
+    # like any other website failure; anything else (``KeyboardInterrupt``,
+    # ``SystemExit``) is saved the same way and then re-raised, so that Ctrl-C
+    # still stops the run. See ``tests/orchestrator/test_pipeline_website_failure.py``.
     _save(checkpoint_store, config, stage=_STAGE_WEBSITE, payload=config.repo_target)
-    project_result = website_runner(intake_report, data_report, config.repo_target)
+    try:
+        project_result = website_runner(intake_report, data_report, config.repo_target)
+    except Exception as error:
+        project_result = _website_failure(intake_report, "unexpected_error", error)
+    except BaseException as error:
+        checkpoint_store.save_result(
+            run_id=config.run_id,
+            name="RepoProjectResult",
+            model=_website_failure(intake_report, "interrupted", error),
+        )
+        raise
     checkpoint_store.save_result(
         run_id=config.run_id,
         name="RepoProjectResult",
@@ -614,6 +633,42 @@ def _halt(
         failure_reason=failure_reason,
         resume_point=config.resume_from,
         **reports,
+    )
+
+
+def _website_failure(
+    intake_report: IntakeReport, kind: str, error: BaseException
+) -> RepoProjectResult:
+    """The FAILED result for a website runner that raised instead of returning one.
+
+    ``failure_reason`` names the exception's CLASS and nothing it said: a message
+    can carry host text, a token or a control code, and this string is printed,
+    saved and read back by the operator. A class name is chosen by code, never by
+    the repository host. It also says a project may exist, because the operator
+    reads it before deleting the result file to retry, and the stage cannot say
+    whether it got as far as creating one (a reply with no ``id`` leaves nothing
+    to name). Project id, URL and commit are therefore empty, as in the agent's
+    precondition failure; the governance fields come from the intake report the
+    stage was given.
+    """
+
+    return RepoProjectResult(
+        status="FAILED",
+        project_url="",
+        project_id="",
+        initial_commit_sha="",
+        files_created=[],
+        governance_manifest=GovernanceManifest(
+            model_registry_entry={},
+            artifacts_created=[],
+            risk_tier=intake_report.governance.risk_tier,
+            cycle_time=intake_report.governance.cycle_time,
+            regulatory_mapping={},
+        ),
+        failure_reason=(
+            f"{kind}: {type(error).__name__} "
+            "(the website stage may already have created a project on the repository host)"
+        ),
     )
 
 
