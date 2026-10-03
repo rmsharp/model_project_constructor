@@ -11,9 +11,13 @@ it.
 
 from __future__ import annotations
 
+import encodings.aliases
 import html
 import json
+import re
+import sys
 import traceback
+import unicodedata
 from collections.abc import Iterator
 from urllib.parse import quote, quote_plus
 
@@ -23,6 +27,7 @@ import pytest
 from model_project_constructor.agents.website._host_text import (
     MAX_HOST_TEXT,
     REDACTED,
+    UNPRINTABLE,
     response_text,
     scrub_host_text,
     scrubbed_errors,
@@ -74,6 +79,22 @@ class TestTheSecret:
         out = scrub_host_text(f"illegal header line: bytearray(b'X {quoted}')", secret)
         assert out == f"illegal header line: bytearray(b'X {REDACTED}')"
 
+    @pytest.mark.parametrize(
+        "secret",
+        ["tok'en9f3kQ7xZ2mW", 'tok"en9f3kQ7xZ2mW', "Zq7'xK9\"mW\\pL3&4<5>6%7+8=="],
+        ids=["single quote", "double quote", "awkward"],
+    )
+    def test_a_secret_is_removed_from_the_repr_of_a_longer_message(self, secret: str) -> None:
+        """A ``repr`` writes a quote as ``\\'`` only when the string it quotes holds both kinds, so
+        the repr of the secret alone never shows that form; the repr of a message around it does."""
+        runs = re.findall(r"[A-Za-z0-9]{3,}", secret)
+        assert runs
+        for message in (f"{secret} \"q\" 'q'", f'{secret} "q"', f"{secret} 'q'"):
+            for text in (repr(message), repr(message.encode())[2:-1]):
+                out = scrub_host_text(text, secret)
+                assert REDACTED in out, text
+                assert [run for run in runs if run in out] == [], (text, out)
+
     def test_the_match_ignores_case(self) -> None:
         """A proxy that lower-cases what it echoes still gives away most of the token."""
         assert TOKEN.lower() not in scrub_host_text(f"x {TOKEN.lower()} y", TOKEN)
@@ -119,6 +140,41 @@ class TestTheShape:
         secret: here it appears in the text only after the control character is turned into one."""
         out = scrub_host_text("x ab\x1bcd y", "ab cd")
         assert out == f"x {REDACTED} y"
+
+    def test_every_control_character_becomes_a_space(self) -> None:
+        """All 65 characters of Unicode category ``Cc``, from the Unicode database of the running
+        interpreter and not from a list typed here (the data agent pins its copy the same way). A
+        few are whitespace to ``str.split`` and would pass unaided; most are not."""
+        controls = [
+            chr(code)
+            for code in range(sys.maxunicode + 1)
+            if unicodedata.category(chr(code)) == "Cc"
+        ]
+        assert len(controls) == 65
+        for control in controls:
+            assert scrub_host_text(f"a{control}b", TOKEN) == "a b", hex(ord(control))
+
+    def test_no_printable_ascii_character_is_changed(self) -> None:
+        for code in range(0x21, 0x7F):
+            assert scrub_host_text(f"a{chr(code)}b", "") == f"a{chr(code)}b", chr(code)
+
+    def test_the_cut_keeps_limit_characters_and_counts_the_rest(self) -> None:
+        assert scrub_host_text("x" * 5000, "", limit=10) == "x" * 10 + (
+            "... [4990 more characters not shown]"
+        )
+        assert scrub_host_text("x" * 11, "", limit=10) == "x" * 10 + (
+            "... [1 more characters not shown]"
+        )
+        assert scrub_host_text("x" * 10, "", limit=10) == "x" * 10
+
+    @pytest.mark.parametrize("limit", [0, -1, -5])
+    def test_a_limit_of_zero_or_less_keeps_nothing(self, limit: int) -> None:
+        assert scrub_host_text("abc", "", limit=limit) == "... [3 more characters not shown]"
+
+    @pytest.mark.parametrize("secret", [None, b"tok", 1234], ids=["None", "bytes", "int"])
+    def test_a_secret_that_is_not_text_fails_closed(self, secret: object) -> None:
+        """Not read as 'no secret': that would return the text with the token still in it."""
+        assert scrub_host_text(f"500 {TOKEN}", secret) == UNPRINTABLE  # type: ignore[arg-type]
 
     def test_a_long_body_is_cut_and_says_so(self) -> None:
         out = scrub_host_text("500 " + "x" * 5000, TOKEN)
@@ -178,6 +234,7 @@ class _Adapter:
 
     @scrubbed_errors
     def works(self, value: int, *, extra: int = 0) -> int:
+        """Add two numbers."""
         return value + extra
 
     @scrubbed_errors
@@ -234,13 +291,37 @@ class TestTheDecorator:
 
     def test_the_wrapped_method_keeps_its_name_and_docstring(self) -> None:
         assert _Adapter.works.__name__ == "works"
+        assert _Adapter.works.__doc__ == "Add two numbers."
+
+    def test_the_wrapper_carries_the_marker_a_registry_test_looks_for(self) -> None:
+        """``__wrapped__`` is set by every ``functools.wraps`` decorator, so it cannot tell this one
+        from a retry or a timer that scrubs nothing."""
+        assert _Adapter.fails.__scrubs_host_text__ is True  # type: ignore[attr-defined]
+        assert not hasattr(_Adapter.fails.__wrapped__, "__scrubs_host_text__")
+
+    def test_a_holder_without_a_secret_fails_closed_and_chains_nothing(self) -> None:
+        """Reading ``self._secret`` in the handler would raise there, with the unscrubbed original
+        on ``__context__``."""
+
+        class NoSecret:
+            @scrubbed_errors
+            def fails(self) -> None:
+                raise RepoClientError(f"500 PRIVATE-TOKEN: {TOKEN}")
+
+        with pytest.raises(RepoClientError) as caught:
+            NoSecret().fails()  # type: ignore[arg-type]
+        assert str(caught.value) == UNPRINTABLE
+        assert caught.value.__cause__ is None
+        assert caught.value.__context__ is None
 
 
 class TestResponseText:
-    """``response.text`` raises when a reply declares a charset its body is not in, and the adapters
-    read it while building the message for a failure: the error that results is not a
-    ``RepoClientError``, so it would leave the adapter as a crash, past ``scrubbed_errors``, with
-    the body bytes in its ``args``."""
+    """``response.text`` raises when a reply declares a charset its body is not in, or one that is
+    not a text codec at all, and the adapters read it while building the message for a failure: the
+    error that results is not a ``RepoClientError``, so it would leave the adapter as a crash, past
+    ``scrubbed_errors``. The class it raises differs by interpreter (``UnicodeDecodeError`` on 3.13,
+    a plain ``UnicodeError`` on 3.11 and 3.12, which is what CI runs), so the premises below ask for
+    the common base."""
 
     def test_an_ordinary_body_is_its_text(self) -> None:
         assert response_text(httpx.Response(500, text="héllo")) == "héllo"
@@ -251,7 +332,7 @@ class TestResponseText:
         response = httpx.Response(
             500, content=body, headers={"content-type": "text/plain; charset=utf-16"}
         )
-        with pytest.raises(UnicodeDecodeError):
+        with pytest.raises(UnicodeError):
             response.text  # noqa: B018 - the premise: the library itself raises here
         assert response_text(response) == body.decode("utf-8")
 
@@ -262,13 +343,44 @@ class TestResponseText:
             content=b"\xff oops \x80!",
             headers={"content-type": "text/plain; charset=utf-16"},
         )
-        with pytest.raises(UnicodeDecodeError):
+        with pytest.raises(UnicodeError):
             response.text  # noqa: B018 - the premise
         assert "oops" in response_text(response)
         assert "\ufffd" in response_text(response)
 
     def test_an_unknown_charset_name_does_not_raise(self) -> None:
+        """A must-not-regress case: ``httpx`` 0.28 falls back to UTF-8 for a name it does not know,
+        so this passes with a bare ``return response.text`` too."""
         response = httpx.Response(
             500, content=b"boom", headers={"content-type": "text/plain; charset=no-such-codec"}
         )
         assert response_text(response) == "boom"
+
+    def test_a_correctly_declared_charset_is_honoured(self) -> None:
+        response = httpx.Response(
+            500,
+            content="h\u00e9llo".encode("latin-1"),
+            headers={"content-type": "text/plain; charset=iso-8859-1"},
+        )
+        assert response_text(response) == "h\u00e9llo"
+
+    @pytest.mark.parametrize("charset", ["undefined", "rot13", "hex", "zlib", "idna", "base64"])
+    def test_a_charset_that_is_not_a_text_codec_does_not_raise(self, charset: str) -> None:
+        """Names ``codecs.lookup`` accepts and ``httpx`` therefore uses: ``response.text`` raises
+        ``UnicodeError``, ``TypeError`` or ``AssertionError``, depending on the codec."""
+        body = b"PRIVATE-TOKEN: " + TOKEN.encode()
+        response = httpx.Response(
+            500, content=body, headers={"content-type": f"text/plain; charset={charset}"}
+        )
+        with pytest.raises((UnicodeError, TypeError, AssertionError)):
+            response.text  # noqa: B018 - the premise
+        assert response_text(response) == body.decode()
+
+    def test_no_charset_the_standard_library_knows_makes_it_raise(self) -> None:
+        names = sorted(set(encodings.aliases.aliases.values()) | set(encodings.aliases.aliases))
+        assert len(names) > 100
+        for name in names:
+            response = httpx.Response(
+                500, content=b"abc", headers={"content-type": f"text/plain; charset={name}"}
+            )
+            assert isinstance(response_text(response), str), name

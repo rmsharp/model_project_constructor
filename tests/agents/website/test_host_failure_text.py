@@ -3,10 +3,15 @@
 Each adapter runs its whole sequence (``create_project`` then ``commit_files``) against a real
 socket that answers correctly, counts the requests, and then runs it again once per request with
 THAT request answered by a hostile host: a valid ``500`` that echoes the request headers, the same
-as JSON, a body of terminal control codes padded to megabytes, and a malformed reply that makes
-``h11`` quote the headers it read. A fifth kind raises from a transport with the token in the
-exception's own text. The position loop is derived from the happy run, so a request an adapter
-gains later is covered without editing this file.
+as JSON, a body of terminal control codes padded to megabytes, a malformed reply that makes ``h11``
+quote the headers it read, and replies that declare a charset the body is not in, or one that is
+not a text codec at all. One more kind raises from a transport with the token in the exception's
+own text. The position loop is derived from the happy run, so a request an adapter gains later is
+DETECTED here, not silently skipped: the routers below answer only the requests they know and the
+request count is pinned, so the file goes red until both are updated.
+
+GitHub has two ways to find the owner (an organisation, then a personal account), so it is run
+both ways; the three sequences have 4, 10 and 11 requests.
 
 What is asserted is what an operator, a log and a checkpoint can see: the message, the exception
 chain and a formatted traceback. ``test_host_text.py`` holds the scrubbing function itself.
@@ -53,13 +58,9 @@ def _gitlab(method: str, path: str) -> Reply:
     raise AssertionError(f"unexpected request {method} {path}")
 
 
-def _github(method: str, path: str) -> Reply:
+def _github_routes(owner: dict[tuple[str, str], Reply]) -> Router:
     routes: dict[tuple[str, str], Reply] = {
-        ("GET", "/orgs/g"): (200, {}),
-        ("POST", "/orgs/g/repos"): (
-            201,
-            {"full_name": "g/n", "html_url": "https://h/g/n", "default_branch": "main"},
-        ),
+        **owner,
         ("GET", "/repos/g/n"): (200, {}),
         ("GET", "/repos/g/n/git/ref/heads/main"): (200, {"object": {"sha": "p1"}}),
         ("GET", "/repos/g/n/git/commits/p1"): (200, {"tree": {"sha": "t1"}}),
@@ -68,10 +69,30 @@ def _github(method: str, path: str) -> Reply:
         ("POST", "/repos/g/n/git/commits"): (201, {"sha": "c1"}),
         ("PATCH", "/repos/g/n/git/refs/heads/main"): (200, {}),
     }
-    try:
-        return routes[(method, path)]
-    except KeyError:
-        raise AssertionError(f"unexpected request {method} {path}") from None
+    def router(method: str, path: str) -> Reply:
+        try:
+            return routes[(method, path)]
+        except KeyError:
+            raise AssertionError(f"unexpected request {method} {path}") from None
+
+    return router
+
+
+_CREATED = (
+    201,
+    {"full_name": "g/n", "html_url": "https://h/g/n", "default_branch": "main"},
+)
+# The owner is an organisation: ``GET /orgs/g`` answers 200.
+_github = _github_routes({("GET", "/orgs/g"): (200, {}), ("POST", "/orgs/g/repos"): _CREATED})
+# The owner is a personal account: the organisation lookup is a 404, and the repository is created
+# under the authenticated user.
+_github_user = _github_routes(
+    {
+        ("GET", "/orgs/g"): (404, {}),
+        ("GET", "/users/g"): (200, {}),
+        ("POST", "/user/repos"): _CREATED,
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -84,7 +105,9 @@ class Host:
 HOSTS = [
     Host("gitlab", _gitlab, lambda url: GitLabAdapter(host_url=url, private_token=TOKEN)),
     Host("github", _github, lambda url: GitHubAdapter(host_url=url, private_token=TOKEN)),
+    Host("github-user", _github_user, lambda url: GitHubAdapter(host_url=url, private_token=TOKEN)),
 ]
+REQUESTS = {"gitlab": 4, "github": 10, "github-user": 11}
 
 
 def _run(adapter: GitLabAdapter | GitHubAdapter) -> None:
@@ -95,7 +118,7 @@ def _run(adapter: GitLabAdapter | GitHubAdapter) -> None:
 
 
 def _http(status: int, body: bytes, *, content_type: str = "application/json") -> bytes:
-    reason = {200: "OK", 201: "Created", 500: "Internal Server Error"}[status]
+    reason = {200: "OK", 201: "Created", 404: "Not Found", 500: "Internal Server Error"}[status]
     return (
         f"HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\n"
         f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
@@ -143,13 +166,23 @@ def _malformed_header_echo(request: bytes) -> bytes:
 
 def _undecodable_charset(request: bytes) -> bytes:
     """A valid ``500`` that declares a charset its body is not in: ``response.text`` raises
-    ``UnicodeDecodeError`` (not an ``httpx.HTTPError``, not a ``RepoClientError``) where the adapter
-    builds its message, and the body bytes, token included, sit in the error's ``args``. UTF-16
-    refuses a body of odd length, so the body is padded to one."""
+    ``UnicodeDecodeError`` on Python 3.13 and a plain ``UnicodeError`` on 3.11 and 3.12 (CI runs
+    3.12), not an ``httpx.HTTPError`` and not a ``RepoClientError``, where the adapter builds its
+    message. UTF-16 refuses a body of odd length, so the body is padded to one."""
     body = _head(request).encode()
     if len(body) % 2 == 0:
         body += b"!"
     return _http(500, body, content_type="text/plain; charset=utf-16")
+
+
+def _charset(name: str) -> Callable[[bytes], bytes]:
+    """A valid ``500`` echoing the request head that declares ``name``, which is not a text codec:
+    ``response.text`` raises ``UnicodeError``, ``TypeError`` or ``AssertionError`` by codec."""
+
+    def reply(request: bytes) -> bytes:
+        return _http(500, _head(request).encode(), content_type=f"text/plain; charset={name}")
+
+    return reply
 
 
 HOSTILE: dict[str, Callable[[bytes], bytes]] = {
@@ -158,6 +191,9 @@ HOSTILE: dict[str, Callable[[bytes], bytes]] = {
     "controls-and-padding": _controls_and_padding,
     "malformed-header-echo": _malformed_header_echo,
     "undecodable-charset": _undecodable_charset,
+    "charset-undefined": _charset("undefined"),
+    "charset-rot13": _charset("rot13"),
+    "charset-hex": _charset("hex"),
 }
 
 
@@ -217,7 +253,7 @@ def test_the_undecodable_charset_reply_really_is_undecodable() -> None:
             content=reply.split(b"\r\n\r\n", 1)[1],
             headers={"content-type": "text/plain; charset=utf-16"},
         )
-        with pytest.raises(UnicodeDecodeError):
+        with pytest.raises(UnicodeError):
             response.text  # noqa: B018
 
 
@@ -227,7 +263,7 @@ def test_the_happy_sequence_works_and_makes_the_requests_the_loop_counts(host: H
     hostile reply's doing, and the request count the loop uses is the real one."""
     count = _request_count(host)
     assert count >= 4
-    assert count == (4 if host.name == "gitlab" else 10)
+    assert count == REQUESTS[host.name]
 
 
 @pytest.mark.parametrize("kind", sorted(HOSTILE))
@@ -303,7 +339,7 @@ def test_a_name_conflict_check_on_an_undecodable_body_does_not_raise(
     headers = {"content-type": "text/plain; charset=utf-16"}
     taken = httpx.Response(status, content=b"name already exists!!", headers=headers)
     other = httpx.Response(status, content=b"something else entirely", headers=headers)
-    with pytest.raises(UnicodeDecodeError):
+    with pytest.raises(UnicodeError):
         taken.text  # noqa: B018 - the premise
     assert check(taken) is True
     assert check(other) is False
@@ -347,13 +383,15 @@ def test_every_registered_host_scrubs_every_method_of_the_protocol(host: str) ->
     """The pipeline script builds its adapter from this registry. A host added to it, or a method
     added to ``RepoClient``, whose adapter does not leave through ``scrubbed_errors`` would reopen
     the leak without any test above noticing, because they name the two adapters and the two
-    methods: this goes red instead."""
+    methods: this goes red instead. The marker is set by ``scrubbed_errors`` alone: ``__wrapped__``
+    is set by every ``functools.wraps`` decorator, a retry or a timer included."""
     adapter = REPO_PLATFORMS[host].adapter_factory(
         host_url="http://127.0.0.1:9", private_token=TOKEN
     )
     assert PROTOCOL_METHODS
     for name in PROTOCOL_METHODS:
-        assert hasattr(getattr(type(adapter), name), "__wrapped__"), (host, name)
+        method = getattr(type(adapter), name)
+        assert getattr(method, "__scrubs_host_text__", False) is True, (host, name)
     assert getattr(adapter, "_secret") == TOKEN  # noqa: B009 - not on the Protocol
 
 
@@ -361,10 +399,10 @@ def test_every_registered_host_scrubs_every_method_of_the_protocol(host: str) ->
     "module", [gitlab_adapter_module, github_adapter], ids=["gitlab", "github"]
 )
 def test_the_adapters_read_a_response_body_only_through_response_text(module: object) -> None:
-    """``response.text`` raises on a body its declared charset cannot decode, and the adapters read
-    a body while building the message for a failure; ``response_text`` is the one reader that does
-    not. A direct ``.text`` or ``.content`` added later would reopen a crash that leaves the adapter
-    as a ``UnicodeDecodeError`` holding the body's bytes."""
+    """``response.text`` raises on a body its declared charset cannot decode, and on a charset that
+    is not a text codec, and the adapters read a body while building the message for a failure;
+    ``response_text`` is the one reader that does not. A direct ``.text`` or ``.content`` added
+    later would reopen a crash that leaves the adapter as a ``UnicodeError`` or a ``TypeError``."""
     tree = ast.parse(inspect.getsource(module))  # type: ignore[arg-type]
     direct = [
         node.lineno
