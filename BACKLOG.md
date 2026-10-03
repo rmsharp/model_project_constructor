@@ -55,7 +55,8 @@ rows below it are the smaller residue that closing it exposed.
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274). | **Small** for the SQLAlchemy lines, the language-model text and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
-| The run log records the full text of any exception a runner raises | `make_logged_runner` writes `str(exc)` into the `agent.error` event's context, unscrubbed. With no handler that shows the context (the default) nothing prints it; with the JSON handler `OPERATIONS.md` section 3.1 recommends, an exception whose message quotes what the host sent (`httpx.InvalidURL` quotes the URL, which can hold a host-supplied project id that is the access token echoed) lands in the log file. Found by Session 275's review; it predates Session 275 and the new handler does not change it. | **Small**: log the class name only, or run the text through a redaction that needs no secret. |
+| The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
+| `MPC_LOG_LEVEL` is read and used by nothing | The setting is parsed and validated (`OrchestratorSettings.log_level`), the operator guide lists it and the wiki says `MPC_LOG_LEVEL=DEBUG` gives "verbose output including handoff payloads". Nothing reads the value: no script or module configures logging from it, and no handoff payload is logged. Found by Session 276 while checking what installs a log handler (nothing does). | **Small; a choice:** wire it (the script installs a handler at that level), or stop documenting it. Pre-existing. |
 | CI tests one Python, and it is not the one sessions run | CI uses whatever Python `ubuntu-latest` has (3.12.3 at the last run); this machine runs 3.13.5; the project says 3.11 or later and pins none. A standard-library error class differs between them, and 7 of Session 274's new tests would have gone red on the first push for that reason. | **Small; operator call:** pin 3.12, or test 3.11, 3.12 and 3.13 (a matrix triples the CI minutes). |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
 | An API key ending in a carriage return is quoted in the error chain | Found by Session 273's review, the sibling of the website-token item it closed. The language-model clients (Anthropic and Bedrock) put their key in an HTTP header, and the HTTP library refuses a key ending in a carriage return or line feed (a Windows-style `.env`) with a message that quotes the whole key. The SDK hides that message ("Connection error.") and the pipeline stores only that, so no report or checkpoint held the key (measured); but it sits in the exception's cause, so any log or traceback that prints the chain prints it (reproduced through the intake web UI's server log). The pipeline script also prints and saves a `MPC_HOST_URL` that carries a password or token. | **Small, a choice:** refuse such a key where it is read (the rule the website token now has), or give the SDK a client that withholds the library's message. |
@@ -569,17 +570,44 @@ Session 275's own and was not put to the operator.**
    `FAILED_AT_WEBSITE` and the resume table as they were; `TROUBLESHOOTING.md` and `OPERATIONS.md` were updated in
    Session 275. Any commit that touches `docs/wiki/` publishes it, so it waits for a decision to publish.
 
-### The run log records the full text of any exception a runner raises
+### The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text
 
-**Found by Session 275's review (its secrets and completeness lenses; pre-existing, not changed by Session 275).**
-`orchestrator/logging.py:94-105`: `make_logged_runner` emits `agent.error` with `"error_message": str(exc)` for
-every `Exception` a runner raises, before re-raising. Python's default handler does not print a record's `context`, so
-nothing shows it by default. `OPERATIONS.md` section 3.1 recommends installing a JSON formatter that renders the
-`context` extra, and with that installed the message is in the log file, unscrubbed. An exception whose message quotes
-what a host sent carries it: Session 275's end-to-end test has a host echo the access token as a project id and
-`httpx.InvalidURL` quotes it. The adapters scrub only the `RepoClientError` they raise. **Fix, small:** log
-`error_type` only, or run the text through a redaction that needs no secret (`db.safe_message` is the model); a test
-that installs the JSON formatter and a hostile host would hold it.
+**Residue of Session 276, which closed the item *"The run log records the full text of any exception a runner
+raises"* (found by Session 275's review).** `make_logged_runner` (`orchestrator/logging.py`) no longer puts `str(exc)`
+in the `agent.error` event. It carries `error_type` (the class name, `<unprintable>` for one that is not a short ASCII
+identifier) and `duration_ms`; no `error_message`, no `exc_info`, and the exception's text is never read. A redaction
+that needs no secret cannot find a bare token (a host that echoes the token as a project id puts one in
+`httpx.InvalidURL`'s message), so the message was dropped, as Session 275 did for the website stage's `failure_reason`.
+Two things are left:
+
+1. **Two wiki pages describe the removed field.** `docs/wiki/model_project_constructor/Security-Considerations.md`
+   section 6.1's table lists `error_message` and section 6.2 says it "is `str(exc)` for whatever exception propagated"
+   and that the shipped adapters do not put a token in one; `Monitoring-and-Operations.md` (under "Structured logging")
+   lists "Error details for failures (type, message, duration)". **Not edited, because any commit that touches
+   `docs/wiki/` publishes it.** Small, an operator call (publish the correction, or leave the pages until the next wiki
+   pass).
+2. **An operator cannot get the text from the log any more.** The traceback still reaches the caller (the wrapper
+   re-raises unchanged), and `FAILED_AT_*` results carry their scrubbed `failure_reason`; the website stage's
+   `unexpected_error:` result and the log say the class only. **If the text is wanted:** a `scrub` callable on
+   `make_logged_runner` that the caller supplies (`scripts/run_pipeline.py` knows the host token and the database
+   address, which is exactly what `scrub_host_text` and `safe_message` need); with none given the message stays out.
+   A choice, and it reopens what the log may hold; not needed until someone misses the text.
+
+### `MPC_LOG_LEVEL` is read and used by nothing
+
+**Found by Session 276 while checking what installs a log handler.** `OrchestratorSettings.from_env`
+(`orchestrator/config.py:266-269`) parses and validates `MPC_LOG_LEVEL` into `settings.log_level`. A search of
+`src/`, `scripts/` and `packages/` finds no read of it: no script or module calls `logging.basicConfig`, adds a
+handler or sets a level from it (only `tests/orchestrator/test_config.py` reads it back). `OPERATIONS.md:30` lists it
+as "Stdlib level name"; `docs/wiki/model_project_constructor/Monitoring-and-Operations.md:70` says "Set
+`MPC_LOG_LEVEL=DEBUG` for verbose output including handoff payloads" (no handoff payload is logged at any level), and
+`Security-Considerations.md:309` says `DEBUG` "is safe". The orchestrator's `agent.*` events are emitted, and Python's
+default handler prints only `WARNING` and above and only the event's name (measured: a runner that raises prints the
+bare words `agent.error`), so **a deployment sees no `agent.start` or `agent.end`, and no context, unless its own code
+installs a handler**, as `OPERATIONS.md` section 3.1 shows. Pre-existing. **Small, a choice:** wire
+it (a handler installed by `scripts/run_pipeline.py` at that level, with a formatter that does not render what it must
+not), or stop documenting it as a control. The wiki lines publish on commit.
+
 
 ### CI tests one Python, and it is not the one sessions run
 
