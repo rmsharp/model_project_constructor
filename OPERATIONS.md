@@ -98,7 +98,22 @@ returns a wrapped callable that emits three event types via stdlib
 |---|---|---|
 | `agent.start` | INFO | `agent`, `run_id`, `correlation_id` |
 | `agent.end` | INFO | plus `duration_ms`, `status` |
-| `agent.error` | ERROR | plus `duration_ms`, `error_type`, `error_message` |
+| `agent.error` | ERROR | plus `duration_ms`, `error_type` |
+
+`error_type` is the exception's class name (a class built at run time
+whose name is not a short ASCII identifier is shown as `<unprintable>`).
+**What the exception said is deliberately not logged**, and there is no
+`error_message` field (it existed until Session 276; a log processor that
+read it now finds it absent). An exception's text is whatever the
+repository host, a database driver or a model's client put in it —
+`httpx.InvalidURL` quotes the URL it refused, and a host can echo the
+access token as a project id — and the JSON formatter below writes the
+whole context, so a message in the context is a token in the log file.
+Nothing that needs no secret can find a bare token in free text, so the
+wrapper does not read the text at all, and attaches no traceback (which
+would print it). The wrapper re-raises the exception unchanged, so the
+code that called the pipeline can print or scrub it with what that code
+knows.
 
 All structured fields land on the log record's `extra={"context": ...}`
 dict. To produce JSON logs, install a JSON formatter on the

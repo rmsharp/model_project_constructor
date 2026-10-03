@@ -28,8 +28,12 @@ Regardless of which stage failed, start here:
 3. **Check the structured logs.** If you wrapped runners with
    `make_logged_runner`, look for `agent.error` events at level
    `ERROR` in the `model_project_constructor.orchestrator` logger. The
-   `context` dict includes `error_type`, `error_message`, and
-   `duration_ms`.
+   `context` dict includes `error_type` (the exception's class name) and
+   `duration_ms`. It does not include what the exception said: that text
+   can carry a host's reply or a token, so it is never logged (see
+   `OPERATIONS.md` §3.1). For the text, see the traceback the caller's
+   own error handler prints, or, for a failure an agent reported itself
+   (a `FAILED_AT_*` status), the `failure_reason` it saved.
 
 4. **Check metrics.** If you used `MetricsRegistry`, call
    `registry.snapshot()` to see the status distribution and per-agent
@@ -259,7 +263,8 @@ The checkpoint files written before the crash are still on disk.
 **What to inspect:**
 - The exception traceback from the caller's error handler.
 - The `agent.error` structured log event (if runners were instrumented
-  with `make_logged_runner`).
+  with `make_logged_runner`): it names the exception's class and the
+  duration, never its text.
 - The checkpoint directory — files stop at whichever stage was running
   when the crash happened.
 
