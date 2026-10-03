@@ -412,6 +412,11 @@ def run_pipeline(
     selection, ``ci_platform``). Production code wraps the real agents in
     small closures; tests inject stubs. This keeps the orchestrator free
     of import-time dependencies on heavy agent wiring.
+
+    An exception from the intake or data runner propagates. An exception from
+    the website runner does not: that stage creates a project it cannot undo, so
+    the run is halted at ``FAILED_AT_WEBSITE`` with a saved FAILED result (and an
+    interrupt is saved, then re-raised) — see the comment at the website stage.
     """
 
     checkpoint_store = store or CheckpointStore(config.checkpoint_dir)
@@ -644,14 +649,18 @@ def _website_failure(
     ``failure_reason`` names the exception's CLASS and nothing it said: a message
     can carry host text, a token or a control code, and this string is printed,
     saved and read back by the operator. A class name is chosen by code, never by
-    the repository host. It also says a project may exist, because the operator
-    reads it before deleting the result file to retry, and the stage cannot say
-    whether it got as far as creating one (a reply with no ``id`` leaves nothing
-    to name). Project id, URL and commit are therefore empty, as in the agent's
-    precondition failure; the governance fields come from the intake report the
-    stage was given.
+    the repository host, and a name that is not a short ASCII identifier (a class
+    built at run time) is replaced rather than carried. It also says a project
+    may exist, because the operator reads it before deleting the result file to
+    retry, and the stage cannot say whether it got as far as creating one (a
+    reply with no ``id`` leaves nothing to name). Project id, URL and commit are
+    therefore empty, as in the agent's precondition failure; the governance
+    fields come from the intake report the stage was given.
     """
 
+    name = type(error).__name__
+    if not (name.isascii() and name.isidentifier() and len(name) <= 100):
+        name = "<unprintable>"  # a class built at run time can be named anything
     return RepoProjectResult(
         status="FAILED",
         project_url="",
@@ -666,7 +675,7 @@ def _website_failure(
             regulatory_mapping={},
         ),
         failure_reason=(
-            f"{kind}: {type(error).__name__} "
+            f"{kind}: {name} "
             "(the website stage may already have created a project on the repository host)"
         ),
     )

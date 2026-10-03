@@ -16,6 +16,7 @@ holds the same behaviour through the real script and a real socket.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from pathlib import Path
 
@@ -60,6 +61,20 @@ EXCEPTIONS: list[pytest.ParameterSet] = [
     pytest.param(lambda: ValueError(HOSTILE_MESSAGE), id="ValueError"),
     pytest.param(lambda: OSError(28, HOSTILE_MESSAGE), id="OSError"),
     pytest.param(lambda: _NobodyHasHeardOfThisOne(HOSTILE_MESSAGE), id="a-class-it-never-heard-of"),
+]
+
+#: What nothing the exception said may leave as: a token, the host's name, a second line, a
+#: control code raw and as JSON writes one.
+LEAKS = ("glpat-SECRET", "host.example", "second line", "\x1b", "\\u001b")
+
+#: Class names no code would choose, which a class built at run time can have.
+ODD_CLASS_NAMES: list[pytest.ParameterSet] = [
+    pytest.param("Evil\x1b[2J\x07\nglpat-SECRET9f3kQ7xZ2mW", id="control-codes-and-a-token"),
+    pytest.param("A" * 1_000_000, id="a-million-characters"),
+    pytest.param("", id="empty"),
+    pytest.param("Caf\u00e9Error", id="not-ascii"),
+    pytest.param("not an identifier", id="spaces"),
+    pytest.param("E" * 101, id="one-too-long"),
 ]
 
 #: Not ``Exception`` subclasses: ``Ctrl-C`` and ``sys.exit()``. The run must still stop.
@@ -135,6 +150,30 @@ def _name(error: BaseException) -> str:
     return type(error).__name__
 
 
+def _assert_nothing_leaked(
+    config: PipelineConfig,
+    reason: str,
+    capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The exception's message is in no place the run wrote: the reason, the checkpoint
+    directory, the screen or the log."""
+    assert len(reason.splitlines()) == 1
+    assert not any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in reason)
+    on_disk = "".join(
+        path.read_text(errors="replace")
+        for path in sorted(config.checkpoint_dir.rglob("*"))
+        if path.is_file()
+    )
+    screen = capsys.readouterr()
+    logged = caplog.text + "".join(record.getMessage() for record in caplog.records)
+    for fragment in LEAKS:
+        assert fragment not in reason
+        assert fragment not in on_disk
+        assert fragment not in screen.out + screen.err
+        assert fragment not in logged
+
+
 class _RecordingStore(CheckpointStore):
     """Records the order of ``save`` and ``save_result`` calls."""
 
@@ -188,24 +227,44 @@ class TestAnExceptionFromTheWebsiteRunner:
         assert _resume_point(config) == "already_complete"
 
     @pytest.mark.parametrize("make_error", EXCEPTIONS)
-    def test_nothing_the_exception_said_reaches_the_result_or_the_disk(
-        self, tmp_path: Path, make_error: Callable[[], BaseException]
+    def test_nothing_the_exception_said_reaches_the_result_the_disk_the_screen_or_the_log(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+        make_error: Callable[[], BaseException],
     ) -> None:
+        caplog.set_level(logging.DEBUG)
         config = _config(tmp_path, "run_clean")
         result = _drive(config, _raising(make_error()))
 
         assert result.failure_reason is not None
-        reason = result.failure_reason
-        assert len(reason.splitlines()) == 1
-        assert not any(ord(c) < 0x20 or 0x7F <= ord(c) <= 0x9F for c in reason)
-        everything = "".join(
-            path.read_text(errors="replace")
-            for path in sorted(config.checkpoint_dir.rglob("*"))
-            if path.is_file()
-        )
-        for fragment in ("glpat-SECRET", "host.example", "second line", "\x1b", "No space"):
-            assert fragment not in reason
-            assert fragment not in everything
+        _assert_nothing_leaked(config, result.failure_reason, capsys, caplog)
+
+    @pytest.mark.parametrize("class_name", ODD_CLASS_NAMES)
+    def test_a_class_name_that_is_not_a_short_ascii_identifier_is_not_carried(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+        class_name: str,
+    ) -> None:
+        """A class created at run time can be named anything; the reason must not be."""
+        caplog.set_level(logging.DEBUG)
+        config = _config(tmp_path, "run_odd_name")
+        result = _drive(config, _raising(type(class_name, (Exception,), {})(HOSTILE_MESSAGE)))
+
+        assert result.failure_reason == f"unexpected_error: <unprintable> ({MAY_EXIST})"
+        _assert_nothing_leaked(config, result.failure_reason, capsys, caplog)
+
+    def test_a_class_name_of_exactly_the_longest_allowed_length_is_carried(
+        self, tmp_path: Path
+    ) -> None:
+        name = "E" * 100
+        config = _config(tmp_path, "run_longest_name")
+        result = _drive(config, _raising(type(name, (Exception,), {})("x")))
+
+        assert result.failure_reason == f"unexpected_error: {name} ({MAY_EXIST})"
 
     def test_the_saved_manifest_carries_the_intake_governance_not_a_default(
         self, tmp_path: Path
@@ -250,11 +309,16 @@ class TestAnExceptionFromTheWebsiteRunner:
 class TestAnInterruptFromTheWebsiteRunner:
     @pytest.mark.parametrize("make_interrupt", INTERRUPTS)
     def test_stops_the_run_and_saves_a_failed_result_first(
-        self, tmp_path: Path, make_interrupt: type[BaseException]
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+        caplog: pytest.LogCaptureFixture,
+        make_interrupt: type[BaseException],
     ) -> None:
+        caplog.set_level(logging.DEBUG)
         config = _config(tmp_path, "run_interrupt")
         with pytest.raises(make_interrupt):
-            _drive(config, _raising(make_interrupt()))
+            _drive(config, _raising(make_interrupt(HOSTILE_MESSAGE)))
 
         saved = _saved(config)
         assert saved.status == "FAILED"
@@ -262,6 +326,17 @@ class TestAnInterruptFromTheWebsiteRunner:
         assert (saved.project_url, saved.project_id, saved.initial_commit_sha) == ("", "", "")
         assert saved.files_created == []
         assert _resume_point(config) == "already_complete"
+        _assert_nothing_leaked(config, saved.failure_reason, capsys, caplog)
+
+    def test_an_interrupt_whose_class_name_is_odd_is_saved_without_it(
+        self, tmp_path: Path
+    ) -> None:
+        odd = type("Evil\x1b[2J\nglpat-SECRET", (BaseException,), {})
+        config = _config(tmp_path, "run_odd_interrupt")
+        with pytest.raises(odd):
+            _drive(config, _raising(odd(HOSTILE_MESSAGE)))
+
+        assert _saved(config).failure_reason == f"interrupted: <unprintable> ({MAY_EXIST})"
 
     @pytest.mark.parametrize("make_interrupt", INTERRUPTS)
     def test_the_interrupt_is_the_exception_that_leaves_not_a_replacement(
@@ -292,6 +367,20 @@ class TestAnInterruptFromTheWebsiteRunner:
         assert events.index(("save", "RepoTarget")) < events.index(("run", "website"))
         assert events.index(("run", "website")) < events.index(("save_result", "RepoProjectResult"))
         assert events.count(("save_result", "RepoProjectResult")) == 1
+
+
+    def test_a_result_that_cannot_be_saved_does_not_hide_the_interrupt_either(
+        self, tmp_path: Path
+    ) -> None:
+        """Here the save runs inside the handler, so the disk error surfaces WITH the interrupt
+        as its context: the operator who pressed Ctrl-C sees both, and the run still stops."""
+        config = _config(tmp_path, "run_interrupt_disk_full")
+        interrupt = KeyboardInterrupt()
+        store = _FailingResultStore(config.checkpoint_dir)
+        with pytest.raises(OSError, match="No space left") as raised:
+            _drive(config, _raising(interrupt), store)
+
+        assert raised.value.__context__ is interrupt
 
 
 class TestWhatDoesNotChange:

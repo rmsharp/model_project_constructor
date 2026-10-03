@@ -42,6 +42,18 @@ BOOT = (
 )
 
 
+def _deep_json_raises_recursion_error() -> bool:
+    """CPython 3.11 to 3.13 raise ``RecursionError`` for 100,000 open brackets; 3.14 parses them
+    and raises ``JSONDecodeError``, which the adapter handles as an ordinary error reply."""
+    try:
+        json.loads(b"[" * 100_000)
+    except RecursionError:
+        return True
+    except ValueError:
+        return False
+    return False
+
+
 def _http(status: int, reason: str, body: bytes, content_type: str = "application/json") -> bytes:
     head = (
         f"HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\n"
@@ -75,6 +87,16 @@ class Host:
             return _http(201, "Created", b"{}")
         if self.how == "deep-json":
             return _http(400, "Bad Request", b"[" * 100_000)
+        if self.how == "echoed-id":
+            # A host that echoes the token it was sent as the project's id. The next request puts
+            # the id in a URL, ``httpx`` refuses the control code and quotes the URL in its message:
+            # an exception whose MESSAGE carries the token, which no other case here does.
+            created = {
+                "id": f"{TOKEN}\x07 x",
+                "web_url": f"{self.base}/p/x",
+                "default_branch": "main",
+            }
+            return _http(201, "Created", json.dumps(created).encode())
         # ``hold``: the commit never gets an answer until the test lets go of it.
         self.commit_seen.set()
         self.release.wait(60)
@@ -175,7 +197,17 @@ def _assert_resume_refuses(host: Host, checkpoints: Path, *, posts_before: int) 
     [
         pytest.param("commit", "no-id", "KeyError", id="commit-reply-without-an-id"),
         pytest.param("project", "no-id", "KeyError", id="project-created-but-reply-without-an-id"),
-        pytest.param("project", "deep-json", "RecursionError", id="error-body-100000-deep"),
+        pytest.param(
+            "project",
+            "deep-json",
+            "RecursionError",
+            id="error-body-100000-deep",
+            marks=pytest.mark.skipif(
+                not _deep_json_raises_recursion_error(),
+                reason="this Python parses 100,000 nested brackets; unit tests raise it directly",
+            ),
+        ),
+        pytest.param("project", "echoed-id", "InvalidURL", id="project-id-echoing-the-token"),
     ],
 )
 def test_a_crash_is_saved_and_resume_makes_no_second_project(
@@ -199,6 +231,7 @@ def test_a_crash_is_saved_and_resume_makes_no_second_project(
     printed = [line for line in crashed.stdout.splitlines() if line.strip().startswith("Failure:")]
     assert [line.split("Failure:", 1)[1].strip() for line in printed] == [reason]
     assert TOKEN not in shown + _everything(checkpoints)
+    assert "\x07" not in shown + _everything(checkpoints)
     assert host.posts_to_projects() == 1
 
     _assert_resume_refuses(host, checkpoints, posts_before=1)
@@ -223,7 +256,14 @@ def test_an_interrupt_during_the_commit_is_saved_and_resume_makes_no_second_proj
         errors="replace",
     )
     try:
-        assert host.commit_seen.wait(120), "the script never reached the commit"
+        for _ in range(600):  # 120 s
+            if host.commit_seen.wait(0.2):
+                break
+            if process.poll() is not None:
+                out, err = process.communicate()
+                pytest.fail(f"the script exited ({process.returncode}) first:\n{out}\n{err}")
+        else:
+            pytest.fail("the script never reached the commit")
         process.send_signal(signal.SIGINT)
         out, err = process.communicate(timeout=120)
     finally:
