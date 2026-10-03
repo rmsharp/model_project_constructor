@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S277 claim: the eleventh trim of `SESSION_NOTES.md` *(in progress)*
+- **Change:** Session 277 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the eleventh trim of `SESSION_NOTES.md`: the file is 220,549 B, past the 196,608 B trigger since Session 275's close-out, and the operator chose it at Phase 0 from a picker (the recommended first option).
+- **Commit/PR:** this commit
+- **Session:** S277 · **Verified:** ledger-only; the Phase 0 reconcile found both frontiers at HEAD (gap 0) and both ledger guards green (82 passed) before the claim.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-02 · [ad hoc] S276 — close out: agent.error carries the exception's class and never what it said; the review's corrections, including a premise I had not checked; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 276 record: the deliverable and who decided what (the operator chose the item from the Phase 0 picker; dropping the message rather than redacting it was my choice, from Session 275's precedent, and was not put to the operator; push and "leave the wiki filed" were put to the operator), the fix (`orchestrator/logging.py`: `agent.error` has `error_type` and `duration_ms`, no message, no `exc_info`, the text never read, emitted after the `except` block, the class name read fail-closed), the measurements, two mutation passes (23, then 35 mutants, all caught after one survivor), the 38-agent review and what it found (a log handler that fails while writing had the runner's exception chained and printed; the class-name read could raise; my fixture watched one logger; two doc entries Session 275 wrote were stale; and `httpx.InvalidURL` does not quote a URL path, which I had repeated unchecked into six places), the Session 275 handoff evaluation (7/10), the self-assessment (7/10), and a next-session list. `HANDOFFS.md`: the S276 receipt completed. `PROJECT_LEARNINGS.md`: #333-338. `CLAUDE.md`: the learnings count (338, Sessions 9 to 276) and the file's size.
 - **Non-commit actions:** the operator answered three pickers (the Phase 0 task; push at close-out, yes; correct the wiki now, not now); one read-only review workflow ran (38 agents, 0 errors, 11.6 minutes, 3.18M subagent tokens) and a scratch Python 3.12 environment was built under the session scratchpad; the push is `git push origin master` after this commit, seven commits including this.

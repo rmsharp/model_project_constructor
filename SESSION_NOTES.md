@@ -93,6 +93,14 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 277 Did
+**Deliverable:** **the eleventh trim of `SESSION_NOTES.md`** — the file passed the 196,608 B trigger at Session 275's
+close-out and stands at 220,549 B. Chosen by the operator at Phase 0 from a picker (first option, recommended). (IN PROGRESS)
+**Started:** 2026-10-03
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until
+close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 276 Did
 **Deliverable:** **`agent.error` now carries the exception's class and never what it said — COMPLETE**, closing `BACKLOG.md`'s item
 *"The run log records the full text of any exception a runner raises"* (removed; its residue and two further findings filed).
