@@ -122,7 +122,10 @@ for q in report.primary_queries:
 ## FAILED_AT_WEBSITE
 
 **What happened:** The Website Agent returned a `RepoProjectResult`
-with `status != "COMPLETE"` (usually `FAILED` or `PARTIAL`).
+with `status != "COMPLETE"` (usually `FAILED` or `PARTIAL`), or the
+website stage raised an exception or was interrupted and the
+orchestrator saved a `FAILED` result itself (a `failure_reason` that
+begins `unexpected_error:` or `interrupted:`; see below).
 
 **Checkpoint state:** All envelope files AND
 `RepoProjectResult.result.json` are present. The terminal result is
@@ -140,6 +143,7 @@ print(result["status"])
 print(result["failure_reason"])
 print(result["files_created"])     # partial list if PARTIAL
 print(result["project_url"])       # may be set even on FAILED if the project was created
+                                   # (always empty for the two reasons below)
 ```
 
 **Root causes:**
@@ -151,6 +155,28 @@ print(result["project_url"])       # may be set even on FAILED if the project wa
   error). Check `files_created` against the expected set.
 - Timeout: the repo host was too slow. Check `duration_ms` in the
   `agent.end` or `agent.error` log event.
+
+**`failure_reason: unexpected_error: <ClassName> (the website stage may already have created a project ...)`**
+(since Session 275). The website stage raised something that is not a
+repository-host error: a reply the adapter could not read (no `id`, JSON
+nested very deeply, a malformed project id), or a bug. The exit code is 1 and
+the status `FAILED_AT_WEBSITE`, as for any other failure. **No traceback is
+printed and none is saved**: the reason names the exception's class and nothing
+it said, because the message can quote what the host sent. The project id, URL
+and commit are empty because the stage cannot tell whether it got as far as
+creating the project. **Treat the project as possibly existing**: look in the
+target namespace for a project named after the target's `project_name_hint`
+before you re-run. `--resume` refuses (exit 2, "Delete ... to retry the website
+stage"); that refusal is what stops a second project being made. The
+`agent.error` log event has the class and, in its `context`, the message, if
+your logging shows the context (`OPERATIONS.md` section 3.1).
+
+**`failure_reason: interrupted: KeyboardInterrupt (...)`** (or `SystemExit`).
+The run was stopped (Ctrl-C, or a `sys.exit`) while the website stage ran. The
+result is saved and the interrupt is re-raised, so the process still ends as
+you asked. The same advice applies: the project may exist. A kill the process
+cannot catch (`kill -9`, the machine losing power) saves nothing, and `--resume`
+then re-runs the stage; check the host first.
 
 **A token leaked by a run before Session 273.** If the token had a trailing carriage
 return, line feed, tab or space (or a NUL, vertical tab or form feed inside it), the HTTP
@@ -225,6 +251,9 @@ printed by `scripts/run_pipeline.py` (see `BACKLOG.md`).
 
 If the pipeline raises an unhandled exception (as opposed to returning
 a `FAILED_AT_*` status), the `PipelineResult` was never constructed.
+An exception from the **website** runner is not one of these: since Session 275
+it is saved as `FAILED_AT_WEBSITE` (see `unexpected_error:` above). Exceptions
+from the intake and data runners still propagate.
 The checkpoint files written before the crash are still on disk.
 
 **What to inspect:**

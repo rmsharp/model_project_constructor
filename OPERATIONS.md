@@ -338,7 +338,10 @@ the real LLM ran. For B2, also inspect the intake envelope: the
 
 ## 5. Resume after a partial run
 
-A crashed run is resumed with `--resume <run_id>`. The orchestrator
+A crashed run is resumed with `--resume <run_id>`. (A crash or Ctrl-C **inside the
+website stage** is the exception: since Session 275 it is saved as a `FAILED`
+result, so `--resume` refuses; the project may already exist on the host. See
+`TROUBLESHOOTING.md`, `FAILED_AT_WEBSITE`.) The orchestrator
 inspects `$MPC_CHECKPOINT_DIR/<run_id>/`, reuses every envelope already
 on disk, and re-executes from the first missing stage onward.
 
@@ -359,7 +362,7 @@ Behavior by checkpoint state:
 | `+ DataRequest.json` | `data` | Runs data + website |
 | `+ DataReport.json` | `website` | Runs website only |
 | `+ RepoProjectResult.result.json` (status=`COMPLETE`) | (no-op) | Exit 0 with project URL |
-| `+ RepoProjectResult.result.json` (status=`FAILED`) | (refused) | Exit 2 with retry recipe |
+| `+ RepoProjectResult.result.json` (status=`FAILED`) | (refused) | Exit 2 with retry recipe (also after the website stage raised or was interrupted: `unexpected_error:` / `interrupted:`) |
 | Successor without predecessor | (refused) | Exit 2 (`ResumeInconsistent`) |
 
 The resume banner names the chosen point and the skipped stages, e.g.:
