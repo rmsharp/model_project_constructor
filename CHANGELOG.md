@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S278 claim: the scripted intake runner's exception text out of the saved report and the printed `Failure:` line *(in progress)*
+- **Change:** Session 278 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is `scripts/run_pipeline.py:206` (`_draft_incomplete_from_exception`), which writes the raw exception text into `missing_fields`; that is copied into the run's `failure_reason`, printed as `Failure: ...` and saved in `IntakeReport.json`. The operator chose it at Phase 0 from a picker (the recommended first option).
+- **Commit/PR:** this commit
+- **Session:** S278 · **Verified:** ledger-only; the Phase 0 reconcile found both frontiers at HEAD (gap 0) and both ledger guards green (82 passed) before the claim.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S277 — close out: the eleventh trim of `SESSION_NOTES.md`; the harness and the sweep recorded; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 277 record (replacing the claim stub): the cut and why it is the fewest records, the sweep published as a dated fact (35 files by the strict form, 37 by the broad one), the coverage harness the new proof's header points at (specified there, validated on the tenth proof first), the two workflows and what each found, the Session 276 handoff evaluation (8/10: one wrong margin figure) and this session's self-assessment (8/10: three header defects carried by me and caught by the review), the decay term, what is next and the gotchas for the twelfth trim. `PROJECT_LEARNINGS.md` #339-342 (two builders and a false comment; re-measure after the last edit; validate a rebuilt harness and keep forward promises; perturb every hand-typed list), `CLAUDE.md`'s count and size, `HANDOFFS.md`'s receipt completed.
 - **Non-commit actions:** the operator answered three pickers (the Phase 0 task, the eight-file commit, push at close-out); two read-only workflows ran (6 scouts, 1.59M tokens; 5 lenses and 32 skeptics, 3.77M tokens); a coverage loop of 166 `--self-test` runs on this proof and the tenth ran in a scratch clone; one `gitleaks` scan of the history (9 findings, all fake token fixtures from Sessions 273-276, none from this trim).

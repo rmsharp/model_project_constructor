@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S278
+date: 2026-10-03
+status: pending
+active_task: The scripted intake runner's exception text out of the saved IntakeReport and the printed Failure line (scripts/run_pipeline.py:206, BACKLOG.md:614-619 point 1), chosen by the operator at Phase 0 from a picker. Claim first, then fix with a test through the real script, then close out.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S277
 date: 2026-10-03
 status: complete

@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 278 Did
+**Deliverable:** the scripted intake runner's exception text out of the saved report and the printed `Failure:` line (`scripts/run_pipeline.py:206`, `BACKLOG.md:614-619` point 1) (IN PROGRESS)
+**Started:** 2026-10-03 18:49
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 277 Did
 **Deliverable:** **the eleventh trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 269 → 258 (twelve records, 1,702 lines,
 126,395 B, a pure byte slice) are in
