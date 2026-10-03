@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S276
+date: 2026-10-02
+status: pending
+active_task: The run log no longer records an exception's message: make_logged_runner (orchestrator/logging.py:94-105) writes str(exc) into the agent.error context, unscrubbed (BACKLOG.md:572, found by Session 275's review); log the class name only, or redact, and hold it with a test that installs the JSON formatter against a host that echoes the token.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S275
 date: 2026-10-02
 status: complete

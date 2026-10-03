@@ -93,6 +93,18 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 276 Did
+**Deliverable:** **the run log no longer records an exception's message** — `BACKLOG.md`'s item *"The run log records the full text
+of any exception a runner raises"* (`BACKLOG.md:572`; `orchestrator/logging.py:94-105`, `make_logged_runner` writes
+`"error_message": str(exc)` into the `agent.error` context, unscrubbed). Found by Session 275's review; a host-echoed token can
+reach a log file with the JSON formatter `OPERATIONS.md` section 3.1 recommends. Chosen by the operator at Phase 1 from the
+Phase 0 picker (first option, recommended). (IN PROGRESS)
+**Started:** 2026-10-02 23:14
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase
+3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's
+reconcile.
+
 ### What Session 275 Did
 **Deliverable:** **a website stage that raises, or is interrupted, now leaves a saved FAILED result, so `--resume` refuses instead of
 creating a second project on the host — COMPLETE**, closing `BACKLOG.md`'s item *"A website stage that raises something other than a
