@@ -90,8 +90,12 @@ class Host:
             return _http(400, "Bad Request", b"[" * 100_000)
         if self.how == "echoed-id":
             # A host that echoes the token it was sent as the project's id. The next request puts
-            # the id in a URL, ``httpx`` refuses the control code and quotes the URL in its message:
-            # an exception whose MESSAGE carries the token, which no other case here does.
+            # the id in a URL and ``httpx`` refuses the control code. (Session 275 wrote that it
+            # "quotes the URL in its message", an exception whose MESSAGE carries the token. It does
+            # not: the message names the control character and its position, measured by Session 276
+            # on httpx 0.28.1 and 0.27.0. So the token is not in this exception's text, and this
+            # case holds that nothing prints the id; ``test_logging_error_text.py`` holds the
+            # message-carrying cases with exceptions that really quote.)
             created = {
                 "id": f"{TOKEN}\x07 x",
                 "web_url": f"{self.base}/p/x",

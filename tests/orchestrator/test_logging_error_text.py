@@ -3,11 +3,19 @@
 Session 276, closing the ``BACKLOG.md`` item *"The run log records the full text of any exception a
 runner raises"* (see ``CHANGELOG.md``). ``make_logged_runner`` used to put ``str(exc)`` in the
 event's ``context``. Python's default handler does not print a record's ``context``, but the JSON
-formatter ``OPERATIONS.md`` section 3.1 recommends does, and an exception can say anything the
-repository host, a database driver or a model's client said to it: ``httpx.InvalidURL`` quotes the
-URL it refused, and a host that echoes the access token as a project id puts the token in that
-URL. A redaction that needs no secret cannot find a bare token, so the message is not carried at
-all, and the exception's own text is never read.
+formatter ``OPERATIONS.md`` section 3.1 recommends does, and an exception says whatever the code
+that raised it put in it: a pydantic ``ValidationError`` quotes the input it refused
+(``input_value='...'``), ``httpx.InvalidURL`` quotes a host or a port it refused, a database driver
+may echo the connection back, and a gateway's error page can echo a header. (``httpx`` does NOT
+quote a project id placed in the URL *path*: the message names the control character and its
+position. The first draft of this change, and Session 275's end-to-end case, assumed it did; the
+review measured otherwise on httpx 0.28.1 and 0.27.0, and ``TestTheRealExceptionsHoldTheToken``
+pins the cases that are real.) A redaction that needs no secret cannot find a bare token, so the
+message is not carried at all, and the exception's own text is never read.
+
+A leak is any channel, not only the record the wrapper emits (learning #329): the fixture below
+collects every record on every logger at ``DEBUG`` and, when the test ends, checks the screen
+(file descriptors 1 and 2) and the warnings for what the exception said.
 
 These tests render the record the way the worst formatter would (every attribute of it, the
 traceback if one is attached, JSON-escaped as a real one escapes) and look for what the exception
@@ -19,11 +27,14 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import traceback
+import warnings
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import httpx
 import pytest
+from pydantic import TypeAdapter, ValidationError
 
 from model_project_constructor.orchestrator import (
     CheckpointStore,
@@ -49,7 +60,8 @@ TOKEN = "glpat-SECRET9f3kQ7xZ2mW"
 #: A message nothing may carry out of the exception: a token, a host, a second line, a control code.
 HOSTILE = f"{TOKEN} \x1b[2J\x07 sent to https://host.example/x\nsecond line"
 
-#: What none of the log's output may contain: raw, and as a JSON writer escapes a control code.
+#: What none of the output may contain. A JSON writer escapes a control code (``\\u001b``) and the
+#: screen does not (``\x1b``), so each form is listed for the channel that would carry it.
 LEAKS = (TOKEN, "host.example", "second line", "\x1b", "\\u001b")
 
 #: Exactly the fields an ``agent.error`` context may carry.
@@ -86,6 +98,24 @@ class _Enormous(Exception):
         return HOSTILE + "x" * 2_000_000
 
 
+def _real_validation_error() -> ValidationError:
+    """What a model parse of a reply says: pydantic quotes the input it refused."""
+    try:
+        TypeAdapter(int).validate_python(HOSTILE)
+    except ValidationError as error:
+        return error
+    raise AssertionError("pydantic accepted the input")
+
+
+def _real_invalid_port() -> httpx.InvalidURL:
+    """What ``httpx`` says about a refused port: it quotes the port."""
+    try:
+        httpx.URL(f"https://host:{TOKEN}/x")
+    except httpx.InvalidURL as error:
+        return error
+    raise AssertionError("httpx accepted the URL")
+
+
 def _chained() -> BaseException:
     error = RuntimeError("outer")
     error.__cause__ = ValueError(HOSTILE)
@@ -102,9 +132,11 @@ def _in_context() -> BaseException:
 EXCEPTIONS: list[pytest.ParameterSet] = [
     pytest.param(lambda: RuntimeError(HOSTILE), id="RuntimeError"),
     pytest.param(lambda: KeyError(HOSTILE), id="KeyError"),
+    pytest.param(_real_validation_error, id="real-pydantic-ValidationError"),
+    pytest.param(_real_invalid_port, id="real-httpx-InvalidURL-for-a-port"),
     pytest.param(
-        lambda: httpx.InvalidURL(f"Invalid non-printable ASCII character in URL, {HOSTILE!r}"),
-        id="InvalidURL-quoting-the-url",
+        lambda: httpx.InvalidURL(f"a hand-built message: {HOSTILE!r}"),
+        id="InvalidURL-with-a-hand-built-message",
     ),
     pytest.param(lambda: OSError(2, HOSTILE, HOSTILE), id="OSError-with-a-filename"),
     pytest.param(
@@ -169,8 +201,17 @@ class _Capture:
 
 
 @pytest.fixture
-def log() -> Iterator[_Capture]:
-    """The documented recipe: a JSON formatter on ``model_project_constructor.orchestrator``."""
+def log(capfd: pytest.CaptureFixture[str]) -> Iterator[_Capture]:
+    """A JSON formatter on EVERY logger, at ``DEBUG``, and a check of the screen at the end.
+
+    ``OPERATIONS.md`` section 3.1 puts the formatter on ``model_project_constructor.orchestrator``;
+    this puts it on the root logger, which that logger propagates to, so a record sent through any
+    other logger or at any level is collected too. A fixture that watched only the orchestrator
+    logger at ``INFO`` let five mutants through (a ``DEBUG`` companion record, the root logger,
+    ``sys.stderr``, ``warnings.warn``, ``traceback.print_exc``). When the test ends, what reached
+    file descriptors 1 and 2 and what was warned are searched for what the exception said, so a
+    channel nobody thought to assert on is still checked.
+    """
     capture = _Capture()
 
     class _Handler(logging.Handler):
@@ -180,15 +221,23 @@ def log() -> Iterator[_Capture]:
 
     handler = _Handler()
     handler.setFormatter(_RendersEverything())
-    logger = logging.getLogger(ORCHESTRATOR_LOGGER_NAME)
-    previous = logger.level
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    try:
-        yield capture
-    finally:
-        logger.removeHandler(handler)
-        logger.setLevel(previous)
+    root = logging.getLogger()
+    orchestrator = logging.getLogger(ORCHESTRATOR_LOGGER_NAME)
+    previous = (root.level, orchestrator.level)
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    orchestrator.setLevel(logging.DEBUG)
+    with warnings.catch_warnings(record=True) as warned:
+        warnings.simplefilter("always")
+        try:
+            yield capture
+        finally:
+            root.removeHandler(handler)
+            root.setLevel(previous[0])
+            orchestrator.setLevel(previous[1])
+    screen = capfd.readouterr()
+    _nothing_leaked(screen.out + screen.err)
+    _nothing_leaked("".join(str(w.message) for w in warned))
 
 
 def _raising(error: BaseException) -> Callable[[], None]:
@@ -266,6 +315,36 @@ class TestTheMessageIsNeverRead:
         _nothing_leaked(log.rendered)
 
 
+class TestTheOriginalExceptionIsUnchanged:
+    """The event is emitted outside the ``except`` block, so the exception is re-raised by name
+    and not by a bare ``raise``; nothing about it may change on the way out."""
+
+    def test_its_explicit_cause_is_left_as_it_was(self, log: _Capture) -> None:
+        cause = ValueError("inner")
+        error = RuntimeError("outer")
+        error.__cause__ = cause
+        with pytest.raises(RuntimeError) as raised:
+            _wrap(error)()
+        assert raised.value.__cause__ is cause
+        assert raised.value.__suppress_context__ is True  # what ``raise ... from cause`` sets
+
+    def test_its_implicit_context_is_left_as_it_was(self, log: _Capture) -> None:
+        earlier = KeyError("earlier")
+        error = RuntimeError("outer")
+        error.__context__ = earlier
+        with pytest.raises(RuntimeError) as raised:
+            _wrap(error)()
+        assert raised.value.__context__ is earlier
+        assert raised.value.__cause__ is None
+        assert raised.value.__suppress_context__ is False
+
+    def test_its_traceback_still_reaches_the_runner(self, log: _Capture) -> None:
+        with pytest.raises(RuntimeError) as raised:
+            _wrap(RuntimeError("x"))()
+        frames = [f.name for f in traceback.extract_tb(raised.value.__traceback__)]
+        assert "runner" in frames  # the function that raised it, not only the wrapper
+
+
 class TestTheClassName:
     def test_an_ordinary_class_name_is_carried(self, log: _Capture) -> None:
         class RepoClientError(Exception):
@@ -285,8 +364,10 @@ class TestTheClassName:
         assert log.error_context()["error_type"] == "<unprintable>"
         assert len(log.rendered) < 5_000
         _nothing_leaked(log.rendered)
-        assert "Caf" not in log.rendered
-        assert "AAAA" not in log.rendered
+        if name:
+            # JSON-escaped, as the formatter wrote it; a prefix long enough that no checkout path
+            # (the record carries the path of ``logging.py``) can contain it by accident.
+            assert json.dumps(name)[1:51] not in log.rendered
 
     def test_the_longest_name_carried_is_one_hundred_characters(self, log: _Capture) -> None:
         longest = type("E" * 100, (Exception,), {})
@@ -306,6 +387,126 @@ class TestTheClassName:
         with pytest.raises(type(error)):
             _wrap(error)()
         assert log.error_context()["error_type"] == saved_name
+
+
+class _NameThatRaises(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        raise RuntimeError("the class name cannot be read")
+
+
+class _HostileText(str):
+    """A ``str`` that answers the class-name guard's questions as a plain identifier would."""
+
+    def isascii(self) -> bool:
+        return True
+
+    def isidentifier(self) -> bool:
+        return True
+
+    def __len__(self) -> int:
+        return 5
+
+
+class _NameThatIsAHostileStr(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        return _HostileText(f"\x1b[2J{TOKEN}")
+
+
+def _caught(error: BaseException) -> BaseException | None:
+    """What the wrapped runner raised. ``pytest.raises`` is not used for these classes: pytest
+    formats a failure with ``type.__name__``, which is the property under test, and crashes with
+    an ``INTERNALERROR`` instead of reporting the failure."""
+    try:
+        _wrap(error)()
+    except BaseException as caught:
+        return caught
+    return None
+
+
+class TestAClassWhoseNameCannotBeTrusted:
+    """The class name is read by the wrapper, so reading it must not be a raise site, and a
+    ``str`` subclass must not answer the guard's questions for it."""
+
+    def test_a_name_that_raises_does_not_replace_the_runners_exception(
+        self, log: _Capture
+    ) -> None:
+        class Odd(Exception, metaclass=_NameThatRaises):
+            pass
+
+        error = Odd(HOSTILE)
+        assert _caught(error) is error
+        assert log.error_context()["error_type"] == "<unprintable>"
+
+    def test_a_name_that_is_a_str_subclass_is_replaced(self, log: _Capture) -> None:
+        class Odd(Exception, metaclass=_NameThatIsAHostileStr):
+            pass
+
+        error = Odd(HOSTILE)
+        assert _caught(error) is error
+        assert log.error_context()["error_type"] == "<unprintable>"
+        _nothing_leaked(log.rendered)
+
+
+class TestAFailingLogSink:
+    """When a handler cannot write, ``logging`` prints the failure to the screen, with the
+    exception being handled chained to it. Emitting from inside the ``except`` block put the
+    runner's exception in that chain, message and all (found by the Session 276 review)."""
+
+    def test_a_handler_that_cannot_write_does_not_print_the_exception(
+        self, log: _Capture, capfd: pytest.CaptureFixture[str]
+    ) -> None:
+        class _DeadStream:
+            def write(self, _text: str) -> None:
+                raise ValueError("the sink is down")
+
+            def flush(self) -> None:
+                pass
+
+        sink = logging.StreamHandler(_DeadStream())
+        logger = logging.getLogger(ORCHESTRATOR_LOGGER_NAME)
+        logger.addHandler(sink)
+        error = RuntimeError(HOSTILE)
+        try:
+            with pytest.raises(RuntimeError) as raised:
+                _wrap(error)()
+        finally:
+            logger.removeHandler(sink)
+        assert raised.value is error
+        screen = capfd.readouterr().err
+        assert "Logging error" in screen  # the sink did fail, and logging said so
+        assert "the sink is down" in screen
+        _nothing_leaked(screen)
+
+
+class TestTheCaptureReachesWhatItGuards:
+    def test_it_collects_debug_records_on_any_logger(self, log: _Capture) -> None:
+        logging.getLogger("some.other.logger").debug("elsewhere")
+        logging.getLogger(ORCHESTRATOR_LOGGER_NAME).debug("detail")
+        assert [r.getMessage() for r in log.records] == ["elsewhere", "detail"]
+
+    def test_it_renders_what_it_collects(self, log: _Capture) -> None:
+        logging.getLogger("some.other.logger").warning("%s", TOKEN)
+        assert TOKEN in log.rendered
+
+
+class TestTheRealExceptionsHoldTheToken:
+    """The premise of the real-exception cases above, so a library release that stops quoting
+    fails here with a clear name instead of making them pass vacuously."""
+
+    def test_pydantic_quotes_the_input_it_refused(self) -> None:
+        assert TOKEN in str(_real_validation_error())
+
+    def test_httpx_quotes_a_port_it_refused(self) -> None:
+        assert TOKEN in str(_real_invalid_port())
+
+    def test_httpx_does_not_quote_a_path(self) -> None:
+        """What the first draft of this change assumed, and Session 275's end-to-end case: it is
+        not so, on httpx 0.28.1 or 0.27.0."""
+        with pytest.raises(httpx.InvalidURL) as raised:
+            httpx.URL(f"https://host/api/v4/projects/{TOKEN}\x07 x/repository/commits")
+        assert TOKEN not in str(raised.value)
 
 
 class TestThePipelineAsTheScriptBuildsIt:

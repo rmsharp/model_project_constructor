@@ -62,13 +62,22 @@ def _class_name(error: BaseException) -> str:
     safe to carry; a class built at run time (``type(name, ...)``) can be named anything, and a
     name that is not a plain identifier is replaced rather than carried. The same rule
     ``orchestrator.pipeline._website_failure`` applies to the reason it saves; a test holds the
-    two in step.
+    two in step for every ordinary class.
+
+    It fails closed, and is stricter than that copy in one respect. The wrapper reads the name for
+    an exception it is about to re-raise, so reading it must not be a raise site: a metaclass whose
+    ``__name__`` raises would otherwise replace the runner's exception. And the name must be an
+    exact ``str``: a subclass can answer ``isascii`` and ``len`` however it likes. (The website
+    stage's copy still reads the name unguarded; ``BACKLOG.md`` files it.)
     """
 
-    name = type(error).__name__
-    if not (name.isascii() and name.isidentifier() and len(name) <= 100):
-        return "<unprintable>"
-    return name
+    try:
+        name = type(error).__name__
+        if type(name) is str and name.isascii() and name.isidentifier() and len(name) <= 100:
+            return name
+    except Exception:
+        pass
+    return "<unprintable>"
 
 
 def make_logged_runner(
@@ -95,16 +104,20 @@ def make_logged_runner(
     "correlation_id"}`` on the ``context`` extra.
 
     ``agent.error`` never carries what the exception said. An exception's
-    text is whatever a repository host, a database driver or a model's
-    client put in it (``httpx.InvalidURL`` quotes the URL it refused, and a
-    host can echo the access token as a project id), and a JSON formatter
-    renders the whole ``context``. Nothing that needs no secret can find a
-    bare token in free text, so the message is not read at all: the record
-    has no ``error_message``, no ``exc_info`` (a traceback prints the
-    message and the chain behind it), and the wrapper cannot be replaced by
-    an exception whose own ``__str__`` raises. To see the text, catch the
-    exception where it is raised and scrub it with what that code knows
-    (the adapters do, for the ``RepoClientError`` they raise).
+    text is whatever the code that raised it put in it (a pydantic
+    ``ValidationError`` quotes the input it refused, a database driver may
+    echo the connection back, a gateway's error page can echo a header),
+    and a JSON formatter renders the whole ``context``. Nothing that needs
+    no secret can find a bare token in free text, so the message is not
+    read at all: the record has no ``error_message``, no ``exc_info`` (a
+    traceback prints the message and the chain behind it), and the wrapper
+    cannot be replaced by an exception whose own ``__str__`` raises. The
+    event is emitted after the ``except`` block, not inside it: a handler
+    that fails while writing has the exception being handled chained to its
+    own, and ``logging`` prints that chain, message included, to the
+    screen. To see the text, catch the exception where it is raised and
+    scrub it with what that code knows (the adapters do, for the
+    ``RepoClientError`` they raise).
     """
 
     log = logger or get_logger()
@@ -120,26 +133,30 @@ def make_logged_runner(
         try:
             result = runner(*args, **kwargs)
         except Exception as exc:
+            failure = exc
             duration_ms = round((time.perf_counter() - start) * 1000, 2)
-            _emit(
-                log,
-                logging.ERROR,
-                EVENT_AGENT_ERROR,
-                {
-                    **base_ctx,
-                    "duration_ms": duration_ms,
-                    "error_type": _class_name(exc),
-                },
-            )
-            raise
-        duration_ms = round((time.perf_counter() - start) * 1000, 2)
-        end_ctx: dict[str, Any] = {
-            **base_ctx,
-            "duration_ms": duration_ms,
-            "status": getattr(result, "status", None),
-        }
-        _emit(log, logging.INFO, EVENT_AGENT_END, end_ctx)
-        return result
+        else:
+            duration_ms = round((time.perf_counter() - start) * 1000, 2)
+            end_ctx: dict[str, Any] = {
+                **base_ctx,
+                "duration_ms": duration_ms,
+                "status": getattr(result, "status", None),
+            }
+            _emit(log, logging.INFO, EVENT_AGENT_END, end_ctx)
+            return result
+        # Outside the ``except`` block on purpose: a handler that fails inside it has the runner's
+        # exception chained to its own, and ``logging`` prints the chain (message included).
+        _emit(
+            log,
+            logging.ERROR,
+            EVENT_AGENT_ERROR,
+            {
+                **base_ctx,
+                "duration_ms": duration_ms,
+                "error_type": _class_name(failure),
+            },
+        )
+        raise failure
 
     return wrapped
 
