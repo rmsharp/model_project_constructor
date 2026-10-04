@@ -16,9 +16,9 @@ A host's SUCCESS replies are its words too (``BACKLOG.md`` route 8): the project
 project id, the default branch and the commit id in a ``2xx`` become the fields of ``ProjectInfo``
 and ``CommitInfo``, then of ``RepoProjectResult``, which the website command and the pipeline
 script print and the pipeline saves; and the id and the branch go back to the host inside a request
-path, where a C0 control character or DEL makes ``httpx`` raise ``InvalidURL`` out of the adapter,
-past :func:`scrubbed_errors`, because it is not a ``RepoClientError``. :func:`scrubbed_values`
-applies the same scrub to what a protocol method RETURNS.
+path, where a C0 control character or DEL used to make ``httpx`` raise ``InvalidURL`` out of the
+adapter, past :func:`scrubbed_errors`, because it is not a ``RepoClientError``.
+:func:`scrubbed_values` applies the same scrub to what a protocol method RETURNS.
 
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
@@ -26,11 +26,13 @@ not listed in :func:`_rewrites` (base64, a hash, or a different escaping of some
 only); one with characters inserted in it, or cut short, or split across lines by the host; a second
 credential (userinfo in the host URL travels as ``Authorization: Basic base64(user:password)``); a
 message built, or a value returned, by a ``RepoClient`` other than the two adapters; and a value an
-adapter reads from one reply and puts in its next request, which :func:`scrubbed_values` never
-sees because it is not on what the method returns (a C0 control or DEL in GitHub's ``parent_sha``,
-which goes into a path, raises ``InvalidURL``; a lone surrogate in any of GitHub's ``parent_sha``,
-base-tree, blob, tree and commit shas, or in GitLab's group id, raises ``UnicodeEncodeError``;
-``BACKLOG.md``).
+adapter reads from one reply and puts in its next request (GitHub's ``parent_sha``, base-tree, blob,
+tree and commit shas, GitLab's group id), which :func:`scrubbed_values` never sees because it is not
+on what the method returns. That value goes back to the host unscrubbed. A request ``httpx``
+cannot build from it (a C0 control or DEL in a path, a lone surrogate in a path or, from 0.28, in a
+body) is refused by ``RepoHttpClient.build_request`` and fails the call as a ``RepoClientError``
+with a fixed text (``_http.py``); ``BACKLOG.md`` holds what remains (the id and the branch go into
+paths unquoted).
 """
 
 from __future__ import annotations

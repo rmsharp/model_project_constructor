@@ -275,11 +275,12 @@ print(result["project_url"])       # may be set even on FAILED if the project wa
 **`failure_reason: unexpected_error: <ClassName> (the website stage may already have created a project ...)`**
 (since Session 275). The website stage raised something that is not a
 repository-host error: a reply the adapter could not read (no `id`, JSON
-nested very deeply, a body that is not a JSON object, a control character in
-the commit reference GitHub hands back, or a lone surrogate in any id or commit
-reference an adapter sends back to the host), or a bug. (A project id or branch
-with a control character was on this list until Session 281; see
-*A project address, id, branch or commit id with terminal control codes* below.)
+nested very deeply, a body that is not a JSON object), or a bug. (A project id
+or branch with a control character was on this list until Session 281, and so
+were a control character in the commit reference GitHub hands back and a lone
+surrogate in any id or commit reference an adapter sends back to the host until
+Session 282; see *A project address, id, branch or commit id with terminal
+control codes* below.)
 The exit code is 1 and
 the status `FAILED_AT_WEBSITE`, as for any other failure. **No traceback is
 printed and none is saved**: the reason names the exception's class and nothing
@@ -371,9 +372,17 @@ made of nothing but control codes is sent empty. Nothing rewrites a result file 
 and a snippet that prints `result['project_url']` after `json.loads` (see above) prints an old
 value as it was saved.
 **What this does not cover:** a `RepoClient` of your own is not scrubbed (the same limit as for
-failure text), and a value an adapter reads and sends in its next request is not on what it
-returns (GitHub's commit references, GitLab's group id: `BACKLOG.md`, *An adapter puts a value
-the host sent into its next request*).
+failure text), and a value an adapter reads and sends in its next request (GitHub's commit
+references, GitLab's group id) is not on what it returns, so it goes back to the host as it came.
+Before Session 282 a control code in GitHub's parent commit reference, or a broken half of a
+character in any of those values, made the next request impossible to build and the website
+command ended in a traceback (`InvalidURL`, `UnicodeEncodeError`), possibly after the project
+already existed. Now that call fails like any failed call: the `failure_reason` says `the
+request could not be built`, the HTTP library's own words are not shown, and the commit is
+retried (`repo_error_retry_exhausted`) **with the project already created**. Retrying cannot
+help, because the value is the host's; look at what the host answered at that step. The project
+id and the branch are still sent in an address without being encoded (`BACKLOG.md`, *The id and
+the branch go into request paths unquoted*).
 
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).
