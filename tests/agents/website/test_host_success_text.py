@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import httpx
 import pytest
 
 from model_project_constructor.agents.website._host_text import REDACTED, scrub_host_text
@@ -35,6 +34,7 @@ from model_project_constructor.schemas.v1.repo import RepoProjectResult, RepoTar
 from tests.agents.website.loopback import serving_raw
 from tests.agents.website.success_hosts import (
     HOSTILE,
+    HTTPX_WRITES_JSON_AS_UTF8,
     SHIPPED,
     TOKEN,
     Shipped,
@@ -46,34 +46,20 @@ from tests.agents.website.success_hosts import (
 FILES = {"README.md": "# r\n", "analysis/01  plan.qmd": "q\n"}
 URL = "https://h.example/g/p"
 
-#: Not route 8, and open: GitHub's ``commit_files`` sends the host's own commit sha back in the body
-#: of its next request, and ``httpx`` cannot encode a lone surrogate there, so the run raises
-#: ``UnicodeEncodeError`` (not a ``RepoClientError``) BEFORE the scrub, which is on what the method
-#: returns, can see the value. ``strict``: the day that is fixed these go red and the marks go.
-#: Only from ``httpx`` 0.28, which writes a JSON body as UTF-8 (``ensure_ascii=False``); 0.27, which
-#: ``pyproject.toml`` still admits, escapes the surrogate to ASCII and the run completes.
-HTTPX_WRITES_JSON_AS_UTF8 = tuple(int(part) for part in httpx.__version__.split(".")[:2]) >= (0, 28)
-GITHUB_REUSES_THE_SHA = pytest.mark.xfail(
-    HTTPX_WRITES_JSON_AS_UTF8,
-    strict=True,
-    raises=UnicodeEncodeError,
-    reason="BACKLOG.md: an adapter puts a host's value into its next request unscrubbed "
-    "(GitHub's commit sha in a PATCH body, parent_sha in a path)",
-)
-
 
 def _commit_cases() -> list[object]:
+    """Every host and every kind of text, except the one a commit cannot complete with.
+
+    GitHub's ``commit_files`` sends the host's own commit sha back in the body of its next request,
+    and ``httpx`` 0.28 cannot encode a lone surrogate there: the request is refused, and the run
+    FAILS cleanly instead of completing with a scrubbed sha. ``test_host_reuse_text.py`` holds that
+    outcome; with ``httpx`` 0.27 the surrogate is escaped and sent, and the case stays here.
+    """
     return [
-        pytest.param(
-            shipped,
-            kind,
-            id=f"{shipped.name}-{kind}",
-            marks=[GITHUB_REUSES_THE_SHA]
-            if shipped.host == "github" and kind == "lone-surrogate"
-            else [],
-        )
+        pytest.param(shipped, kind, id=f"{shipped.name}-{kind}")
         for shipped in SHIPPED
         for kind in sorted(HOSTILE)
+        if not (HTTPX_WRITES_JSON_AS_UTF8 and shipped.host == "github" and kind == "lone-surrogate")
     ]
 
 
