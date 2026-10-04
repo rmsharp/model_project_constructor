@@ -95,10 +95,138 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 280 Did
-**Deliverable:** **`DataAgent.run` is total: the report is assembled inside the same `try` as the graph (route 9 of `BACKLOG.md`'s "Seven more routes" item, `:530`) (IN PROGRESS)**
-**Started:** 2026-10-03 22:14
-**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **`DataAgent.run` is total: the report is built inside a guard, so a model reply it cannot be assembled from is `EXECUTION_FAILED` with `report assembly failed: <Class>`, not a raise — COMPLETE.** Route 9 of `BACKLOG.md`'s
+"Seven more routes" item. Only `self._app.invoke` was guarded; `_assemble_complete_report` runs after it. I reproduced the
+symptom through the real script before changing anything: a loopback gateway that answers every question validly except
+`expected_row_count_order` gave exit 1, a traceback on stderr that quoted the model's reply (pydantic's `input_value`, the
+ESC as `\x1b`), no status line, and no `DataReport.json` in the checkpoint directory. Now the script exits 1 with
+`Status:  FAILED_AT_DATA`, the saved report reads `Data Agent run failed: report assembly failed: ValidationError`, it holds
+no queries, and nothing the model said is on the screen or in any file. Chosen by the operator at Phase 0 from a picker (first
+option, recommended). **The operator also decided:** push at close-out (yes). **Mine, and not put to the operator:** a second
+`try` around the assembly rather than "the same `try`" (the status branch sits between the two); the class name through
+`db.safe_class_name`, as the graph's site does; adding the assembly as a third arm of the shared `SITES` parametrization (it
+inherits all four of the other sites' tests) and testing that no guard swallows an interrupt at all three sites (wider than
+route 9); hoisting `message()` into `tests/agents/website/loopback.py`; fixing the review's findings about this diff's own tests
+and prose and filing the rest. **Started:** 2026-10-03 22:14. **Completed:** 2026-10-03. **Commits: nine** — `e2e0a16` (claim,
+alone), `6a59fa3` (the guard and its unit tests), `ec05df5` (the end-to-end test), `2857a0b` and `e7f5865` (docs, `BACKLOG.md`),
+`cf4ced9` (the review's test findings), `a3d359c` (its documentation findings), `9e425a3` (what it found that this change did not
+cause) and this close-out. Each carries its own `CHANGELOG.md` entry; the push is recorded in the close-out's.
+
+#### What changed
+- **`agent.py:65-75`:** the `_assemble_complete_report(...)` call is in `try`/`except Exception`; the handler returns
+  `_execution_failed_report(request, f"report assembly failed: {safe_class_name(e)}")`. Class only: pydantic's message quotes the
+  refused value, and the report is saved and written into a committed project.
+- **Tests (3,053 → 3,073):** `test_data_agent.py` 51 → 69 (§Session 280, `:1508`): an `"assembly"` arm on `SITES` (+8: the class and
+  none of the text, a message that cannot be printed, four class names `type()` can build, two it cannot); `FAULTS` (`:1595`: an
+  order outside the vocabulary, a different number of quality-check groups, a summary that is not text) each asserting the failed
+  report and, separately, that nothing the model said is in any string; a control that a sound reply still completes; the
+  interrupt test (`:1569`, one per site). `tests/scripts/test_run_pipeline_data_bad_reply.py` (new, 2 tests): the real script
+  against a gateway answering all five questions, and the premise that pydantic quotes what it refuses. `loopback.py:183`
+  `message()`, shared with `test_gateway_error_text.py`.
+- **Docs:** `packages/data-agent/USAGE.md` (error contract, the CLI's exit code, a recipe), `TROUBLESHOOTING.md:119` §FAILED_AT_DATA
+  (a root-cause entry; the recipe at `:202`, run with a stand-in client; the log level in step 3), `OPERATIONS.md`, `docs/tutorial.md`;
+  `docs/wiki/` not touched. **`BACKLOG.md`:** route 9 closed (`:538`), six routes remain (1, 2, 3, 4, 6, 8); a new item, a model reply of
+  `[]` is a `COMPLETE` report with no queries (`:711`, index row `:61`); channel 2 of *Three more channels* (`:386`) and the bad
+  `--db-url` item (`:345`) gain what the review found. `PROJECT_LEARNINGS.md` #349-351; `CLAUDE.md:122` (351, 396.0 KB).
+
+#### Verification
+Full suite with `GITHUB_ACTIONS=true`: **3,073 passed, 9 skipped**, coverage 98.33%; `ruff check src/ tests/ packages/ scripts/` and
+`mypy` clean; both ledger guards 82 passed. Before the guard 14 of the 18 new unit cases failed (the control and the three interrupt
+tests pass either way). Mutation against the guard, each run's count equal to the unmutated one: no guard, raw `{e}`,
+`safe_message(e)`, a bare `type(e).__name__`, `__qualname__`, an unguarded `e.__class__.__name__`, the rule inlined without a `try`,
+`except ValueError`, `except BaseException`, a wrong prefix, no prefix, a handler naming a class nothing raises: all caught; and after
+the review a handler that keeps the graph's baseline (4 fail) and one that carries the graph's summary (14). The script test catches
+the original, raw `{e}` and `safe_message(e)`; a bare class name and `except ValueError` survive it and are the unit tests' to catch.
+**Runtime smoke (3E), done:** the fixture pipeline (`--llm none`) exits 0 with `Status:  COMPLETE`; the unassemblable reply through the
+real script is the end-to-end test (exit 1, `FAILED_AT_DATA`, no traceback, no quoted text).
+
+#### The review, and what it found
+One workflow: five read-only lenses (totality, test faithfulness, callers, docs and ledger, hostile inputs), two skeptics per non-nit
+finding. 29 agents, 0 errors, 22.5 minutes, 2.95M subagent tokens, 637 tool uses. 20 findings (8 nits); of the 12 others the
+skeptics refuted 4 as older than this change and confirmed 8 (every one reproduced; most rated nit by the skeptics, three low). **The
+guard held:** no lens found a way for an exception to leave the new handler or for a model's text to reach the report through it.
+What it found was around the fix, and half of it was claims I had written without checking. **Fixed:** the "not quoted" test never
+asserted the status, and two of its three arms held no hostile text (a `None` quotes nothing, `zip` quotes nothing); the
+`baseline_snapshot is None` assertion could not fail (the request asked for no baseline); the interrupt test's docstring said the
+orchestrator saves a FAILED result for a data-stage Ctrl-C (Session 275's save is the website stage's; I wrote it from memory of the
+notes); "14 of the 15" and "the other three still pass" in my own ledger; docs that named causes only a custom client can produce
+(the shipped ones coerce every field with `str`), said "fewer" for a `zip` that fails for any different number, and said the traceback
+"names the field" for a `ValueError`; the recipe re-runs the model and a REPL echoes the reply; `OPERATIONS.md` and the troubleshooting
+step still said `agent.error`. **Filed:** a model reply of `[]` gives a `COMPLETE` report with no queries (the website stage accepts
+it on purpose); through the pipeline a lone surrogate in a model reply crashes the checkpoint save instead of writing an unloadable
+file; the standalone CLI exits 0 for an `EXECUTION_FAILED` report (it used to exit 1 with a traceback for this cause; `USAGE.md` says
+so now). **Not filed:** model-authored text is raw in every `DataReport` field by design (route 6 files the template sink). **Observed,
+not filed:** `DataAgent.run` is total by enumeration, not by structure: `final_state.get`, the `failure_reason` read and
+`_missing_semantics` are outside every `try`, and none is reachable from the shipped graph or clients (a stand-in `invoke` returning
+`None` gives `AttributeError`).
+
+### Session 279 Handoff Evaluation (by Session 280)
+
+**Score: 9/10.**
+- **+** The first recommendation was the deliverable, exactly: `BACKLOG.md:530`, `agent.py`'s `try`, the two failing inputs (an
+  out-of-range `expected_row_count_order`, fewer quality-check groups) and "the TROUBLESHOOTING class list gaining the case" were all
+  right, and the key-file line numbers resolved. Gotcha 1 (a mutation harness must compare the test count, not read the last line) paid
+  for itself: my new harness read "0 passed" from a doubled `-q`, every mutant "survived", and the count discipline caught it at once.
+  Gotcha 3 (copy the helper, change both or neither) and gotcha 5 (`CLAUDE.md:122`) held.
+- **−** It said "inside the same `try`", and the status check sits between the graph's `try` and the assembly, so a second handler was
+  needed (cosmetic). It did not say that the real-client gateway fixture is private to `test_gateway_error_text.py` and answers four
+  calls (I built a five-question one for the script; `loopback.message` is shared now), and it did not mention the standalone CLI's
+  exit code for `EXECUTION_FAILED`, which the review showed is part of route 9's before and after. Its "five or six more closing
+  records at this size" estimate assumed about 12 KB each; the two records since are 13 KB each, so it is lower now (below).
+- **ROI: high.**
+
+### Session 280 Self-Assessment
+
+**Score: 7/10.**
+- **+** Claimed first, reproduced through the real script before changing anything, wrote the unit tests first and watched 14 fail for
+  the right reason, mutated the guard and then the strengthened tests, kept every commit at five files or fewer, drove the real
+  script end to end, ran the review before closing, and fixed or filed every finding.
+- **−** Four of the review's eight confirmed findings were claims I wrote without reading the thing they were about (the interrupt
+  docstring, two counts in my ledger, a list of causes checked against a test double instead of the shipped client), and two assertions
+  could not fail. My ledger-edit script aborted on an `assert` and the next line committed without it (`bb2d477`, no `CHANGELOG.md`
+  entry, failure mode #27); I saw the traceback and amended the local commit (`cf4ced9`) before doing anything else. My mutation
+  harness repeated #346's bug (a doubled `-q`) before it caught itself. I restored `agent.py` after two scratch mutations with `git checkout --`,
+  which is safe only because the guard was already committed (the harnesses restore from a copy).
+- **Decay term:** nothing was removed from a mandated-read file. `SESSION_NOTES.md` was 134,739 B before this record (the live trigger
+  is 196,608 B); `BACKLOG.md` 153,194 → 157,960 B; `PROJECT_LEARNINGS.md` grows by three rows (393,533 → 395,969 B). **A twelfth trim
+  is not due:** about three or four more closing records at this size is an estimate (147,858 B now, so about 49 KB of room to the
+  trigger over roughly 13 KB each).
+
+**What's next** (sizes and effort are estimates unless measured; none is blocking).
+1. **Small, no ruling, still open:** route 8 (`BACKLOG.md:524`: `scrub_host_text(value)` where `ProjectInfo` and `CommitInfo` are built, or
+   at the three prints) and route 2(b) (`:450`: a logging filter on the `sqlalchemy` loggers). `BACKLOG.md`'s own cost line says both
+   need no ruling.
+2. **Rulings owed, as before, plus one new:** the `[]` reply (`:711`); one named error class per cause for the scripted intake and the
+   data stage (`:670`); the discovery log line and its four raw class-name reads (`:649`); the lone-surrogate channels (`:386`) and
+   what `run` should exit with for a failed report (`:345`); `L10`'s completeness gap; publish the wiki correction (`:622`) and the
+   two `opencode`-version sentences; wire or stop documenting `MPC_LOG_LEVEL` (`:725`); whether the coverage harness from Session 277
+   should be committed.
+3. **Observed, not filed:** `stash@{0}` (Session 270's claim commit), the branches `worktree-wf_5f96c807-d00-3` and
+   `worktree-wf_c93ee390-506-3` with `.claude/worktrees/wf_5f96c807-d00-3`, the root `methodology_dashboard.py` at v2.18.0 against
+   v2.19.0, Session 277's `gitleaks` count of 9 (not re-measured), `TROUBLESHOOTING.md` §FAILED_AT_DATA's first root-cause bullet ("a SQL
+   query failed against the database": a failing quality check is `ERROR` on that check and the report stays `COMPLETE`), and
+   `tests/agents/website/loopback.py`'s module docstring, which still says the module answers every request `200 {}` (it now also holds
+   `serving_raw`, a 400 handler and `message()`).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `packages/data-agent/src/model_project_constructor_data_agent/agent.py:65-75` (the handler), `db.py:456` (`safe_class_name`).
+- `tests/agents/data/test_data_agent.py:1508-1690` (§Session 280; `SITES` at `:1357`, `_crash_report` at `:1281`);
+  `tests/scripts/test_run_pipeline_data_bad_reply.py`; `tests/agents/website/loopback.py:183` (`message`).
+- `TROUBLESHOOTING.md:119` and `:202`; `packages/data-agent/USAGE.md` (§Error contract, the CLI paragraph near `:71`);
+  `BACKLOG.md:61, 345, 386, 524, 538, 711`; `PROJECT_LEARNINGS.md` #349-351.
+
+**Gotchas.**
+1. **Chain a script and the commit that follows it with `&&`**, and read `git show --stat` of every commit (#351). A heredoc script that
+   fails does not stop the next line.
+2. **The shipped clients coerce every model-reply field with `str`**, which is why only two causes reach the assembly's handler through
+   them; `FakeLLMClient` returns anything, so a test double is the wrong place to list causes from (#350).
+3. **The standalone CLI exits 0 for any report status**, `EXECUTION_FAILED` included; `USAGE.md` says so and `BACKLOG.md:345` holds the
+   question.
+4. **`DataAgent.run` is total by enumeration**: three statements sit outside every `try` and none is reachable today. A new node that
+   puts a non-dict in the state, or a `failure_reason` that is not text, would reach them.
+5. Never `git stash` (#316). `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit
+   that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. Use `uv run python`, never bare `python3`. `CLAUDE.md:122` states the
+   learnings count and the file's size (now 351, Sessions 9–280).
 
 ### What Session 279 Did
 **Deliverable:** **the data stage's report names the exception's class and never its message — COMPLETE.** `DataAgent.run` wrote
