@@ -172,6 +172,15 @@ ERRORS_FIELD_SHAPES: list[object] = [
     {"message": "x"},
     {"a": [1]},
 ]
+# A conflict said INSIDE an ``errors`` that is not a list (the message moved out of its list is the
+# likeliest wording drift): the entry-by-entry search skips it, so the whole-body match is the only
+# thing that can see it, in any case.
+CONFLICT_IN_A_NON_LIST_ERRORS: list[object] = [
+    "name already exists",
+    "Name Already Exists on this account",
+    {"message": "name already exists on this account"},
+    {"a": ["name already exists"]},
+]
 
 
 class TestNameConflictSniffing:
@@ -234,7 +243,7 @@ class TestNameConflictSniffing:
         assert _is_name_conflict(response) is False
 
     @pytest.mark.parametrize("errors", ERRORS_FIELD_SHAPES, ids=repr)
-    def test_422_with_a_non_list_errors_still_matches_a_conflict_said_elsewhere(
+    def test_422_whatever_the_errors_field_holds_still_matches_a_conflict_said_elsewhere(
         self, errors: object
     ) -> None:
         # Skipping the entry-by-entry loop for a non-list must not skip the loose whole-body match
@@ -242,6 +251,13 @@ class TestNameConflictSniffing:
         response = self._response(
             422, json_body={"errors": errors, "message": "Repository already exists"}
         )
+        assert _is_name_conflict(response) is True
+
+    @pytest.mark.parametrize("errors", CONFLICT_IN_A_NON_LIST_ERRORS, ids=repr)
+    def test_422_with_the_conflict_said_inside_a_non_list_errors_is_a_conflict(
+        self, errors: object
+    ) -> None:
+        response = self._response(422, json_body={"errors": errors})
         assert _is_name_conflict(response) is True
 
     @pytest.mark.parametrize("body", [[], [5], 5, 1.5, True, "x", None], ids=repr)
@@ -371,6 +387,22 @@ class TestCreateProject:
         # A ``RepoNameConflictError`` is a ``RepoClientError`` too, and here the name is not taken.
         assert type(excinfo.value) is RepoClientError
         assert "422" in str(excinfo.value)
+
+    @pytest.mark.parametrize("errors", CONFLICT_IN_A_NON_LIST_ERRORS, ids=repr)
+    def test_create_project_422_with_the_conflict_said_inside_a_non_list_errors_is_a_name_conflict(
+        self, errors: object
+    ) -> None:
+        adapter = _adapter_with_transport(
+            _route(
+                {
+                    ("GET", "/orgs/acme"): httpx.Response(200, json={"login": "acme"}),
+                    ("POST", "/orgs/acme/repos"): httpx.Response(422, json={"errors": errors}),
+                }
+            )
+        )
+        with pytest.raises(RepoNameConflictError) as excinfo:
+            adapter.create_project(namespace="acme", name="foo", visibility="private")
+        assert excinfo.value.name == "foo"
 
     @pytest.mark.parametrize("errors", NON_ITERABLE_ERRORS, ids=repr)
     def test_create_project_422_with_a_non_list_errors_and_a_taken_name_is_a_name_conflict(
