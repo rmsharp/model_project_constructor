@@ -453,6 +453,39 @@ def safe_message(
         return "<unprintable>"
 
 
+def safe_class_name(error: BaseException) -> str:
+    """The exception's class name, or ``<unprintable>`` when it is not a short ASCII identifier.
+
+    For an exception that is not the database's: what an LLM client raised, which the agent turns
+    into a report. :func:`safe_message` is for database and driver text, whose masking is best
+    effort. This is for text whose author is a gateway or an upstream model provider: an SDK
+    ``APIError`` carries the reply, which a proxy that echoes request headers fills with the API
+    key (measured: a bare ``sk-ant-`` token survives :func:`safe_message`), and opencode's error
+    events carry upstream text. So the report names the class and nothing the exception said.
+
+    A class name is chosen by code, never by the gateway or the driver, so it is safe to carry; a
+    class built at run time (``type(name, ...)``) can be named anything, and a name that is not a
+    plain identifier is replaced rather than carried.
+
+    It runs inside the ``except`` blocks that deliver "never raises", so it must not be a raise
+    site: a metaclass whose ``__name__`` raises would otherwise replace the report with a crash,
+    which is why it reads nothing from the exception itself (``f"{e}"`` was one: a ``__str__``
+    that raises). The name must be an exact ``str``, because a subclass can answer ``isascii`` and
+    ``len`` however it likes.
+
+    The same rule as ``model_project_constructor.orchestrator.logging._class_name``, which this
+    package cannot import (it is standalone); ``tests/data_agent_package/test_db.py`` holds the two
+    in step.
+    """
+    try:
+        name = type(error).__name__
+        if type(name) is str and name.isascii() and name.isidentifier() and len(name) <= 100:
+            return name
+    except Exception:
+        pass
+    return "<unprintable>"
+
+
 class DBConnectionError(Exception):
     """Raised when the Data Agent cannot reach its database."""
 

@@ -41,6 +41,7 @@ from model_project_constructor_data_agent.db import (
     SkippedEntity,
     redact_db_url,
     redact_secrets,
+    safe_class_name,
     safe_message,
     sql_dialect_from_url,
 )
@@ -1028,3 +1029,118 @@ class TestTheSharedHelpers:
         assert unsafe(ESCAPE_NAME) == ["U+0007", "U+001B"]
         assert unsafe(ESCAPE_NAME_SCRUBBED) == []
         assert safe_message(ESCAPE_NAME) == ESCAPE_NAME_SCRUBBED
+
+
+# --- Session 279: ``safe_class_name`` is the one place an exception is named for a report ---
+#
+# ``agent.py`` and ``nodes.py`` used to write ``{e}`` into the report for an exception raised by
+# the LLM client, which is the gateway's or opencode's text and can hold the API key. Each site
+# writes the class name now; this holds the rule, and ``test_data_agent.py`` holds each site.
+# The package cannot import ``orchestrator.logging._class_name`` (it is standalone), so the rule
+# is stated here and the last test holds the two in step.
+
+_KEY = "sk-ant-NAMETEST0123456789abcdef"
+
+
+class _NameThatRaises(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        raise RuntimeError("the class name cannot be read")
+
+
+class _HostileText(str):
+    """A ``str`` that answers the guard's questions as a plain identifier would."""
+
+    def isascii(self) -> bool:
+        return True
+
+    def isidentifier(self) -> bool:
+        return True
+
+    def __len__(self) -> int:
+        return 5
+
+
+class _NameThatIsAHostileStr(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        return _HostileText(f"\x1b[2J{_KEY}")
+
+
+class _CannotBePrinted(Exception):
+    def __str__(self) -> str:
+        raise AssertionError("the exception's message was read")
+
+    def __repr__(self) -> str:
+        raise AssertionError("the exception's repr was read")
+
+
+_ODD_NAMES = [
+    pytest.param("", id="empty"),
+    pytest.param("has a space", id="space"),
+    pytest.param("bell\x07", id="control-character"),
+    pytest.param(f"\x1b[2J{_KEY}", id="escape-sequence-and-key"),
+    pytest.param("café", id="non-ascii"),
+    pytest.param("1leading_digit", id="not-an-identifier"),
+    pytest.param("E" * 101, id="one-hundred-and-one-characters"),
+]
+
+
+def _odd_exceptions() -> list[BaseException]:
+    class Odd(Exception, metaclass=_NameThatRaises):
+        pass
+
+    class OddStr(Exception, metaclass=_NameThatIsAHostileStr):
+        pass
+
+    return [Odd(_KEY), OddStr(_KEY)]
+
+
+class TestSafeClassName:
+    def test_an_ordinary_class_is_named_by_its_own_name(self) -> None:
+        class Local(Exception):
+            pass
+
+        assert safe_class_name(RuntimeError("boom")) == "RuntimeError"
+        assert safe_class_name(DBConnectionError("boom")) == "DBConnectionError"
+        # ``__name__``, not ``__qualname__``: the enclosing function is not part of the name.
+        assert safe_class_name(Local()) == "Local"
+
+    def test_it_asks_the_exception_for_nothing(self) -> None:
+        assert safe_class_name(_CannotBePrinted(_KEY)) == "_CannotBePrinted"
+
+    @pytest.mark.parametrize("name", _ODD_NAMES)
+    def test_a_name_that_is_not_a_short_identifier_is_replaced(self, name: str) -> None:
+        """A class built at run time can be named anything: code chooses the name, never the
+        host, but a name that is not a plain identifier is replaced rather than carried."""
+        assert safe_class_name(type(name, (Exception,), {})(_KEY)) == "<unprintable>"
+
+    def test_the_longest_name_allowed_is_carried(self) -> None:
+        assert safe_class_name(type("E" * 100, (Exception,), {})()) == "E" * 100
+
+    def test_a_class_whose_name_cannot_be_read_does_not_raise(self) -> None:
+        """It runs inside an ``except`` block that delivers "never raises"."""
+        odd, _ = _odd_exceptions()
+        assert safe_class_name(odd) == "<unprintable>"
+
+    def test_a_name_that_is_a_str_subclass_is_replaced(self) -> None:
+        """A subclass can answer ``isascii``, ``isidentifier`` and ``len`` however it likes."""
+        _, odd_str = _odd_exceptions()
+        assert safe_class_name(odd_str) == "<unprintable>"
+
+    def test_it_agrees_with_the_orchestrators_copy_of_the_rule(self) -> None:
+        """This package cannot import ``orchestrator.logging._class_name``, so the two stay in
+        step by a test: the same answer for an ordinary class, a long name, a name that is
+        replaced and a class whose name cannot be read."""
+        from model_project_constructor.orchestrator.logging import _class_name
+
+        raised = [
+            RuntimeError("x"),
+            KeyError("x"),
+            DBConnectionError("x"),
+            _CannotBePrinted(),
+            type("E" * 100, (Exception,), {})(),
+            *(type(p.values[0], (Exception,), {})() for p in _ODD_NAMES),
+            *_odd_exceptions(),
+        ]
+        assert [safe_class_name(e) for e in raised] == [_class_name(e) for e in raised]

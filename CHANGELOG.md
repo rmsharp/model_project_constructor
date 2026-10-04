@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S279 — feat: `safe_class_name` in the data agent's `db.py`, the one place an LLM client's exception is named for a report
+- **Change:** `packages/data-agent/.../db.py` gains `safe_class_name(error)`, beside `safe_message`: the exception's class name, or `<unprintable>` unless it is an exact-`str` ASCII identifier of at most 100 characters, and reading it cannot raise inside an `except` block (it asks the exception for nothing; the name is read under a `try`). It is the same rule as `orchestrator/logging.py::_class_name`, which the standalone package cannot import, so `tests/data_agent_package/test_db.py` gains `TestSafeClassName` (ordinary classes, `__name__` not `__qualname__`, an exception that cannot be printed, seven odd names, the 100-character limit, a metaclass whose `__name__` raises, a `str` subclass for a name) and a parity test that holds the two copies in step. Nothing calls it yet; the next commit puts it at the two sites.
+- **Commit/PR:** this commit
+- **Session:** S279 · **Verified:** `uv run pytest tests/data_agent_package/test_db.py` green; `ruff check packages/ tests/` and `mypy` clean; against six mutants of the helper (no length limit, no exact-`str` check, no ASCII check, no identifier check, unguarded read, `__qualname__`) each is caught by at least two tests.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S279 claim: the data stage's exception text out of `DataReport.json` *(in progress)*
 - **Change:** Session 279 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the two places the data agent writes a raw exception into its report: `agent.py:54` (`graph crashed: {e}`, into `data_quality_concerns` and the summary) and `nodes.py:211` (`LLM baseline-query generation failed: {e}`, into `caveats`). Session 278 reproduced the first against a gateway that echoes the API key into a 400: the key reaches `DataReport.json` on disk, not the screen. The operator chose it at Phase 0 from a picker (the recommended first option).
 - **Commit/PR:** this commit
