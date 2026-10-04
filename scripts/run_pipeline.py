@@ -72,6 +72,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "packages" / "data-agent" / "src"))
 
+from model_project_constructor.agents.website._host_text import scrub_host_text  # noqa: E402
 from model_project_constructor.agents.website.agent import WebsiteAgent  # noqa: E402
 from model_project_constructor.agents.website.fake_client import FakeRepoClient  # noqa: E402
 from model_project_constructor.agents.website.governance_templates import (  # noqa: E402
@@ -404,7 +405,10 @@ def _handle_already_complete(store: CheckpointStore, run_id: str) -> None:
     result_path = store._result_path(run_id, "RepoProjectResult")  # noqa: SLF001
     payload = json.loads(result_path.read_text())
     status = payload.get("status", "UNKNOWN")
-    project_url = payload.get("project_url") or "(no project URL recorded)"
+    # The address is the host's words (BACKLOG route 8). The adapters scrub what a host says NOW;
+    # this one was read back from a file that may predate them, and ``json.loads`` has turned the
+    # file's escapes into real control characters again.
+    project_url = scrub_host_text(payload.get("project_url") or "") or "(no project URL recorded)"
 
     if status == "COMPLETE":
         print(

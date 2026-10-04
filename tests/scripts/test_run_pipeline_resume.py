@@ -185,6 +185,72 @@ def test_resume_already_complete_status_complete_exit_0(
     assert "already-done" in captured.out
 
 
+def _seed_complete_run(tmp_path: Path, run_id: str, project_url: object) -> None:
+    """A run directory whose terminal ``RepoProjectResult`` is COMPLETE with ``project_url``."""
+    run_dir = tmp_path / run_id
+    run_dir.mkdir(parents=True)
+    _seed_intake_envelope(run_dir, run_id)
+    _seed_data_request_envelope(run_dir, run_id)
+    (run_dir / "DataReport.json").write_text(
+        json.dumps(_envelope_dict(run_id, "DataReport", {"status": "COMPLETE"}))
+    )
+    (run_dir / "RepoProjectResult.result.json").write_text(
+        json.dumps({"status": "COMPLETE", "project_url": project_url})
+    )
+
+
+@pytest.mark.parametrize(
+    "hostile",
+    [
+        "\x1b]0;PWNED-TITLE\x07",
+        "\x1b[2J",
+        "\x1bc",
+        "\x9b2J\x7f",
+        "\r\nStatus:  COMPLETE\r\n",
+        "\ud800",
+    ],
+    ids=["osc-title", "csi-clear", "reset", "c1-and-del", "forged-line", "lone-surrogate"],
+)
+def test_resume_already_complete_prints_a_saved_address_without_its_control_codes(
+    run_pipeline_module, tmp_path, capsys, hostile
+):
+    """BACKLOG route 8. ``--resume`` of a finished run prints the address it SAVED, read back with
+    ``json.loads``, which turns the file's ``\\u001b`` into a real ESC again. The adapters scrub
+    what a host says now, so they cannot reach a checkpoint written before they did (or one edited
+    by hand); this print is the only place that can. One line, exactly."""
+    from model_project_constructor.agents.website._host_text import scrub_host_text
+
+    url = f"https://h.example/g/p{hostile}tail"
+    _seed_complete_run(tmp_path, "old_run", url)
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_pipeline_module._resolve_resume(tmp_path, "old_run")
+
+    assert excinfo.value.code == 0
+    assert capsys.readouterr().out == (
+        "Run 'old_run' is already complete. Nothing to resume. "
+        f"Result: {scrub_host_text(url)}\n"
+    )
+
+
+@pytest.mark.parametrize("saved", ["\x1b\x07", "", None], ids=["only-controls", "empty", "null"])
+def test_resume_already_complete_says_so_when_there_is_no_address_to_print(
+    run_pipeline_module, tmp_path, capsys, saved
+):
+    """An address that is nothing but control codes scrubs to nothing, and prints as an address
+    that was never recorded rather than as ``Result: ``."""
+    _seed_complete_run(tmp_path, "bare_run", saved)
+
+    with pytest.raises(SystemExit) as excinfo:
+        run_pipeline_module._resolve_resume(tmp_path, "bare_run")
+
+    assert excinfo.value.code == 0
+    assert capsys.readouterr().out == (
+        "Run 'bare_run' is already complete. Nothing to resume. "
+        "Result: (no project URL recorded)\n"
+    )
+
+
 def test_resume_already_complete_status_failed_exit_2(
     run_pipeline_module, tmp_path, capsys
 ):
