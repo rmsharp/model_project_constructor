@@ -22,10 +22,11 @@ import httpx
 
 from model_project_constructor.agents.website import GitHubAdapter, GitLabAdapter
 
-#: ``httpx`` 0.28 writes a JSON body as UTF-8 (``ensure_ascii=False``), so a lone surrogate in one
-#: cannot be encoded and the request cannot be built; 0.27, which ``pyproject.toml`` still admits,
-#: escapes it to ASCII and sends it. Measured on 0.27.2 and 0.28.1 (Session 282). A lone surrogate
-#: or a C0 control in a request PATH is refused by both.
+#: ``httpx`` 0.28 writes a JSON body as UTF-8 with ``allow_nan=False``, so a lone surrogate, a
+#: ``NaN`` or an infinity in one cannot be encoded and the request cannot be built; 0.27, which
+#: ``pyproject.toml`` still admits, escapes the surrogate to ASCII and sends it, and sends the
+#: ``NaN``. Measured on 0.27.2 and 0.28.1 (Session 282). A lone surrogate or a C0 control in a
+#: request PATH is refused by both. CI runs the locked 0.28.1 only, so the 0.27 half is run by hand.
 HTTPX_WRITES_JSON_AS_UTF8 = tuple(int(part) for part in httpx.__version__.split(".")[:2]) >= (0, 28)
 
 TOKEN = "glpat-SECRET9f3kQ7xZ2mW"

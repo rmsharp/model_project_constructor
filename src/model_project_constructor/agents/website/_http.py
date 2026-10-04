@@ -7,12 +7,22 @@ through, or any other part of a request ``h11`` objects to, is not quoted back i
 message, in the ``-o`` file, or in a traceback or a walk of the exception's chain.
 
 A request can be refused at two stages, and each needs its own override. ``httpx`` BUILDS a request
-(its address and its body) and then SENDS it: ``h11`` objects at the second stage, and the first
-raises ``InvalidURL`` for a control character in a path and ``UnicodeEncodeError`` for a lone
-surrogate in a path or, from ``httpx`` 0.28, in a body. Neither of those is an ``httpx.HTTPError``,
-so the adapters' ``except httpx.HTTPError`` blocks never caught them, and both quote the value
-they refused. An adapter writes values the host sent into its next request, so the value is the
-host's to choose.
+(its address, its body and the ``Cookie`` header it makes from the cookies a host set) and then
+SENDS it. ``h11`` objects at the second stage. The first raises ``InvalidURL`` for a control
+character in a path and ``ValueError`` for what a body cannot hold: a lone surrogate (as
+``UnicodeEncodeError``) or ``NaN`` or an infinity, from ``httpx`` 0.28, which writes a JSON body as
+UTF-8 with ``allow_nan=False``; 0.27 escapes the first and sends the second. A non-ASCII cookie
+value a host set is a third cause, and a permanent one: the client keeps the cookie and refuses
+every later request. None of these is an ``httpx.HTTPError``, so the adapters' ``except
+httpx.HTTPError`` blocks never caught them. An adapter writes values the host sent into its next
+request, so what makes the request unbuildable is the host's to choose.
+
+What the library's own message holds, measured on 0.27.2 and 0.28.1: for a control character or a
+surrogate, that one character and its position; for ``NaN`` or an infinity, the number. (Its
+refusals of a host or a port quote their text, but the adapters take those from their own
+configuration.) It does not repeat the whole value, so that is not why it is withheld. It is
+withheld because it repeats part of what a host chose, in the library's wording, which changes
+between versions: the fixed text is the same for every refusal.
 """
 
 from __future__ import annotations
@@ -28,10 +38,10 @@ PROTOCOL_ERROR_TEXT = (
 )
 
 UNBUILDABLE_REQUEST_TEXT = (
-    "the request could not be built: the HTTP library refused part of its address or body as "
-    "malformed (a control character or an unpaired surrogate, for instance). Its own message is "
-    "withheld because it can quote the value it refused, and a value a host sent can carry the "
-    "credential."
+    "the request could not be built: the HTTP library refused part of it (its address, its body "
+    "or a cookie) as malformed, for instance a control character, an unpaired surrogate or a "
+    "number JSON cannot hold. Its own message is withheld because it repeats part of what was "
+    "refused, and a host chose that text."
 )
 
 
@@ -42,13 +52,19 @@ class RepoHttpClient(httpx.Client):
     :meth:`build_request` and reaches the transport through :meth:`send`, so one override of each
     covers every call the adapters make. Both raise :class:`httpx.LocalProtocolError`, an
     :class:`httpx.HTTPError`, with a fixed text: a request that cannot be built fails the call as
-    any other failed call does, and a retry builds it the same way and fails the same way. Any other
+    any other failed call does, and a retry builds it the same way and fails the same way. The one
+    that :meth:`build_request` raises has no ``request`` (building one is what failed), so reading
+    its ``.request`` raises ``RuntimeError``; nothing in this repository reads it. Any other
     failure, a refused connection or a timeout or a malformed response for instance, passes through
     with its own message.
+
+    Only what a host's words can cause is converted: ``InvalidURL`` and ``ValueError`` (which
+    holds ``UnicodeEncodeError``). A ``TypeError``, a value of a type JSON cannot hold, is the
+    caller's own mistake, since a JSON reply holds no such value, and it passes through.
     """
 
     def build_request(self, *args: Any, **kwargs: Any) -> httpx.Request:
-        with contextlib.suppress(httpx.InvalidURL, UnicodeEncodeError):
+        with contextlib.suppress(httpx.InvalidURL, ValueError):
             return super().build_request(*args, **kwargs)
         # Raised here, after the handler, for the reason ``send`` does it below. There is no
         # request to attach: building one is what failed.

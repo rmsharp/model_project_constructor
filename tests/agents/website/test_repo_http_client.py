@@ -8,10 +8,14 @@ error (their constructors refuse the value first), so most tests drive ``RepoHtt
 refused header and talk to a real socket, which is the only thing that shows the installed stack
 still raises the class this client catches.
 
-The second half is the same rule one step earlier. ``httpx`` builds a request (the address and the
-body) before it sends one, and refuses to build some: ``InvalidURL`` for a control character in a
-path, ``UnicodeEncodeError`` for a lone surrogate. Neither is an ``httpx.HTTPError``, so neither
-reached the adapters' ``except`` blocks, and both quote the value they refused.
+The second half is the same rule one step earlier. ``httpx`` builds a request (the address, the
+body and the ``Cookie`` header) before it sends one, and refuses to build some: ``InvalidURL`` for a
+control character in a path, ``ValueError`` for a lone surrogate (``UnicodeEncodeError``) or a
+number JSON cannot hold in a body, and ``UnicodeEncodeError`` for a non-ASCII cookie a host set.
+None of them is an ``httpx.HTTPError``, so none reached the adapters' ``except`` blocks. The
+library's own message repeats only part of what it refused (one character and its position, or the
+number), so the tests that hold the converter are the exact fixed text and the empty chain; the
+assertions that the secret is absent are kept, and they cannot fail for any ``httpx`` today.
 """
 
 from __future__ import annotations
@@ -185,8 +189,8 @@ def test_an_adapter_never_repeats_the_quoted_value_in_its_error(
 # A request ``httpx`` cannot build.
 # ---------------------------------------------------------------------------------------------
 
-#: What ``httpx`` refuses to put in a request PATH, each carrying the secret so a message that
-#: quotes the value shows it: a C0 control, DEL and a lone surrogate (0.27.2 and 0.28.1).
+#: What ``httpx`` refuses to put in a request PATH, each carrying the secret: a C0 control, DEL
+#: and a lone surrogate (0.27.2 and 0.28.1).
 UNBUILDABLE_PATHS = [
     pytest.param(f"/x/{SECRET}\x1b]0;PWNED\x07", httpx.InvalidURL, id="escape-and-bell"),
     pytest.param(f"/x/{SECRET}\x00", httpx.InvalidURL, id="nul"),
@@ -194,6 +198,22 @@ UNBUILDABLE_PATHS = [
     pytest.param(f"/x/{SECRET}\r\nStatus: COMPLETE", httpx.InvalidURL, id="line-break"),
     pytest.param(f"/x/{SECRET}\ud800", UnicodeEncodeError, id="lone-surrogate"),
 ]
+
+
+#: What ``httpx`` 0.28 refuses to write into a JSON body (``ensure_ascii=False`` and
+#: ``allow_nan=False``); 0.27 escapes the surrogate and sends a ``NaN``. The overflowing float is
+#: ``inf`` once parsed.
+BODY_VALUES = [
+    pytest.param(f"{SECRET}\ud800", id="lone-surrogate"),
+    pytest.param(float("nan"), id="nan"),
+    pytest.param(float("inf"), id="infinity"),
+    pytest.param(-float("inf"), id="minus-infinity"),
+    pytest.param(1e999, id="overflowing-float"),
+]
+skip_before_0_28 = pytest.mark.skipif(
+    not HTTPX_WRITES_JSON_AS_UTF8,
+    reason="httpx < 0.28 escapes a lone surrogate in a JSON body and sends a NaN",
+)
 
 
 def _accepting(sent: list[httpx.Request]) -> RepoHttpClient:
@@ -253,16 +273,28 @@ def test_the_other_ways_in_are_covered_too(path: str, refused: type[Exception]) 
         _assert_nothing_quotes_the_secret(caught.value)
 
 
-@pytest.mark.skipif(
-    not HTTPX_WRITES_JSON_AS_UTF8,
-    reason="httpx < 0.28 escapes a lone surrogate in a JSON body to ASCII and sends it",
-)
+@skip_before_0_28
+@pytest.mark.parametrize("value", BODY_VALUES)
+def test_the_installed_httpx_still_refuses_a_body_this_client_converts(value: object) -> None:
+    """The canary for the body: ``ValueError`` (``UnicodeEncodeError`` is one), not an
+    ``httpx.HTTPError``."""
+    plain = httpx.Client(base_url="https://host.example")
+    with pytest.raises(ValueError) as caught:
+        plain.build_request("POST", "/x", json={"sha": value})
+    assert not isinstance(caught.value, httpx.HTTPError)
+    plain.close()
+
+
+@skip_before_0_28
+@pytest.mark.parametrize("value", BODY_VALUES)
 @pytest.mark.parametrize("method", ["post", "patch", "put"])
-def test_a_json_body_httpx_cannot_encode_is_the_fixed_text_and_is_never_sent(method: str) -> None:
+def test_a_json_body_httpx_cannot_encode_is_the_fixed_text_and_is_never_sent(
+    method: str, value: object
+) -> None:
     sent: list[httpx.Request] = []
     client = _accepting(sent)
     with pytest.raises(httpx.LocalProtocolError) as caught:
-        getattr(client, method)("/x", json={"sha": f"{SECRET}\ud800"})
+        getattr(client, method)("/x", json={"sha": value})
     assert str(caught.value) == UNBUILDABLE_REQUEST_TEXT
     assert caught.value.__cause__ is None
     assert caught.value.__context__ is None
@@ -292,15 +324,18 @@ def test_a_request_httpx_can_build_is_built_and_sent_exactly_as_before(
         return httpx.Response(200, json={})
 
     build(httpx.Client(base_url="https://host.example", transport=httpx.MockTransport(handler)))
-    assert [(r.method, str(r.url), r.content) for r in sent] == [
-        (r.method, str(r.url), r.content) for r in plain_sent
+    # The headers too: ``Content-Type``, ``Accept``, ``Host``, ``User-Agent`` and the length.
+    assert [(r.method, str(r.url), r.content, sorted(r.headers.items())) for r in sent] == [
+        (r.method, str(r.url), r.content, sorted(r.headers.items())) for r in plain_sent
     ]
     assert len(sent) == 1
+    assert "accept" in sent[0].headers and "user-agent" in sent[0].headers
 
 
 def test_a_failure_that_is_not_a_refused_request_passes_through_untouched() -> None:
-    """Only what ``httpx`` refuses to put in an address or a body is converted. A caller's own
-    mistake (a value that is not JSON) is a bug somebody has to see with its own message."""
+    """Only what a host's words can cause is converted. A value of a type JSON cannot hold is the
+    caller's own mistake (a JSON reply holds no such value), a bug somebody has to see with its
+    own message."""
     client = _accepting([])
     with pytest.raises(TypeError, match="JSON serializable"):
         client.post("/x", json={"a": object()})
@@ -309,8 +344,54 @@ def test_a_failure_that_is_not_a_refused_request_passes_through_untouched() -> N
 def test_the_text_for_an_unbuildable_request_says_what_happened_and_what_it_withholds() -> None:
     assert "could not be built" in UNBUILDABLE_REQUEST_TEXT
     assert "withheld" in UNBUILDABLE_REQUEST_TEXT
-    assert "can quote" in UNBUILDABLE_REQUEST_TEXT
+    assert "repeats part of what was refused" in UNBUILDABLE_REQUEST_TEXT
+    assert "cookie" in UNBUILDABLE_REQUEST_TEXT
     assert UNBUILDABLE_REQUEST_TEXT != PROTOCOL_ERROR_TEXT
+
+
+def _setting_a_cookie(
+    value: bytes, sent: list[httpx.Request]
+) -> Callable[[httpx.Request], httpx.Response]:
+    """A transport handler whose every reply sets the cookie ``value`` (raw bytes: a header)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, headers=[(b"set-cookie", value)], json={})
+
+    return handler
+
+
+@pytest.mark.parametrize("client_class", [httpx.Client, RepoHttpClient], ids=["plain", "ours"])
+def test_a_cookie_a_host_set_that_httpx_cannot_send_back_refuses_every_later_request(
+    client_class: type[httpx.Client],
+) -> None:
+    """The third build-time cause, and a permanent one: the client keeps the cookie, builds a
+    ``Cookie`` header from it for every later request, and cannot encode a non-ASCII value. The
+    plain client raises ``UnicodeEncodeError`` each time (not an ``httpx.HTTPError``); this client
+    raises the fixed text. A cookie it can send changes nothing."""
+    sent: list[httpx.Request] = []
+    handler = _setting_a_cookie("a=caf\xe9".encode("latin-1"), sent)
+    client = client_class(base_url="https://host.example", transport=httpx.MockTransport(handler))
+    assert client.get("/first").status_code == 200
+    for _ in range(3):
+        if client_class is httpx.Client:
+            with pytest.raises(UnicodeEncodeError):
+                client.get("/later")
+        else:
+            with pytest.raises(httpx.LocalProtocolError) as caught:
+                client.get("/later")
+            assert str(caught.value) == UNBUILDABLE_REQUEST_TEXT
+            assert caught.value.__cause__ is None and caught.value.__context__ is None
+    assert [r.url.path for r in sent] == ["/first"]
+
+
+def test_a_cookie_httpx_can_send_back_is_sent_back_by_this_client_as_by_the_plain_one() -> None:
+    sent: list[httpx.Request] = []
+    handler = _setting_a_cookie(b"a=b", sent)
+    ours = RepoHttpClient(base_url="https://host.example", transport=httpx.MockTransport(handler))
+    ours.get("/first")
+    ours.get("/second")
+    assert sent[1].headers["cookie"] == "a=b"
 
 
 @pytest.mark.parametrize("adapter", [GitLabAdapter, GitHubAdapter], ids=["gitlab", "github"])
