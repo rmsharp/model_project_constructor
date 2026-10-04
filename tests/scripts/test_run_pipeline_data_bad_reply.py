@@ -140,8 +140,10 @@ def test_an_unassemblable_reply_is_a_failed_data_stage_and_none_of_it_is_quoted(
         )
 
     shown = run.stdout + run.stderr
-    # The scenario is real: the graph ran to its end, so the failure is the assembly's.
-    assert len(gateway.seen) >= 4, shown
+    # The scenario is real: all five questions (the primary queries, the checks, the baseline, the
+    # summary and the datasheet) were answered, so the graph ran to its end and the failure is the
+    # assembly's.
+    assert len(gateway.seen) == 5, shown
     assert run.returncode == 1, shown
     assert "Traceback" not in shown
     assert "Status:  FAILED_AT_DATA" in run.stdout
@@ -152,6 +154,8 @@ def test_an_unassemblable_reply_is_a_failed_data_stage_and_none_of_it_is_quoted(
     assert saved["summary"] == "Data Agent run failed: report assembly failed: ValidationError"
     assert saved["data_quality_concerns"] == ["report assembly failed: ValidationError"]
     assert saved["primary_queries"] == []
+    # The run did ask for a baseline (the gateway was asked for one), and none is carried.
+    assert saved["baseline_snapshot"] is None
 
     everything = shown + _everything(tmp_path)
     assert "MODELSAIDTHIS" not in everything

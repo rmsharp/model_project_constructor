@@ -1225,7 +1225,7 @@ def test_the_unreachable_database_concern_carries_no_part_of_a_password_in_the_a
 # name, as the scripted intake runner's was in Session 278 (``db.safe_class_name``).
 #
 # Each site is its own call, so each has its own tests: a site that goes back to ``{e}`` (or to
-# a bare ``type(e).__name__``) leaves the other site's tests green.
+# a bare ``type(e).__name__``) leaves the other sites' tests green.
 # ---------------------------------------------------------------------------
 
 GATEWAY_KEY = "sk-ant-DATALEAK0123456789abcdef"
@@ -1516,9 +1516,10 @@ def test_a_crash_whose_class_name_the_helper_must_guard_still_returns_a_report(
 # docstring and ``packages/data-agent/USAGE.md``. The exception pydantic raises quotes the
 # model's reply (``input_value``), so the text also reached the operator's screen.
 #
-# The three tests below drive the real causes through the real assembly. The ``"assembly"`` arm of
-# ``SITES`` above holds the guard's own properties (the class and not the message, a name that
-# cannot be read, a message that cannot be printed) the same way it holds the other two sites'.
+# The ``FAULTS`` tests below drive the real causes through the real assembly. The ``"assembly"`` arm
+# of ``SITES`` above holds the guard's own properties (the class and not the message, a name that
+# cannot be read, a message that cannot be printed, an interrupt that is not swallowed) the same way
+# it holds the other two sites'.
 # ---------------------------------------------------------------------------
 
 
@@ -1551,9 +1552,16 @@ def _llm_whose_reply_is_faulty(
         faulty = replace(spec, expected_row_count_order=_hostile_text())
         return FakeLLMClient(**{**common, "primary_queries_sequence": [[faulty]]})
     if fault == "fewer-quality-check-groups-than-queries":
-        return _AnswersNoQualityCheckGroups(**common)
+        # ``zip``'s message quotes nothing, so the hostile text rides in the summary the graph
+        # produced: a handler that fell back to carrying any of the graph's state would show it.
+        hostile = replace(summary, summary=_hostile_text())
+        return _AnswersNoQualityCheckGroups(**{**common, "summary_response": hostile})
     if fault == "summary-that-is-not-text":
-        return FakeLLMClient(**{**common, "summary_response": replace(summary, summary=None)})
+        # A list where text belongs, holding the hostile text: pydantic's message quotes it. The
+        # shipped clients coerce every field with ``str``, so only a custom ``LLMClient`` can.
+        return FakeLLMClient(
+            **{**common, "summary_response": replace(summary, summary=[_hostile_text()])}
+        )
     raise AssertionError(fault)
 
 
@@ -1567,9 +1575,11 @@ def test_an_interrupt_is_not_swallowed_by_any_of_the_guards(
     summary_response: SummaryResult,
     datasheet_response: Datasheet,
 ) -> None:
-    """Each guard catches ``Exception``, so Ctrl-C reaches the orchestrator, which saves a FAILED
-    result for it (Session 275). A guard that caught ``BaseException`` would return a report and
-    the run would go on to the next stage."""
+    """Each guard catches ``Exception``, so Ctrl-C leaves ``DataAgent.run`` and stops the run. A
+    guard that caught ``BaseException`` would turn it into a returned ``EXECUTION_FAILED`` report
+    and the pipeline would handle it as a failed data stage. (The orchestrator saves a FAILED
+    result for an interrupt in the website stage only, Session 275; the data stage has no
+    handler, so here it simply propagates.)"""
     with pytest.raises(KeyboardInterrupt):
         _crash_report(
             site,
@@ -1618,13 +1628,16 @@ def test_a_faulty_model_reply_becomes_a_failed_report_not_a_raise(
         fault, primary_query_spec_valid, qc_specs_valid, summary_response, datasheet_response
     )
 
-    report = _run_or_fail(llm, sample_request)
+    # The request asks for a baseline, so the graph's state carries a ``baseline_snapshot`` and
+    # the assertion below can fail for a handler that kept it.
+    report = _run_or_fail(llm, _request_with_baseline(sample_request))
 
     assert report.status == "EXECUTION_FAILED"
+    # The exact prefix is what says the failure is the assembly's and no node's (a node's would
+    # read ``graph crashed:``); ``summarize`` having run shows the graph got that far.
     assert report.summary == f"Data Agent run failed: report assembly failed: {class_name}"
     assert report.data_quality_concerns == [f"report assembly failed: {class_name}"]
-    # Nothing is half-built: the report carries no queries, and the graph itself ran to its end,
-    # so the failure is the assembly's and no node's.
+    # Nothing is half-built.
     assert report.primary_queries == []
     assert report.baseline_snapshot is None
     assert llm.summarize_calls == 1
@@ -1641,7 +1654,9 @@ def test_a_faulty_model_reply_is_not_quoted_in_the_failed_report(
     datasheet_response: Datasheet,
 ) -> None:
     """Pydantic's error quotes the value it refused (``input_value``). The report is saved and
-    written into a committed project, so none of it may be carried."""
+    written into a committed project, so none of it may be carried. Each fault holds hostile text
+    where it can: in the refused value (``order``, ``summary``), or, for ``qc-groups``, whose
+    ``zip`` message quotes nothing, in the graph's own summary."""
     report = _run_or_fail(
         _llm_whose_reply_is_faulty(
             fault, primary_query_spec_valid, qc_specs_valid, summary_response, datasheet_response
@@ -1649,6 +1664,8 @@ def test_a_faulty_model_reply_is_not_quoted_in_the_failed_report(
         sample_request,
     )
 
+    # Without this a run that did not fail at all would pass every line below.
+    assert report.status == "EXECUTION_FAILED"
     everything = "\n".join(_every_string(report))
     assert GATEWAY_KEY not in everything
     assert "x-api-key" not in everything
