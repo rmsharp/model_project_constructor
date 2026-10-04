@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S284
+date: 2026-10-04
+status: pending
+active_task: GitHub's _is_name_conflict raises a bare TypeError for a 422 whose errors field is a truthy non-list (github_adapter.py:317); guard it with isinstance(errors, list) so create_project gives a RepoClientError (BACKLOG.md:683, point 2). Chosen by the operator at Phase 0 from two pickers.
+```
+
+```handoff
 session: S283
 date: 2026-10-04
 status: complete
