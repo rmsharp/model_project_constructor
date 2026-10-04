@@ -409,3 +409,28 @@ def test_an_adapter_turns_an_unbuildable_request_into_its_own_error(
     assert "non-printable" not in str(caught.value)  # ``httpx``'s own words
     assert caught.value.__cause__ is None and caught.value.__context__ is None
     assert sent == []
+
+
+@pytest.mark.parametrize(
+    ("adapter", "step"),
+    [(GitLabAdapter, "group lookup failed"), (GitHubAdapter, "owner lookup failed")],
+    ids=["gitlab", "github"],
+)
+def test_a_namespace_with_a_lone_surrogate_fails_the_call_and_is_never_sent(
+    adapter: type[GitLabAdapter] | type[GitHubAdapter], step: str
+) -> None:
+    """A command-line argument whose bytes are not UTF-8 arrives as a lone surrogate. GitHub writes
+    the namespace into the path as it is, so ``httpx`` refuses to build the request and the client
+    above converts that. GitLab ``quote``s it first, and ``urllib.parse.quote`` raises
+    ``UnicodeEncodeError`` before ``httpx`` is reached, past the client, so the call ended in a
+    traceback until Session 283. The namespace is the caller's own text, so the message may show it
+    (as ``repr`` writes it, escaped); nothing is sent with the character cleaned out."""
+    built = adapter(host_url="https://host.example", private_token=TOKEN)
+    sent: list[httpx.Request] = []
+    built._client = _accepting(sent)
+    with pytest.raises(RepoClientError) as caught:
+        built.create_project(namespace="a\ud800b", name="n", visibility="private")
+    assert step in str(caught.value)
+    assert "\\ud800" in str(caught.value)
+    assert caught.value.__cause__ is None and caught.value.__context__ is None
+    assert sent == []

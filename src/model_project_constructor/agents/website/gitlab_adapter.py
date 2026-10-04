@@ -97,7 +97,19 @@ class GitLabAdapter(RepoClient):
         visibility: str,
     ) -> ProjectInfo:
         try:
-            response = self._client.get(f"/groups/{quote(namespace, safe='')}")
+            group_path = f"/groups/{quote(namespace, safe='')}"
+        except UnicodeEncodeError as exc:
+            # ``quote`` writes the namespace as UTF-8 and raises for a lone surrogate (a
+            # command-line argument whose bytes are not UTF-8 arrives as one) before ``httpx`` is
+            # reached, so the client's conversion of an unbuildable request never sees it. The
+            # namespace is the caller's text, not the host's, so the message may show it (``repr``
+            # escapes the character); it is refused, not sent with the character cleaned out.
+            raise RepoClientError(
+                f"group lookup failed for {namespace!r}: the namespace holds a character that "
+                "cannot be written into an address (an unpaired surrogate)"
+            ) from exc
+        try:
+            response = self._client.get(group_path)
         except httpx.HTTPError as exc:
             raise RepoClientError(
                 f"group lookup failed for {namespace!r}: {exc}"
