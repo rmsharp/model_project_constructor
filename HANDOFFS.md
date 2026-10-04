@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S285
+date: 2026-10-04
+status: pending
+active_task: A reply of the wrong shape from the repository host ends as a clean RepoClientError naming the field at all nine places an adapter reads a 2xx reply, and a 2xx that cannot be used as JSON says a project may exist (points 1 and 3 of BACKLOG.md's "A reply of the wrong shape ends as a raw KeyError or TypeError out of the adapter", :683). Chosen by the operator at Phase 0 from two pickers; check each field and name it, retry a wrong shape on the commit path as invalid JSON is retried, push at close-out.
+```
+
+```handoff
 session: S284
 date: 2026-10-04
 status: complete

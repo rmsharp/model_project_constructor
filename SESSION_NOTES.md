@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 285 Did
+**Deliverable:** **a reply of the wrong shape from the repository host ends as a clean `RepoClientError` naming the field, at all nine places an adapter reads a `2xx` reply, and a `2xx` that cannot be used as JSON says a project may exist (points 1 and 3 of `BACKLOG.md`'s item *A reply of the wrong shape ends as a raw `KeyError` or `TypeError` out of the adapter*, `:683`) (IN PROGRESS)**
+**Started:** 2026-10-04 17:20
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers (the area, then the item; both the first option, recommended). **The operator also decided:** check each field and name it (not a catch of the two classes); a wrong shape on the commit path is RETRIED as invalid JSON is today (no new error class); push at close-out (yes). Point 4 (the dead loop) stays the operator's call and is not in scope. Workstream: `DEVELOPMENT_WORKSTREAM.md`.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 284 Did
 **Deliverable:** **GitHub's `_is_name_conflict` answers a `422` whose `errors` is not a list and no longer raises a bare `TypeError` out of `create_project` — COMPLETE.** Point 2 of `BACKLOG.md`'s item *A reply of the wrong shape ends as a raw `KeyError` or `TypeError` out of the adapter* (`:683`). Points 1 and 3 need a choice and stay open. Chosen by the operator at Phase 0 from two pickers (area, then item; both the first option, recommended); **the operator also decided:** push at close-out (yes). **Mine:** the guard as filed and not the deletion of the loop in front of which it sits (dead code, below; filed as point 4, `:721`); the eight extra tests the review asked for. **Started:** 2026-10-04 16:00. **Completed:** 2026-10-04 (close-out 16:55). **Commits: six** (`git rev-list --count 10904d8..HEAD` after this one lands): `84e13aa` (claim), `eb7e9b3` (fix and 71 tests), `1fcc6ad` (docs, #363), `c82a891` (the review's 8 tests), `3eaf34d` (its doc corrections) and this close-out; each has its own `CHANGELOG.md` entry, and the push is recorded in the close-out's.
 
