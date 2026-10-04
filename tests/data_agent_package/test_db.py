@@ -54,6 +54,8 @@ from tests.hostile_text import (
     ESCAPING_URL,
     EVERY_CONTROL,
     NON_SPACE_CONTROLS,
+    NameThatIsAHostileStr,
+    NameThatRaises,
     control_ids,
     unsafe,
 )
@@ -1031,7 +1033,7 @@ class TestTheSharedHelpers:
         assert safe_message(ESCAPE_NAME) == ESCAPE_NAME_SCRUBBED
 
 
-# --- Session 279: ``safe_class_name`` is the one place an exception is named for a report ---
+# --- Session 279: ``safe_class_name`` names an LLM client's exception for the data report ---
 #
 # ``agent.py`` and ``nodes.py`` used to write ``{e}`` into the report for an exception raised by
 # the LLM client, which is the gateway's or opencode's text and can hold the API key. Each site
@@ -1040,31 +1042,6 @@ class TestTheSharedHelpers:
 # is stated here and the last test holds the two in step.
 
 _KEY = "sk-ant-NAMETEST0123456789abcdef"
-
-
-class _NameThatRaises(type):
-    @property
-    def __name__(cls) -> str:  # type: ignore[override]
-        raise RuntimeError("the class name cannot be read")
-
-
-class _HostileText(str):
-    """A ``str`` that answers the guard's questions as a plain identifier would."""
-
-    def isascii(self) -> bool:
-        return True
-
-    def isidentifier(self) -> bool:
-        return True
-
-    def __len__(self) -> int:
-        return 5
-
-
-class _NameThatIsAHostileStr(type):
-    @property
-    def __name__(cls) -> str:  # type: ignore[override]
-        return _HostileText(f"\x1b[2J{_KEY}")
 
 
 class _CannotBePrinted(Exception):
@@ -1087,10 +1064,10 @@ _ODD_NAMES = [
 
 
 def _odd_exceptions() -> list[BaseException]:
-    class Odd(Exception, metaclass=_NameThatRaises):
+    class Odd(Exception, metaclass=NameThatRaises):
         pass
 
-    class OddStr(Exception, metaclass=_NameThatIsAHostileStr):
+    class OddStr(Exception, metaclass=NameThatIsAHostileStr):
         pass
 
     return [Odd(_KEY), OddStr(_KEY)]
@@ -1134,8 +1111,15 @@ class TestSafeClassName:
         replaced and a class whose name cannot be read."""
         from model_project_constructor.orchestrator.logging import _class_name
 
+        class Local(Exception):
+            pass
+
+        # ``Local`` is the class where ``__name__`` ("Local") and ``__qualname__`` (the enclosing
+        # function, ``<locals>`` and the name: not an identifier) differ, so a copy that reads
+        # the wrong one disagrees here and nowhere else.
         raised = [
             RuntimeError("x"),
+            Local(),
             KeyError("x"),
             DBConnectionError("x"),
             _CannotBePrinted(),

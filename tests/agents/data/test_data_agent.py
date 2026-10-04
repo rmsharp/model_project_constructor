@@ -37,6 +37,8 @@ from tests.hostile_text import (
     EVERY_CONTROL,
     SECRET,
     SECRET_NAME,
+    NameThatIsAHostileStr,
+    NameThatRaises,
     database_with_a_dangling_view,
     leaked_run,
     unsafe,
@@ -1290,13 +1292,22 @@ def _crash_report(
         "summary_response": summary_response,
         "datasheet_response": datasheet_response,
     }
-    if site == "graph":
+    try:
+        if site == "graph":
+            return DataAgent(
+                llm=_RaisesWhileGeneratingQueries(**common, error=error), db=None
+            ).run(sample_request)
         return DataAgent(
-            llm=_RaisesWhileGeneratingQueries(**common, error=error), db=None
-        ).run(sample_request)
-    return DataAgent(
-        llm=_RaisesWhileGeneratingTheBaseline(**common, error=error), db=None
-    ).run(_request_with_baseline(sample_request))
+            llm=_RaisesWhileGeneratingTheBaseline(**common, error=error), db=None
+        ).run(_request_with_baseline(sample_request))
+    except Exception:
+        pass
+    # Outside the handler on purpose. Raised inside it, the failure would carry the exception
+    # being handled as its context, and pytest reads that class's name to print it: for a class
+    # whose name cannot be read that is an INTERNALERROR, which ends the whole session
+    # instead of failing this test (measured, with ``safe_class_name`` replaced by an inline,
+    # unguarded read at the ``agent.py`` site).
+    pytest.fail("DataAgent.run raised instead of returning a report", pytrace=False)
 
 
 def _every_string(report: DataReport) -> list[str]:
@@ -1429,6 +1440,46 @@ def test_a_crash_whose_class_name_is_not_a_short_identifier_is_not_carried(
     report = _crash_report(
         site,
         type(name, (Exception,), {})(GATEWAY_KEY),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert _own_text(site, report) == f"{prefix}<unprintable>"
+    assert GATEWAY_KEY not in report.model_dump_json()
+
+
+@SITES
+@pytest.mark.parametrize(
+    "metaclass",
+    [
+        pytest.param(NameThatRaises, id="name-cannot-be-read"),
+        pytest.param(NameThatIsAHostileStr, id="name-is-a-str-subclass"),
+    ],
+)
+def test_a_crash_whose_class_name_the_helper_must_guard_still_returns_a_report(
+    site: str,
+    prefix: str,
+    metaclass: type,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """The names ``type(name, ...)`` cannot build. A site that read the name inline, without the
+    guard, would raise from inside its ``except`` block (the first) or carry the name (the second):
+    the odd-name test above passes for such a site, because every name it builds is a plain
+    ``str`` that can be read."""
+
+    class Odd(Exception, metaclass=metaclass):  # type: ignore[call-arg]
+        pass
+
+    report = _crash_report(
+        site,
+        Odd(GATEWAY_KEY),
         sample_request,
         primary_query_spec_valid,
         qc_specs_valid,

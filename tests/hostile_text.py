@@ -185,3 +185,44 @@ def leaked_run(password: str, text: str, width: int = WIDTH) -> str | None:
         if any(ch.isalnum() for ch in run) and run.lower() in haystack:
             return run
     return None
+
+
+# --- Session 279: class names an exception can carry that a report must not -----------------
+#
+# ``db.safe_class_name`` names an exception for a report. A class built at run time can be named
+# anything, which ``type(name, ...)`` covers; these two are the names ``type()`` cannot build: a
+# metaclass whose ``__name__`` raises, and one whose ``__name__`` is a ``str`` subclass that
+# answers the guard's questions as a plain identifier would. ``test_db.py`` holds the helper,
+# ``test_data_agent.py`` holds each site that calls it, and both need them.
+
+#: What the hostile ``__name__`` holds: an escape sequence and an API key.
+HOSTILE_CLASS_NAME = "\x1b[2J" + "sk-ant-NAMETEST0123456789abcdef"
+
+
+class NameThatRaises(type):
+    """A metaclass whose class cannot be asked its name."""
+
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        raise RuntimeError("the class name cannot be read")
+
+
+class HostileText(str):
+    """A ``str`` that answers the class-name guard's questions as a plain identifier would."""
+
+    def isascii(self) -> bool:
+        return True
+
+    def isidentifier(self) -> bool:
+        return True
+
+    def __len__(self) -> int:
+        return 5
+
+
+class NameThatIsAHostileStr(type):
+    """A metaclass whose ``__name__`` is a :class:`HostileText` of :data:`HOSTILE_CLASS_NAME`."""
+
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        return HostileText(HOSTILE_CLASS_NAME)
