@@ -16,9 +16,9 @@ A host's SUCCESS replies are its words too (``BACKLOG.md`` route 8): the project
 project id, the default branch and the commit id in a ``2xx`` become the fields of ``ProjectInfo``
 and ``CommitInfo``, then of ``RepoProjectResult``, which the website command and the pipeline
 script print and the pipeline saves; and the id and the branch go back to the host inside a request
-path, where a control character makes ``httpx`` raise ``InvalidURL`` out of the adapter, past
-:func:`scrubbed_errors`, because it is not a ``RepoClientError``. :func:`scrubbed_values` applies
-the same scrub to what a protocol method RETURNS.
+path, where a C0 control character or DEL makes ``httpx`` raise ``InvalidURL`` out of the adapter,
+past :func:`scrubbed_errors`, because it is not a ``RepoClientError``. :func:`scrubbed_values`
+applies the same scrub to what a protocol method RETURNS.
 
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
@@ -27,8 +27,9 @@ only); one with characters inserted in it, or cut short, or split across lines b
 credential (userinfo in the host URL travels as ``Authorization: Basic base64(user:password)``); a
 message built, or a value returned, by a ``RepoClient`` other than the two adapters; and a value an
 adapter reads from one reply and puts in its next request, which :func:`scrubbed_values` never
-sees because it is not on what the method returns (GitHub's ``parent_sha`` and commit sha: a
-control character or a lone surrogate there raises ``InvalidURL`` or ``UnicodeEncodeError``;
+sees because it is not on what the method returns (a C0 control or DEL in GitHub's ``parent_sha``,
+which goes into a path, raises ``InvalidURL``; a lone surrogate in any of GitHub's ``parent_sha``,
+base-tree, blob, tree and commit shas, or in GitLab's group id, raises ``UnicodeEncodeError``;
 ``BACKLOG.md``).
 """
 
@@ -56,8 +57,21 @@ from model_project_constructor.agents.website.protocol import (
 #: operator needs the status and the first lines of it.
 MAX_HOST_TEXT = 1000
 
+#: Room for that notice (``... [N more characters not shown]`` is 32 characters and the digits of N,
+#: under 52 for any N a machine can hold). Text scrubbed once is at most ``MAX_HOST_TEXT +
+#: NOTICE_ROOM`` long, so a second scrub with that limit leaves it as it is instead of cutting the
+#: notice off and counting again; ``--resume`` re-scrubs an address that may have been scrubbed.
+NOTICE_ROOM = 64
+
 #: What replaces the secret.
 REDACTED = "***"
+
+#: What replaces a lone surrogate: U+FFFD, the Unicode replacement character. Not ``?``, which in a
+#: value that goes back into a request path (a project id, a branch) starts a query, so the path
+#: named the real project and the rest of it became the query string (Session 281's review).
+REPLACEMENT = "�"
+
+_LONE_SURROGATES = re.compile("[\ud800-\udfff]")
 
 #: What :func:`scrub_host_text` returns when it cannot finish: a scrub that did not complete has not
 #: removed the secret.
@@ -121,12 +135,12 @@ def scrub_host_text(text: object, secret: str = "", *, limit: int = MAX_HOST_TEX
 
     Runs inside the ``except`` blocks that deliver a ``failure_reason``, and over the values a
     success reply returns, so it must not be a raise site itself: any failure returns
-    :data:`UNPRINTABLE`. A lone surrogate is replaced first, because text holding one makes a file
-    write or ``model_dump_json`` raise.
+    :data:`UNPRINTABLE`. A lone surrogate is replaced first, by :data:`REPLACEMENT`, because text
+    holding one makes a file write or ``model_dump_json`` raise.
     """
     try:
         limit = max(limit, 0)
-        raw = str(text).encode("utf-8", "replace").decode("utf-8")
+        raw = _LONE_SURROGATES.sub(REPLACEMENT, str(text))
         pattern = _secret_pattern(secret)
         if pattern is not None:
             raw = pattern.sub(REDACTED, raw)
@@ -213,9 +227,20 @@ def scrub_project_info(info: ProjectInfo, secret: str = "") -> ProjectInfo:
 
     ``id``, ``url`` and ``default_branch`` are all the host's words. Text with nothing to remove (an
     address with a port, a query and non-ASCII letters, a GitHub ``owner/name``, a branch with a
-    slash) comes out as it went in. An id or a branch that held a control character comes out with
-    a space where it was, so it names nothing the host has and the next request fails the way a
-    request for any unknown project does, instead of ``httpx`` refusing the path.
+    slash) comes out as it went in. What becomes of an id or a branch that held something to remove
+    decides what the next request asks the host for, instead of ``httpx`` refusing the path:
+
+    * a control character INSIDE it becomes a space, and a lone surrogate U+FFFD (never ``?``,
+      which would start a query): the value names nothing the host has, and the request for it
+      fails as one for any unknown project does;
+    * a control character or other whitespace at either END is dropped, so ``42`` and a bell is
+      ``42``, the project the host most likely meant;
+    * a value that is NOTHING but control characters becomes empty, which is what an empty value
+      from the host already gave (the adapters write ``main`` for a missing branch before this
+      sees it, so a branch of only control characters is sent as an empty one);
+    * a run of whitespace, a non-breaking space and the Unicode line separators become one space,
+      and the adapter's token becomes ``***``, even inside an id (a real token is too long to
+      occur in one by accident).
     """
     return ProjectInfo(
         id=scrub_host_text(info.id, secret),
@@ -257,21 +282,36 @@ def scrubbed_values(
 
     @functools.wraps(method)
     def wrapper(self: _S, /, *args: _P.args, **kwargs: _P.kwargs) -> _V:
+        result = method(self, *args, **kwargs)
         # ``_scrubbed_result`` returns the kind it was given, which a type checker cannot see.
-        return cast("_V", _scrubbed_result(method(self, *args, **kwargs), self._secret))
+        return cast("_V", _scrubbed_result(result, _secret_of(self)))
 
     # What a registry-wide test looks for, set by this decorator alone (see ``scrubbed_errors``).
     wrapper.__scrubs_host_values__ = True  # type: ignore[attr-defined]
     return wrapper
 
 
+def _secret_of(holder: _HoldsSecret) -> object:
+    """``holder._secret``, or ``None`` if it cannot be read.
+
+    Read here, inside a guard, as :func:`_scrubbed_message` reads it: the host call has already
+    succeeded (the project may exist), so a missing attribute must not become an ``AttributeError``
+    now. ``None`` is not a ``str``, so every field fails closed to :data:`UNPRINTABLE`: a value
+    whose secret could not be removed must not look like one that never held it.
+    """
+    try:
+        return holder._secret
+    except Exception:
+        return None
+
+
 def _scrubbed_result(
-    result: ProjectInfo | CommitInfo, secret: str
+    result: ProjectInfo | CommitInfo, secret: object
 ) -> ProjectInfo | CommitInfo:
     if isinstance(result, ProjectInfo):
-        return scrub_project_info(result, secret)
+        return scrub_project_info(result, secret)  # type: ignore[arg-type]
     if isinstance(result, CommitInfo):
-        return scrub_commit_info(result, secret)
+        return scrub_commit_info(result, secret)  # type: ignore[arg-type]
     raise TypeError(
         f"scrubbed_values wraps a method that returns ProjectInfo or CommitInfo, "
         f"not {type(result).__name__}"

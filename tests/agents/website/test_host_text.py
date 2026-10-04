@@ -27,7 +27,9 @@ import pytest
 
 from model_project_constructor.agents.website._host_text import (
     MAX_HOST_TEXT,
+    NOTICE_ROOM,
     REDACTED,
+    REPLACEMENT,
     UNPRINTABLE,
     response_text,
     scrub_commit_info,
@@ -208,6 +210,34 @@ class TestTheShape:
         out = scrub_host_text("bad \ud800 text", TOKEN)
         assert out.encode("utf-8").decode("utf-8") == out
         assert out.startswith("bad ") and out.endswith(" text")
+
+    def test_a_lone_surrogate_becomes_the_replacement_character_and_never_a_question_mark(
+        self,
+    ) -> None:
+        """A project id or a branch goes back into a request path, where ``?`` starts the query:
+        ``g/n?`` asked for the real repository with the rest of the path as a query string, and
+        the adapter then crashed on a reply that was not the one it asked for (Session 281's
+        review). U+FFFD is percent-encoded instead, and names nothing."""
+        assert REPLACEMENT == "\ufffd"
+        assert scrub_host_text("42\ud800") == "42\ufffd"
+        assert scrub_host_text("g/n\udcff/x") == "g/n\ufffd/x"
+        assert "?" not in scrub_host_text("\ud800\udbff\udc00\udfff")
+        # A character outside the basic plane is not a surrogate in a Python string.
+        assert scrub_host_text("ok \U0001F600") == "ok \U0001F600"
+
+    def test_text_scrubbed_once_is_left_as_it_is_by_a_scrub_with_room_for_the_notice(
+        self,
+    ) -> None:
+        """``--resume`` re-scrubs an address the adapter may already have scrubbed. With the
+        default limit a second scrub cuts the first one's notice off and counts again, printing a
+        false count; with ``NOTICE_ROOM`` it leaves the text as it is."""
+        for length in (MAX_HOST_TEXT + 1, 5000, 10**6):
+            once = scrub_host_text("u" * length)
+            assert scrub_host_text(once, limit=MAX_HOST_TEXT + NOTICE_ROOM) == once, length
+        once = scrub_host_text("u" * 5000)
+        assert scrub_host_text(once) != once  # the premise
+        # The room holds the notice for any count a machine can hold.
+        assert len(f"... [{10**19} more characters not shown]") <= NOTICE_ROOM
 
     def test_a_message_that_cannot_be_rendered_fails_closed(self) -> None:
         class Broken:
@@ -466,6 +496,25 @@ class TestScrubbedValues:
         assert _Holder.project.__scrubs_host_values__ is True  # type: ignore[attr-defined]
         assert not hasattr(_Holder.project, "__scrubs_host_text__")
         assert not hasattr(_Holder.project.__wrapped__, "__scrubs_host_values__")
+
+    def test_a_holder_without_a_secret_fails_closed_and_does_not_raise(self) -> None:
+        """The host call has succeeded by then, and the project may exist: an ``AttributeError``
+        now would be a crash past ``scrubbed_errors``. A value whose secret could not be removed
+        must not pass for one that never held it, so every field is ``<unprintable>``."""
+
+        class NoSecret:
+            @scrubbed_values
+            def project(self) -> ProjectInfo:
+                return ProjectInfo("42", "https://h/p", "main")
+
+        assert NoSecret().project() == ProjectInfo(  # type: ignore[arg-type]
+            UNPRINTABLE, UNPRINTABLE, UNPRINTABLE
+        )
+
+    def test_a_secret_that_is_not_text_fails_closed_too(self) -> None:
+        holder = _Holder(TOKEN)
+        holder._secret = 5  # type: ignore[assignment]
+        assert holder.commit("abc").sha == UNPRINTABLE
 
     def test_stacked_under_scrubbed_errors_both_markers_show_and_both_work(self) -> None:
         class Both:

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import httpx
 import pytest
 
 from model_project_constructor.agents.website._host_text import REDACTED, scrub_host_text
@@ -41,14 +42,19 @@ from tests.agents.website.success_hosts import (
     serve,
 )
 
-FILES = {"README.md": "# r\n", "analysis/01 plan.qmd": "q\n"}
+# Two spaces in a path: a scrub of the paths would collapse them, which one space cannot show.
+FILES = {"README.md": "# r\n", "analysis/01  plan.qmd": "q\n"}
 URL = "https://h.example/g/p"
 
 #: Not route 8, and open: GitHub's ``commit_files`` sends the host's own commit sha back in the body
 #: of its next request, and ``httpx`` cannot encode a lone surrogate there, so the run raises
 #: ``UnicodeEncodeError`` (not a ``RepoClientError``) BEFORE the scrub, which is on what the method
 #: returns, can see the value. ``strict``: the day that is fixed these go red and the marks go.
+#: Only from ``httpx`` 0.28, which writes a JSON body as UTF-8 (``ensure_ascii=False``); 0.27, which
+#: ``pyproject.toml`` still admits, escapes the surrogate to ASCII and the run completes.
+HTTPX_WRITES_JSON_AS_UTF8 = tuple(int(part) for part in httpx.__version__.split(".")[:2]) >= (0, 28)
 GITHUB_REUSES_THE_SHA = pytest.mark.xfail(
+    HTTPX_WRITES_JSON_AS_UTF8,
     strict=True,
     raises=UnicodeEncodeError,
     reason="BACKLOG.md: an adapter puts a host's value into its next request unscrubbed "
@@ -118,7 +124,7 @@ def test_commit_files_returns_the_sha_scrubbed_and_the_paths_as_they_are(
     assert is_clean(commit.sha)
     # The paths are the caller's own: a path with a space in it must not be collapsed.
     assert commit.files_committed == sorted(FILES)
-    assert "analysis/01 plan.qmd" in commit.files_committed
+    assert "analysis/01  plan.qmd" in commit.files_committed
 
 
 @pytest.mark.parametrize("shipped", SHIPPED, ids=lambda s: s.name)
@@ -243,8 +249,8 @@ def test_a_default_branch_with_a_control_code_is_a_result_not_a_crash(
     intake_report: IntakeReport,
     data_report: DataReport,
 ) -> None:
-    """GitHub puts the branch in a request path as well (GitLab sends it in a JSON body, where it
-    cannot be refused by the client, so it is held by the direct tests above)."""
+    """GitHub puts the branch in a request path as well. GitLab sends it in a JSON body, where a
+    control character is escaped rather than refused; the direct tests above hold its scrub."""
     branch = f"main{HOSTILE[kind]}"
     project = shipped.project_reply(id_text="", url=URL, branch=branch)
     result = _run_against(shipped, project, "abc", intake_report, data_report)

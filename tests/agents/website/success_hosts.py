@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from model_project_constructor.agents.website import GitHubAdapter, GitLabAdapter
 
@@ -153,11 +154,16 @@ def _http(status: int, payload: object) -> bytes:
 
 
 def serve(router: Router) -> Callable[[bytes], bytes]:
-    """The reply function ``loopback.serving_raw`` takes: each request answered by ``router``."""
+    """The reply function ``loopback.serving_raw`` takes: each request answered by ``router``.
+
+    The router sees the PATH, as a real server routes on it: whatever follows a ``?`` in the
+    request target is the query and is dropped. Matching the raw target instead hid that a value
+    which put a ``?`` in a path named the real project with a query after it (Session 281's review).
+    """
 
     def reply(request: bytes) -> bytes:
-        method, path, _ = request.split(b"\r\n", 1)[0].decode("latin-1").split(" ", 2)
-        status, payload = router(method, path)
+        method, target, _ = request.split(b"\r\n", 1)[0].decode("latin-1").split(" ", 2)
+        status, payload = router(method, urlsplit(target).path)
         return _http(status, payload)
 
     return reply
