@@ -57,7 +57,8 @@ rows below it are the smaller residue that closing it exposed.
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
 | One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
-| The scripted intake stops for four reasons and the saved report now gives one name for all of them | Session 278 made the intake runner's failure report name the exception's class and not what it said, because a gateway can quote the API key in a message. The scripted run stops itself with a plain `RuntimeError` for four different causes (the fixture ran out of interview answers, ran out of review responses, hit an interrupt it does not know, or went past its turn cap), so the report now reads `RuntimeError` for each, and the message was the only place the cause was written (the exception is turned into a report, not re-raised). A bad model reply and an HTTP 400 collapse into one name each in the same way, and since Session 279 the data stage's report does the same (every crash of its graph reads `graph crashed:` and a class name; the model-reply error alone has 18 raise sites), and since Session 280 so does a failure to build its report from the model's replies (`report assembly failed:`, one `ValidationError` for a value outside the vocabulary and for a field of the wrong type). | **Small; a choice:** one named error class per cause, which says which with no message to leak. The tutorial and the troubleshooting guide list the four meanwhile, and the troubleshooting guide the data stage's classes. |
+| The scripted intake stops for four reasons and the saved report now gives one name for all of them | Session 278 made the intake runner's failure report name the exception's class and not what it said, because a gateway can quote the API key in a message. The scripted run stops itself with a plain `RuntimeError` for four different causes (the fixture ran out of interview answers, ran out of review responses, hit an interrupt it does not know, or went past its turn cap), so the report now reads `RuntimeError` for each, and the message was the only place the cause was written (the exception is turned into a report, not re-raised). A bad model reply and an HTTP 400 collapse into one name each in the same way, and since Session 279 the data stage's report does the same (every crash of its graph reads `graph crashed:` and a class name; the model-reply error alone has 18 raise sites), and since Session 280 so does a failure to build its report from the model's replies (`report assembly failed:`, a `ValidationError` for a value outside the vocabulary and a `ValueError` for a different number of quality-check groups). | **Small; a choice:** one named error class per cause, which says which with no message to leak. The tutorial and the troubleshooting guide list the four meanwhile, and the troubleshooting guide the data stage's classes. |
+| A model reply of `[]` for the primary queries is a `COMPLETE` report with no queries | Found by Session 280's review. If the language model answers the data agent's first question with an empty list, nothing refuses it: the report says `COMPLETE`, holds no queries, and the website stage builds a project with no query files and prints its address. The request is checked for being empty; the reply is not. | **Small; a choice:** treat it like invalid SQL (one retry, then a failed report), require at least one query, or accept it and say so. |
 | `MPC_LOG_LEVEL` is read and used by nothing | The setting is parsed and validated (`OrchestratorSettings.log_level`), the operator guide lists it and the wiki says `MPC_LOG_LEVEL=DEBUG` gives "verbose output including handoff payloads". Nothing reads the value: no script or module configures logging from it, and no handoff payload is logged. Found by Session 276 while checking what installs a log handler (nothing does). | **Small; a choice:** wire it (the script installs a handler at that level), or stop documenting it. Pre-existing. |
 | CI tests one Python, and it is not the one sessions run | CI uses whatever Python `ubuntu-latest` has (3.12.3 at the last run); this machine runs 3.13.5; the project says 3.11 or later and pins none. A standard-library error class differs between them, and 7 of Session 274's new tests would have gone red on the first push for that reason. | **Small; operator call:** pin 3.12, or test 3.11, 3.12 and 3.13 (a matrix triples the CI minutes). |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
@@ -66,7 +67,7 @@ rows below it are the smaller residue that closing it exposed.
 | `redact_secrets` is slow on some text, and nothing limits how much text `safe_message` reads | A message made of thousands of `://x:` runs with no spaces takes seconds to minutes (4x longer each time the text doubles), and a 10-million-character message uses 1 to 2 GB. No database driver normally produces either. | **Small**, but a choice: a cap on the length shortens a very long `[SQL: ...]` that is now shown whole. |
 | Only `typer`'s minimum version has ever been checked | Session 268 closed the `typer` item (the minimum is now `>=0.16.0`, and a test holds it) and, doing it, found that nothing installs ANY declared minimum, because the lock pins every package far above it. Asked of the others, `langgraph>=0.2` fails at once: at 0.2.0 the intake command cannot even start, and the first release that works is 0.2.57. The rest started, but only `--help` was run. | **Small** to raise `langgraph` (measure the data agent's own tests at its minimum first). **Operator call** for a CI job that installs the minimums, the only thing that would have caught either. |
 | The tests need Click 8.2 and nothing says so | Under Click 8.1, 31 CLI tests fail because they read the error stream separately and Click 8.1 does not capture it that way; the program itself runs fine there. And one test imports Click directly although no file declares it: it arrives by accident through other packages, and newer Typer stops bringing it. | **Small** — declare `click>=8.2` in the dev extras. |
-| A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
+| A bad `--db-url` still exits 0 | **Two thirds of this closed in Session 260.** The run used to throw away the message naming the cause, so a typo'd port, an unexported shell variable and a genuine warehouse outage produced byte-identical reports; now the cause is in the report (with any password masked) and a URL that fails to *parse* also logs a warning. What is left: the run still reports `COMPLETE` and exits 0 with **every quality check unexecuted** — the cause is reported, but nothing gates on it. The CLI exits 0 for a failed (`EXECUTION_FAILED`) report too. | **Operator call.** Making it halt turns runs that succeed today into failures, which is the point of it, and changes `DataReport` status semantics across two packages. Three shapes are in the item. |
 | CLI-adapter portability (`opencode` spec) | Not a bug — the umbrella record of the four-phase `opencode` adapter build. **All four phases are DONE.** It stays here as the provenance trail for the measurement items above. | Nothing to execute. |
 | `sql_exec` — CLOSED | Historical marker, kept deliberately. Nothing to do. | Nothing to execute. |
 | The docs toolchain has no version ceiling | `pyproject.toml` bounds the tutorial site's theme from below only (`>=9.0`), so a major Material release could be resolved into the public site. Deliberately deferred when the renderer landed. Session 243 made such a bump fail as a red job instead of a silent unstyled publish; the ceiling would stop it being resolved at all. | Small — 2 lines + `uv lock`. Non-binding today: Material 10.x does not exist. |
@@ -356,7 +357,9 @@ no longer produce byte-identical reports — pinned by
 `if executed and data_report.status != "COMPLETE"`. So the data-agent CLI still prints
 `wrote report.json (COMPLETE)` and exits 0, and the full pipeline still generates every project file
 and exits 0, with **every quality check unexecuted**. The cause is now *in* the report; nothing
-*gates* on it.
+*gates* on it. (The CLI exits 0 for an `EXECUTION_FAILED` report as well: a crash of the graph and, since
+Session 280, a failure to build the report, which used to end in a traceback and exit 1. `packages/data-agent/USAGE.md`
+says so. Whatever is ruled here for `COMPLETE` should be ruled for `EXECUTION_FAILED` too.)
 
 **Why it was not done with (a) and (b).** It is an operator-visible behaviour change, not a bug fix:
 runs that succeed today would start failing, and that is the point of it. It also changes
@@ -395,7 +398,12 @@ validates, is written with exit 0, and then fails to load.
    refuse (`ValidationError: Invalid JSON`). Reproduced with `--fake-llm`.
 2. **A model reply** carrying the same escape is written into the `DataReport` unchecked
    (`cli.py:164`, `json.dumps(report.model_dump(mode="json"), indent=2)`): exit 0 and an unloadable
-   file. Reproduced by making the fake client's `summarize` return one.
+   file. Reproduced by making the fake client's `summarize` return one. *(Session 280's review: through the pipeline
+   the same reply does not write an unloadable file, it crashes the save. `checkpoints.py:67`'s
+   `envelope.model_dump_json` raises `PydanticSerializationError` out of `run_pipeline`, so `scripts/run_pipeline.py
+   --llm data` exits 1 with a traceback and the checkpoint directory holds no `DataReport.json`; the stage returned a
+   `COMPLETE` report first. A surrogate in the spec name of an invalid-SQL failure does the same. Older than the
+   report-assembly fix, which it does not touch.)*
 3. **`intake_qa_pairs_to_inventory`** (`orchestrator/adapters.py:197-199`) builds `request_context`
    from `IntakeReport.stakeholder_id` and `session_id`, which accept the same text, and
    `model_dump_json` then raises. `merge_inventories` embeds only counts, so it is not affected.
@@ -531,8 +539,9 @@ Oracle or SQL Server.
    Session 279's review (a probe by one lens; two skeptics reproduced it, one calling it a nit and one low).* Only
    `self._app.invoke` was guarded. `_assemble_complete_report` builds `PrimaryQuery` objects whose
    `expected_row_count_order` is a `Literal`, zips the specs, quality-check groups and datasheets with `strict=True`,
-   and builds the `DataReport` itself, so a model reply with a value outside the `Literal`, fewer quality-check groups
-   than primary queries, or a summary that is not text made `run` raise instead of returning `EXECUTION_FAILED`,
+   and builds the `DataReport` itself, so a model reply with a value outside the `Literal` or a different number of
+   quality-check groups than primary queries (the two the shipped clients can produce), or, from a custom `LLMClient`, a
+   summary that is not text, made `run` raise instead of returning `EXECUTION_FAILED`,
    against `agent.py`'s module docstring and `packages/data-agent/USAGE.md`. Session 280 measured it through the real
    script: exit 1, a traceback on stderr that quoted the model's reply (pydantic's `input_value`), no status line and no
    `DataReport.json` in the checkpoint directory. **Fixed:** the call sits in the same kind of handler as the graph's
@@ -540,8 +549,9 @@ Oracle or SQL Server.
    `tests/agents/data/test_data_agent.py` (the four tests the other two sites have, and that no guard swallows an
    interrupt) and the three real causes through the real assembly, and end to end by
    `tests/scripts/test_run_pipeline_data_bad_reply.py` (the real script, client and SDK, a socket). **The cost** is the
-   same as the other two sites' and is filed with them, under *The scripted intake stops for four reasons* below: a
-   `ValidationError` says a value or a field was refused and not which.
+   same as the other two sites' and is filed with them, under *The scripted intake stops for four reasons* below, and it is smaller
+   here: through the shipped clients two causes give two class names (`ValidationError` the row-count order,
+   `ValueError` the group count).
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
@@ -688,13 +698,29 @@ names no key. It also lost the `opencode` version the client appends to two of t
 longer so, and `docs/wiki/` is the operator's to republish. **The fix has the same shape as the intake's:** a subclass per cause, with no message to leak.
 `TROUBLESHOOTING.md` §FAILED_AT_DATA says what the classes mean meanwhile.
 
-**And the report's assembly (Session 280, which made it return `report assembly failed: <ExceptionClass>`).** Three
-causes share two names: a value outside the row-count vocabulary and a field of the wrong type are both
-`ValidationError`, and fewer quality-check groups than queries is `ValueError` (`zip(strict=True)`). The message that
-said which quotes the model's reply, so it stays out of the report; the cause is read by running the graph and the
-assembly yourself (`TROUBLESHOOTING.md` has the recipe, which calls a private function). A fixed sentence per cause,
-chosen by checking the three conditions before the build and naming the field and never the value, would say which
-with nothing to leak; not built, because it adds checks to an agent whose reply handling is the next ruling.
+**And the report's assembly (Session 280, which made it return `report assembly failed: <ExceptionClass>`).** With the
+shipped clients two causes give two names (a value outside the row-count vocabulary is `ValidationError`, a number of
+quality-check groups different from the number of queries is `ValueError`, from `zip(strict=True)`), so the class
+says which; a custom `LLMClient` can add a field of the wrong type (`ValidationError` again), `TypeError` and
+`KeyError`. What the class does not say is which value: pydantic's message names the field but quotes the model's
+reply, so it stays out of the report, and the cause is read by running the graph and the assembly yourself
+(`TROUBLESHOOTING.md` has the recipe, which calls a private function). A fixed sentence per cause, chosen by checking
+the conditions before the build and naming the field and never the value, would say which with nothing to leak; not
+built, because it adds checks to an agent whose reply handling is the next ruling.
+
+### A model reply of `[]` for the primary queries is a `COMPLETE` data report with no queries
+
+**Found by Session 280's review, older than that session's change and not touched by it.** The reviewer reproduced it end to
+end (the real script, the real client, a loopback gateway answering `[]` to the primary-queries and quality-check prompts:
+exit 0, `Status: COMPLETE`, a project URL printed) and two skeptics with a stand-in client. `generate_queries` checks each
+spec in a loop, which is vacuous on an empty list; `_assemble_complete_report` zips three empty lists without raising; and
+`DataReport.primary_queries` is a bare `list` with no minimum. So `DataAgent.run` returns `COMPLETE` with no queries and the
+website stage builds a project with no query files. That stage accepts an empty report on purpose
+(`tests/agents/website/test_templates.py`, `test_empty_data_report_yields_no_query_files`), so nothing downstream objects.
+The request is checked for vacuity (`_missing_semantics`); the reply is not. **Small, a choice:** treat an empty list like
+invalid SQL (the one retry, then `EXECUTION_FAILED`), or give `primary_queries` a minimum of one (which would also refuse
+any older saved report that holds none), or accept it and say so. Not built: it changes what `COMPLETE` means for two
+agents.
 
 ### `MPC_LOG_LEVEL` is read and used by nothing
 
