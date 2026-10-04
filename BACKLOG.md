@@ -56,7 +56,8 @@ rows below it are the smaller residue that closing it exposed.
 | Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the *language model's* error text (not the database's) copied into a report, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274). | **Small** for the SQLAlchemy lines, the language-model text and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
-| Two more places put a model's or a gateway's error text on the screen or in a log | Found by Session 276's review, both older than it. The scripted intake runner copies a raw exception into the report it saves and the `Failure:` line it prints; the data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Neither is fixed. | **Medium, small** for the report (class name only). **Low, a choice** for the log line. |
+| One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
+| The scripted intake stops for four reasons and the saved report now gives one name for all of them | Session 278 made the intake runner's failure report name the exception's class and not what it said, because a gateway can quote the API key in a message. The scripted run stops itself with a plain `RuntimeError` for four different causes (the fixture ran out of interview answers, ran out of review responses, hit an interrupt it does not know, or went past its turn cap), so the report now reads `RuntimeError` for each, and the message was the only place the cause was written (the exception is turned into a report, not re-raised). A bad model reply and an HTTP 400 collapse into one name each in the same way. | **Small; a choice:** one named error class per cause, which says which with no message to leak. The tutorial and the troubleshooting guide list the four meanwhile. |
 | `MPC_LOG_LEVEL` is read and used by nothing | The setting is parsed and validated (`OrchestratorSettings.log_level`), the operator guide lists it and the wiki says `MPC_LOG_LEVEL=DEBUG` gives "verbose output including handoff payloads". Nothing reads the value: no script or module configures logging from it, and no handoff payload is logged. Found by Session 276 while checking what installs a log handler (nothing does). | **Small; a choice:** wire it (the script installs a handler at that level), or stop documenting it. Pre-existing. |
 | CI tests one Python, and it is not the one sessions run | CI uses whatever Python `ubuntu-latest` has (3.12.3 at the last run); this machine runs 3.13.5; the project says 3.11 or later and pins none. A standard-library error class differs between them, and 7 of Session 274's new tests would have gone red on the first push for that reason. | **Small; operator call:** pin 3.12, or test 3.11, 3.12 and 3.13 (a matrix triples the CI minutes). |
 | The argument parser prints a mistyped address or token | An address typed without `--db-url` is echoed back as "unexpected extra argument", password and all, by the data agent's command and by `scripts/run_pipeline.py`. Session 272's review found the same for a bare token given to the website agent and for an address typed as the first word ("No such command"). **The other half closed in Session 272:** in Typer 0.16 to 0.22 an uncaught error printed every parameter's value (the address, and the website agent's token, which nobody had filed) in a box under the traceback; all three apps now switch it off, and a test holds it. | **Small; a secrets matter; a choice.** Catch the error and mask it, or take the address and token from an environment variable. The existing masking function hides an address's password but not a bare token. |
@@ -466,7 +467,10 @@ Oracle or SQL Server.
    in the exception came out with all three). `agent.py:54`, `f"graph crashed: {e}"`, puts any exception
    that escapes the graph into `data_quality_concerns` **and** the summary. The realistic carriers are an
    SDK `APIError` and `opencode`'s error event. **Fix:** `safe_message(e)` at both (one token each, plus a
-   test mirroring the route-3 baseline test). The review's guard idea: a small AST test that fails on any
+   test mirroring the route-3 baseline test). *(Session 278's review, run against a gateway that echoes the API key
+   into a 400 and into a 200 that is not JSON: `agent.py:54` does write the key into `DataReport.json`'s summary and
+   `data_quality_concerns` today, not onto the screen, and `safe_message` masks the `x-api-key: <key>` shape but
+   leaves a bare `sk-ant-` token, so the sturdier fix there is the class name only, as the intake runner now does.)* The review's guard idea: a small AST test that fails on any
    f-string interpolating a bare exception name in `nodes.py`, `agent.py` and `cli.py` unless allow-listed,
    which would have flagged both and would stop new routes arriving raw.
 6. **The website templates are an unguarded sink.** *Found by Session 270's review.* Routes were fixed at
@@ -576,7 +580,9 @@ Session 275's own and was not put to the operator.**
    `run_pipeline` raise with no result saved: the duplicate-project case Session 275 closed for ordinary exceptions.
    The log's copy of the rule (`logging.py::_class_name`) is guarded and requires an exact `str`;
    `test_it_is_the_name_the_website_stage_saves` holds the two equal for ordinary classes only. *(Found by Session
-   276's review; its skeptics split nit and low.)* **Small:** the same guard, four lines and a test.
+   276's review; its skeptics split nit and low.)* **Small:** the same guard, four lines and a test. Session 278's
+   `scripts/run_pipeline.py` imports `_class_name` for its own failure report, so the script is not a third copy;
+   `pipeline.py` stays the only unguarded one, and it does not import `logging.py` (by that module's own design).
 8. **Session 275's `echoed-id` end-to-end case never had the token in the exception's text.** It assumed `httpx`
    quotes a URL; for a control character in the path it names the character and its position, not the URL
    (measured on httpx 0.28.1 and 0.27.0), so its token assertions hold trivially. Session 276 corrected the
@@ -611,24 +617,39 @@ first draft, said it did. Two things are left:
    address, which is exactly what `scrub_host_text` and `safe_message` need); with none given the message stays out.
    A choice, and it reopens what the log may hold; not needed until someone misses the text.
 
-### Two more places put a model's or a gateway's error text where a token could be
+### One more place puts a model's error text where a token could be
 
-**Found by Session 276's review (its leak-channels sweep; both pre-existing, neither touched).** Both reproduced by
-two skeptics.
+**Found by Session 276's review (its leak-channels sweep; pre-existing, untouched), reproduced by two skeptics.** It
+was filed as two places. The first, `scripts/run_pipeline.py` (`_draft_incomplete_from_exception`) copying the raw
+exception text into the saved `IntakeReport.json` and the printed `Failure:` line, **was closed by Session 278**
+(`CHANGELOG.md`): the report names the exception's class only, through `logging._class_name`, and a test drives the
+real script against a gateway that echoes the API key. What is left:
 
-1. **`scripts/run_pipeline.py:206`** (`_draft_incomplete_from_exception`, called from the scripted intake runner's
-   `except Exception`, `:285`): `missing_fields=[f"interview_aborted: {reason}: {exc}"]` carries the raw exception
-   text. `pipeline.py:441-445` copies `missing_fields` into the run's `failure_reason`, the script prints it as
-   `Failure: ...`, and the report is saved as `IntakeReport.json` in the checkpoint directory. An error from a model
-   client or a gateway that echoes a credential or a header lands on the screen and on disk unscrubbed. The sibling
-   sites (`agent.py:54`, `nodes.py:211`) are filed in the item above. **Medium, small:** class name only, as
-   Sessions 275 and 276 chose for the website stage and the log.
-2. **`packages/data-agent/.../discovery.py:293-297, 300-306, 315-322`** logs `safe_message(e)` at `WARNING`.
+1. **`packages/data-agent/.../discovery.py:293-297, 300-306, 315-322`** logs `safe_message(e)` at `WARNING`.
    `safe_message` masks `key=value` and `PRIVATE-TOKEN:` shapes and, by its own docstring, not a bare token, a
    `Bearer` header or a signature; a ranker that raises `RuntimeError('... authorization Bearer <token>')` prints the
    token through Python's last-resort handler when no handler is configured (reproduced). `discovery.py:240-244` keeps
    such text out of the persisted note for that reason and still logs it. A documented best-effort trade-off the
    operator has not ruled on for the log. **Low, a choice:** log the class name only, as the orchestrator now does.
+
+### The scripted intake stops for four reasons, and the saved report gives one name for all of them
+
+**Residue of Session 278, which made `_draft_incomplete_from_exception` name the exception's class and nothing it said**
+(`scripts/run_pipeline.py`; a gateway can quote the request headers, and so the API key, in a message, and the string is
+printed as `Failure:` and saved in `IntakeReport.json`). `IntakeAgent.run_scripted` stops itself with a plain
+`RuntimeError` at four sites (`agents/intake/agent.py:141` the fixture ran out of interview answers, `:149` it ran out
+of review responses, `:153` an interrupt of an unknown kind, `:157` more than `max_turns` turns), so `interview_aborted:
+RuntimeError` no longer says which. Before, the message did, and it was the only place the cause was written: the
+runner converts the exception into a report and does not re-raise, so no traceback reaches the operator.
+`docs/tutorial.md` (Failure behavior) and `TROUBLESHOOTING.md` (`FAILED_AT_INTAKE`) list the four meanwhile. **Small, a
+choice:** one `RuntimeError` subclass per cause (for example `FixtureExhaustedError`), which names the cause with no
+message to leak and keeps every `except RuntimeError` working; it adds four names to the intake agent's surface. **The
+four are not the only collision** *(found by Session 278's review)*: `IntakeLLMError` has about eleven raise sites on
+the Anthropic path (`anthropic_client.py:303-490`, `nodes.py:269`: a reply cut off at the token limit, not JSON, an
+empty content list, a missing key) and more for `opencode`, and the SDK names a failure by its status, so every HTTP 400
+is `BadRequestError` whatever the reason. The four `RuntimeError`s are the ones whose cause was written only in the
+message by this repository's own code, which is why they come first; a fuller version gives `IntakeLLMError` a subclass
+per cause too.
 
 ### `MPC_LOG_LEVEL` is read and used by nothing
 

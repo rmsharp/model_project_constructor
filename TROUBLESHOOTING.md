@@ -35,7 +35,9 @@ Regardless of which stage failed, start here:
    own error handler prints (an intake or data crash reaches it), or, for
    a failure an agent reported itself (a `FAILED_AT_*` status), the
    `failure_reason` it saved. A website-stage `unexpected_error:` keeps
-   neither: see that entry above.
+   neither: see that entry above. Nor does the scripted intake's
+   `interview_aborted:` (see `FAILED_AT_INTAKE`): `scripts/run_pipeline.py`
+   catches the exception and saves its class only.
 
 4. **Check metrics.** If you used `MetricsRegistry`, call
    `registry.snapshot()` to see the status distribution and per-agent
@@ -72,6 +74,33 @@ print(intake.missing_fields)  # list of fields the stakeholder didn't provide
   the `missing_fields`. Feed the completed report back into the pipeline
   as a new run.
 - If fixture: fix the fixture file and re-run.
+
+**`interview_aborted: <ExceptionClass>` in `missing_fields` (a scripted `--llm both`
+run).** An exception stopped the interview, and `scripts/run_pipeline.py` saved its class
+and nothing it said, because a model client or a gateway can quote the request headers, and
+so the API key, in a message. `RuntimeError` is the scripted driver stopping itself: the
+fixture ran out of interview answers or of review responses (add `qa_pairs`), it met an
+interrupt of a kind it does not know, or the graph exceeded its turn cap. `IntakeLLMError`
+is a model reply the client could not use. An `anthropic` class names the HTTP status or the
+connection (`BadRequestError` is any 400, `AuthenticationError` a rejected key,
+`RateLimitError`, `APIConnectionError`). The message is recorded nowhere; to read it, call
+`IntakeAgent.run_scripted` yourself with the same fixture, which lets the exception reach you.
+
+**An API key leaked by an intake run before Session 278.** A gateway or proxy that sends the
+request headers back in an error reply put the key into the exception's message, and the
+script copied that into `missing_fields[0]` (`interview_aborted: BadRequestError: Error code:
+400 - {... x-api-key: sk-ant-...}`): printed in the `Failure:` line and saved in
+`<checkpoint_dir>/<run_id>/IntakeReport.json`. Since Session 278 only the class is. Nothing
+rewrites the files already on disk. To find an old leak, search for the first characters of
+your key (`sk-ant-` for an Anthropic key; use your own prefix if it has another format):
+
+```bash
+grep -rlF 'sk-ant-' <checkpoint dir> <saved CI logs>
+```
+
+Rotate a key that turns up, then delete or redact those files and logs. (The same search
+finds `DataReport.json` when the data stage's model call failed: that report still records
+the message, a separate open item in `BACKLOG.md`.)
 
 ---
 

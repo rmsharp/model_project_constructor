@@ -315,7 +315,13 @@ before turn 10), or if Anthropic raises (rate limit, bad JSON), the
 inline `_draft_incomplete_from_exception` adapter converts the error
 into a `DRAFT_INCOMPLETE` `IntakeReport` and the orchestrator halts
 cleanly with `FAILED_AT_INTAKE`. The run exits non-zero but leaves a
-checkpoint envelope documenting the failure.
+checkpoint envelope documenting the failure. The report names the
+exception's class (`interview_aborted: <ExceptionClass>`) and never its
+message. A model client or a gateway can quote the request headers, and so
+the API key, in a message; the `Failure:` line is printed and the report is
+saved to disk, so the message stays out of both. A report saved by a run
+from before this change can still hold it (`TROUBLESHOOTING.md`
+§FAILED_AT_INTAKE says how to find one).
 
 Flags:
 
