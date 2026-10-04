@@ -6,7 +6,8 @@ error body), and so is the HTTP library's description of a malformed reply (``h1
 the server sent). It removes the secret by value in every form a host is known to re-encode it in,
 makes the text one line free of control characters, and bounds its length. ``scrubbed_errors``
 applies it at the exit of an adapter method, so a message-building site added later cannot bypass
-it.
+it; ``scrubbed_values`` does the same for the ``ProjectInfo`` and ``CommitInfo`` a method returns
+(``BACKLOG.md`` route 8).
 """
 
 from __future__ import annotations
@@ -29,10 +30,15 @@ from model_project_constructor.agents.website._host_text import (
     REDACTED,
     UNPRINTABLE,
     response_text,
+    scrub_commit_info,
     scrub_host_text,
+    scrub_project_info,
     scrubbed_errors,
+    scrubbed_values,
 )
 from model_project_constructor.agents.website.protocol import (
+    CommitInfo,
+    ProjectInfo,
     RepoClientError,
     RepoNameConflictError,
 )
@@ -313,6 +319,171 @@ class TestTheDecorator:
         assert str(caught.value) == UNPRINTABLE
         assert caught.value.__cause__ is None
         assert caught.value.__context__ is None
+
+
+class TestScrubProjectInfo:
+    def test_each_of_the_three_fields_is_scrubbed(self) -> None:
+        out = scrub_project_info(
+            ProjectInfo(id="1\x1b[2J2", url="https://h/p\x1b]0;x\x07", default_branch="m\r\nain")
+        )
+        assert out == ProjectInfo(id="1 [2J2", url="https://h/p ]0;x", default_branch="m ain")
+
+    def test_it_is_a_new_object_and_the_argument_is_left_alone(self) -> None:
+        info = ProjectInfo(id="1\x07", url="u", default_branch="b")
+        out = scrub_project_info(info)
+        assert out is not info
+        assert info.id == "1\x07"
+
+    @pytest.mark.parametrize(
+        ("id_", "url", "branch"),
+        [
+            ("42", "https://gitlab.example.com/g/p", "main"),
+            ("owner/name", "https://github.com/owner/name", "release/1.0_rc-2"),
+            ("7", "https://gitlab.exämple.org:8443/g/sub/p-1?x=1&y=2#frag", "develop"),
+        ],
+    )
+    def test_text_with_nothing_to_remove_comes_back_as_it_went_in(
+        self, id_: str, url: str, branch: str
+    ) -> None:
+        info = ProjectInfo(id=id_, url=url, default_branch=branch)
+        assert scrub_project_info(info, TOKEN) == info
+
+    def test_the_secret_is_removed_from_every_field(self) -> None:
+        out = scrub_project_info(
+            ProjectInfo(id=f"1-{TOKEN}", url=f"https://h/{TOKEN}/p", default_branch=f"b-{TOKEN}"),
+            TOKEN,
+        )
+        assert TOKEN not in repr(out)
+        assert out == ProjectInfo(
+            id=f"1-{REDACTED}", url=f"https://h/{REDACTED}/p", default_branch=f"b-{REDACTED}"
+        )
+
+    def test_a_value_that_is_only_control_codes_becomes_empty_as_an_empty_one_already_was(
+        self,
+    ) -> None:
+        """Pinned, not endorsed: an empty id, address or branch was accepted before (the adapters
+        write ``main`` for a missing branch BEFORE the scrub sees it), and a host that sends only
+        control codes now gets the same treatment as one that sends nothing."""
+        assert scrub_project_info(
+            ProjectInfo(id="\x1b\x07", url="\x00", default_branch="\x7f")
+        ) == ProjectInfo(id="", url="", default_branch="")
+
+    def test_a_value_over_the_limit_is_cut_with_the_notice_a_url_may_not_want(self) -> None:
+        """Pinned, not endorsed (``BACKLOG.md`` route 8 names it): the cut and its notice apply to
+        an address as to any other host text. No real address, id, branch or sha is this long."""
+        exact = "u" * MAX_HOST_TEXT
+        assert scrub_project_info(ProjectInfo("1", exact, "main")).url == exact
+        cut = scrub_project_info(ProjectInfo("1", exact + "x", "main")).url
+        assert cut == exact + "... [1 more characters not shown]"
+
+    def test_a_value_that_is_not_text_comes_back_as_its_text(self) -> None:
+        out = scrub_project_info(ProjectInfo(id=5, url=None, default_branch=1.5))  # type: ignore[arg-type]
+        assert out == ProjectInfo(id="5", url="None", default_branch="1.5")
+
+    def test_a_secret_that_is_not_text_fails_closed(self) -> None:
+        out = scrub_project_info(ProjectInfo("1", "u", "b"), 5)  # type: ignore[arg-type]
+        assert out == ProjectInfo(UNPRINTABLE, UNPRINTABLE, UNPRINTABLE)
+
+    def test_it_is_idempotent(self) -> None:
+        once = scrub_project_info(ProjectInfo("1\x1b2", "u\x07", "b\r\n"), TOKEN)
+        assert scrub_project_info(once, TOKEN) == once
+
+
+class TestScrubCommitInfo:
+    def test_the_sha_is_scrubbed_and_the_paths_are_copied_as_they_are(self) -> None:
+        files = ["README.md", "analysis/01 plan.qmd", "a\tb.txt"]
+        out = scrub_commit_info(CommitInfo(sha="abc\x1b]0;x\x07def", files_committed=files))
+        assert out.sha == "abc ]0;x def"
+        assert out.files_committed == files
+        # A copy: the caller's list is not shared with the result.
+        assert out.files_committed is not files
+
+    def test_the_secret_is_removed_from_the_sha(self) -> None:
+        out = scrub_commit_info(CommitInfo(sha=f"x{TOKEN}y", files_committed=[]), TOKEN)
+        assert out.sha == f"x{REDACTED}y"
+
+    def test_a_full_sha_comes_back_as_it_went_in(self) -> None:
+        sha = "0123456789abcdef0123456789abcdef01234567"
+        assert scrub_commit_info(CommitInfo(sha, ["a"]), TOKEN).sha == sha
+
+    def test_a_sha_that_is_not_text_comes_back_as_its_text(self) -> None:
+        """GitHub's adapter does not ``str()`` the sha it reads, GitLab's does: the scrub makes the
+        two agree, where before an integer or a list was a pydantic error in the result."""
+        assert scrub_commit_info(CommitInfo(sha=5, files_committed=[])).sha == "5"  # type: ignore[arg-type]
+
+
+class _Holder:
+    """A stand-in with the one attribute ``scrubbed_values`` reads."""
+
+    def __init__(self, secret: str) -> None:
+        self._secret = secret
+
+    @scrubbed_values
+    def project(self, raw: str) -> ProjectInfo:
+        """Make a project."""
+        return ProjectInfo(id=raw, url=f"https://h/{self._secret}", default_branch="main")
+
+    @scrubbed_values
+    def commit(self, sha: str) -> CommitInfo:
+        return CommitInfo(sha=sha, files_committed=["a b"])
+
+    @scrubbed_values
+    def fails(self) -> ProjectInfo:
+        raise RepoClientError(f"quoted {self._secret}")
+
+    @scrubbed_values
+    def wrong_type(self) -> ProjectInfo:
+        return "not a project"  # type: ignore[return-value]
+
+
+class TestScrubbedValues:
+    def test_a_project_leaves_scrubbed_with_the_holders_secret_removed(self) -> None:
+        out = _Holder(TOKEN).project("12\x1b[2J3")
+        assert out == ProjectInfo(id="12 [2J3", url=f"https://h/{REDACTED}", default_branch="main")
+
+    def test_a_commit_leaves_scrubbed(self) -> None:
+        out = _Holder(TOKEN).commit("abc\x07")
+        assert out == CommitInfo(sha="abc", files_committed=["a b"])
+
+    def test_an_exception_is_not_touched(self) -> None:
+        """It is ``scrubbed_errors``' to handle, and the one stacked above this decorator does."""
+        with pytest.raises(RepoClientError) as caught:
+            _Holder(TOKEN).fails()
+        assert str(caught.value) == f"quoted {TOKEN}"
+
+    def test_a_result_of_any_other_type_fails_closed(self) -> None:
+        """No method of ``RepoClient`` returns one. A method added that does would carry the marker
+        and scrub nothing, so it raises the first time it is called."""
+        with pytest.raises(TypeError, match="ProjectInfo or CommitInfo, not str"):
+            _Holder(TOKEN).wrong_type()
+
+    def test_the_wrapped_method_keeps_its_name_and_docstring(self) -> None:
+        assert _Holder.project.__name__ == "project"
+        assert _Holder.project.__doc__ == "Make a project."
+
+    def test_the_wrapper_carries_its_own_marker_and_not_the_errors_one(self) -> None:
+        """Each decorator sets its marker alone, so a registry test can tell which one ran."""
+        assert _Holder.project.__scrubs_host_values__ is True  # type: ignore[attr-defined]
+        assert not hasattr(_Holder.project, "__scrubs_host_text__")
+        assert not hasattr(_Holder.project.__wrapped__, "__scrubs_host_values__")
+
+    def test_stacked_under_scrubbed_errors_both_markers_show_and_both_work(self) -> None:
+        class Both:
+            _secret = TOKEN
+
+            @scrubbed_errors
+            @scrubbed_values
+            def project(self, fail: bool) -> ProjectInfo:
+                if fail:
+                    raise RepoClientError(f"500 {TOKEN}")
+                return ProjectInfo("1\x07", "u", "b")
+
+        assert Both.project.__scrubs_host_text__ is True  # type: ignore[attr-defined]
+        assert Both.project.__scrubs_host_values__ is True  # type: ignore[attr-defined]
+        assert Both().project(False) == ProjectInfo("1", "u", "b")
+        with pytest.raises(RepoClientError) as caught:
+            Both().project(True)
+        assert str(caught.value) == f"500 {REDACTED}"
 
 
 class TestResponseText:
