@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 282 Did
+**Deliverable:** **`RepoHttpClient` turns a request it cannot build (`httpx.InvalidURL`, `UnicodeEncodeError`) into an `httpx.HTTPError`, so a value the host sent and an adapter sends back no longer crashes the run (items 1 and 2 of `BACKLOG.md`'s "An adapter puts a value the host sent into its next request", `:596`) (IN PROGRESS)**
+**Started:** 2026-10-04 07:55
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers (the area, then the item; both the first option, recommended).
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 281 Did
 **Deliverable:** **the repository host's success values are scrubbed where they leave the adapters — COMPLETE.** Route 8 of
 `BACKLOG.md`'s "Seven more routes" item. A host's 2xx reply carries the project address, id, default branch and commit id; they

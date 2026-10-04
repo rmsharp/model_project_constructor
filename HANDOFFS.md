@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S282
+date: 2026-10-04
+status: pending
+active_task: RepoHttpClient turns a request it cannot build (httpx.InvalidURL, UnicodeEncodeError) into an httpx.HTTPError (BACKLOG.md:596, items 1 and 2), then GITHUB_REUSES_THE_SHA goes. Chosen by the operator at Phase 0 from two pickers.
+```
+
+```handoff
 session: S281
 date: 2026-10-04
 status: complete
