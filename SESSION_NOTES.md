@@ -95,10 +95,125 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 278 Did
-**Deliverable:** the scripted intake runner's exception text out of the saved report and the printed `Failure:` line (`scripts/run_pipeline.py:206`, `BACKLOG.md:614-619` point 1) (IN PROGRESS)
-**Started:** 2026-10-03 18:49
-**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **the scripted intake runner's failure report names the exception's class and never its message — COMPLETE.**
+`scripts/run_pipeline.py::_draft_incomplete_from_exception` wrote `str(exc)` into `missing_fields`; `pipeline.py` copies that
+into `failure_reason`, the script prints it as `Failure: ...` and saves it in `IntakeReport.json`. I reproduced it before
+touching anything: a loopback gateway that answers a 400 echoing `x-api-key` put the API key on the screen and on disk. Now the
+report reads `interview_aborted: BadRequestError` and the key appears nowhere (the gateway did receive it). Closes point 1 of
+`BACKLOG.md`'s "Two more places" item (now "One more place": the data agent's discovery log is what is left).
+Chosen by the operator at Phase 0 from a picker (first option, recommended). **The operator also decided:** push at close-out
+(yes). **Mine, and not put to the operator:** importing the log's guarded `_class_name` rather than copying the rule a third
+time or promoting it to a public name (a refactor); fixing the review's eight standing findings in this session because each is
+about this diff's own tests and prose; adding the `TROUBLESHOOTING.md` entry and the old-report `grep` recipe (Sessions 273 and
+274 set that precedent); filing the diagnosability cost instead of fixing it (it adds exception classes to the intake agent).
+**Started:** 2026-10-03 18:49. **Completed:** 2026-10-03. **Commits: four** — `6c69125` (claim, alone), `699331e` (the fix: the
+script, two test files, one docstring, the ledger), `1c8c385` (docs and `BACKLOG.md`) and this close-out. Each carries its own
+`CHANGELOG.md` entry; the push is recorded in the close-out's.
+
+#### What changed
+- **`scripts/run_pipeline.py`:** `reason = _class_name(exc)` (imported from `orchestrator/logging.py`: an exact-`str` ASCII
+  identifier of at most 100 characters, else `<unprintable>`, and the read cannot raise) and `missing_fields=[f"interview_aborted:
+  {reason}"]`. Reading the name unguarded would have been a raise site inside the `except` block; dropping `{exc}` also removed
+  the other one (a `__str__` that raises). `logging.py`'s `_class_name` docstring now names the script as its second caller.
+- **Tests (13 net):** the test that pinned the message as behaviour (`test_draft_incomplete_from_arbitrary_exception` asserted
+  `"429 too many requests" in missing_fields[0]`) is inverted; 11 new unit cases (an exception that cannot be printed, seven odd
+  class names, the 100-character limit, a metaclass whose `__name__` raises, a `str` subclass for a name); and
+  `test_run_pipeline_intake_error_text.py`: the real script as a subprocess in an empty working directory against a loopback
+  gateway, searching the screen and every file, plus a premise test that the SDK does put the body into its exception.
+- **Docs:** `docs/tutorial.md`, `OPERATIONS.md` and `TROUBLESHOOTING.md` (an `interview_aborted:` entry under `FAILED_AT_INTAKE`,
+  the leak `grep` for reports saved by earlier runs, and step 3's "where the text is"). `docs/wiki/` untouched.
+- **`BACKLOG.md`:** the first point closed; a new item for the cost (`:635`); item 5 (`:462`) notes that `safe_message` leaves a
+  bare `sk-ant-` token; the index rows follow.
+
+#### Verification
+Mutation: against the original script 14 of the changed and new tests fail (the end-to-end one included); against an unguarded
+`type(exc).__name__` without the message, 9; against the guarded name with the message restored, the message tests and the
+end-to-end test. CI's `ruff check src/ tests/ packages/ scripts/` and `mypy` clean (`ruff format --check` flags 3 files, two of them
+already unformatted at `HEAD`, and CI does not run it, so I formatted only the new file). Full suite with `GITHUB_ACTIONS=true`
+on the working tree: **3,019 passed, 9 skipped** (3,006 before), coverage 98.21%. The two changed test files with the run-log tests,
+three runs in a row, 100 passed each. Both ledger guards 82 passed. **Runtime smoke (3E), done:** the fixture pipeline completes with exit 0; the failing
+scripted intake exits 1 with `Failure: ... missing_fields=['interview_aborted: BadRequestError']` and the key nowhere.
+
+#### The review, and what it found
+One workflow: five read-only lenses (leak channels, test faithfulness, compatibility, docs and ledger, hostile inputs), two skeptics
+per non-nit finding. 31 agents, 0 errors, 14.4 minutes, 2.67M tokens, 469 tool calls. **13 non-nit findings; 4 refuted by both
+skeptics; 9 not refuted by every skeptic, which is 8 distinct (one raised by two lenses), all low** (one skeptic called the flaky
+test medium). **None above low, no leak left on the intake path.** All eight are fixed: the `"429"` assertion that flaked about once
+in 300 runs on the timestamp's digits; the search that did not cover the working directory; the tutorial listing three of the four
+causes; "only these four collide" (`IntakeLLMError` has about eleven sites; every HTTP 400 is `BadRequestError`); a docstring
+crediting the website stage with the guarded rule; a test docstring citing a BACKLOG title this diff renames; `TROUBLESHOOTING.md`
+step 3 and the missing note on reports already on disk. Refuted, and why: the data stage's `DataReport.json` holds the key too
+(true and already filed as item 5, which I annotated; it is not on the screen); model-authored `missing_fields` (the model never
+sees the key); `ANTHROPIC_LOG=debug` makes the SDK's own logger print the chain and headers (opt-in, not this change); a fixture with an
+integer `stakeholder_id` makes the handler raise (unchanged from `HEAD`).
+
+### Session 277 Handoff Evaluation (by Session 278)
+
+**Score: 9/10.**
+- **+** The first recommendation was right and exact: `scripts/run_pipeline.py:206`, `BACKLOG.md:619`, `:614`, `:633` all resolved
+  as written, and "with a test through the real script" set the shape of the deliverable. The observed-not-filed list (the stash,
+  the two worktree branches and the directory, the dashboard at v2.18.0 against v2.19.0) was still true at Orient, and the size
+  estimate (about 107 KB) was within 2 KB of the measured 108,822 B. Gotcha 7 (never `git stash`; both guards before a ledger commit)
+  saved two decisions.
+- **−** It did not point at a template for a real-script test: `tests/scripts/test_run_pipeline_website_crash_resume.py` and
+  `tests/agents/website/loopback.py::serving_raw` were the model, and the fact that the Anthropic SDK honours `ANTHROPIC_BASE_URL`
+  (which makes the intake path drivable offline) took a grep and a probe to find. And the item it recommended called the fix
+  "small, class name only" without saying the exception is swallowed, so the name is all that survives (filed as the new item).
+- **ROI: high.**
+
+### Session 278 Self-Assessment
+
+**Score: 8/10.**
+- **+** Claimed first; reproduced the leak end to end before the fix; wrote the tests first and watched them fail; checked the tests
+  can fail with three mutants, twice (once more after I changed the end-to-end test); found the existing test that pinned the leak
+  and inverted it; kept the commits under the five-file cap; ran the review before committing rather than after; fixed what it found
+  and filed, with measurements, what I had not seen (the wider name collision).
+- **−** Four statements I wrote were universals that were false or unchecked (the tutorial "lists the four", "only these four
+  collide", a docstring crediting the website stage, "cannot import"), each written right after reading code that contradicts it
+  (#345). My first unit assertion flaked on a timestamp (#344) and I had not run it enough times to see it. A probe ran under the
+  system Python 3.10 (bare `python3` is miniforge's here; `uv run python` is the project's) and cost one round trip. A test docstring
+  cited a BACKLOG title my own diff renamed.
+- **Decay term:** nothing was removed from a mandated-read file this session: `SESSION_NOTES.md` grew by this record,
+  `PROJECT_LEARNINGS.md` by three rows (to 390,757 B), `BACKLOG.md` by about 3 KB net. **A twelfth trim is not due:** the live file
+  is about 121 KB (measured with `wc -c` just before the commit) against the 196,608 B trigger, about six more closing records at this
+  size (an estimate: about 75 KB of room over roughly 12.5 KB each), and the 262,144 B refusal ceiling is about 141 KB away.
+
+**What's next** (sizes and effort are estimates unless measured; none is blocking).
+1. **The scripted intake's four stop reasons now share one class name** (`BACKLOG.md:635`, with the wider `IntakeLLMError` and
+   HTTP-status collision the review measured). Small, a choice: one `RuntimeError` subclass per cause at `agent.py:141, 149, 153,
+   157`. It adds names to the intake agent's surface, so it is yours to rule on before anyone builds it.
+2. **The data stage still writes the key into `DataReport.json`** (`BACKLOG.md:462`, item 5, `agent.py:54` and `nodes.py:211`;
+   reproduced by two skeptics this session, disk only, not the screen). Medium. The sturdier fix is the class name, not
+   `safe_message`; the harness this session used is the recipe: `tests/scripts/test_run_pipeline_intake_error_text.py`
+   with a gateway that answers a few calls validly and then a 400 (the review did this in its scratch directory; it is not kept).
+3. **Rulings owed, as before:** `L10`'s completeness gap and its second hole (`BACKLOG.md:927`), publish the wiki correction
+   (`BACKLOG.md:593`, point 1), wire or stop documenting `MPC_LOG_LEVEL` (`BACKLOG.md:654`), the discovery log line (`BACKLOG.md:620`),
+   and whether the coverage harness from Session 277 should be committed.
+4. **Observed, not filed:** `stash@{0}` (Session 270's claim commit), the branches `worktree-wf_5f96c807-d00-3` and
+   `worktree-wf_c93ee390-506-3` with `.claude/worktrees/wf_5f96c807-d00-3`, the root `methodology_dashboard.py` at v2.18.0, and
+   Session 277's `gitleaks` count of 9 (not re-measured). New: `ANTHROPIC_LOG=debug` prints the SDK's exception chain and response
+   headers to stderr (opt-in, refuted as a defect here; worth one sentence in `OPERATIONS.md` if anyone documents that variable).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `scripts/run_pipeline.py`: the import (`:97`), `_draft_incomplete_from_exception` (`:182-247`), the `runner()` closure (`:284-301`).
+- `src/model_project_constructor/orchestrator/logging.py:58-84` (`_class_name`, now with two callers).
+- `tests/scripts/test_run_pipeline_intake_error_text.py` (the template for a real-script, secret-absence test) and
+  `tests/scripts/test_run_pipeline_adapter.py:51-172` (the new unit cases).
+- `TROUBLESHOOTING.md` §`FAILED_AT_INTAKE`; `BACKLOG.md:462, 593, 620, 635, 654`; `PROJECT_LEARNINGS.md` #343-345.
+
+**Gotchas.**
+1. **Use `uv run python`, never bare `python3`** (3.10 here; the project needs 3.11+). A script that imports `datetime.UTC` fails
+   under it with an `ImportError` that looks like a project bug.
+2. **A real-script test must strip `MPC_*` and `ANTHROPIC_*` from the environment it passes** and run in an empty working
+   directory; the script loads no `.env`, but the checkout has one. `ANTHROPIC_BASE_URL` redirects the SDK to a loopback server.
+3. **Do not reformat `scripts/run_pipeline.py` or `test_run_pipeline_adapter.py`:** both were unformatted at `HEAD` and CI does not
+   run `ruff format`, so a format pass is a whole-file diff in an unrelated change.
+4. **`_class_name` is private and two things now depend on it.** `pipeline.py::_website_failure` is the one unguarded copy left
+   (`BACKLOG.md:578`); it does not import `logging.py` by that module's own design, so the fix there is the same four lines inline.
+5. **`CLAUDE.md:122` states the learnings count and the file's size**; a close-out that appends learnings edits it (now 345, Sessions
+   9–278, 390.8 KB). `docs/wiki/` was not touched, so no commit this session published the wiki.
+6. Never `git stash` (#316). `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit
+   that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`.
 
 ### What Session 277 Did
 **Deliverable:** **the eleventh trim of `SESSION_NOTES.md` — COMPLETE.** Sessions 269 → 258 (twelve records, 1,702 lines,
