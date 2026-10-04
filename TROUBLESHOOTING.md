@@ -38,9 +38,10 @@ Regardless of which stage failed, start here:
    `unexpected_error:` keeps neither: see that entry above. Nor does the
    scripted intake's `interview_aborted:` (see `FAILED_AT_INTAKE`):
    `scripts/run_pipeline.py` catches the exception and saves its class
-   only. Nor does the data stage's `graph crashed:` (see `FAILED_AT_DATA`):
-   `DataAgent.run` catches an exception from inside its graph and saves its
-   class only, so no traceback reaches the caller.
+   only. Nor does the data stage's `graph crashed:` or `report assembly failed:`
+   (see `FAILED_AT_DATA`): `DataAgent.run` catches an exception from inside its
+   graph, or from building its report, and saves its class only, so no traceback
+   reaches the caller.
 
 4. **Check metrics.** If you used `MetricsRegistry`, call
    `registry.snapshot()` to see the status distribution and per-agent
@@ -160,6 +161,19 @@ for q in report.primary_queries:
   `caveats` instead, and the report stays `COMPLETE`. A `DataReport.json` saved
   before Session 279 holds the message instead and may hold a key
   (§FAILED_AT_INTAKE shows how to search for one, and where else to look).
+- `EXECUTION_FAILED` with `Data Agent run failed: report assembly failed:
+  <ExceptionClass>` in `report.summary` (and as the only `data_quality_concerns`
+  entry): the graph ran to its end and the report could not be built from what the
+  model returned. `ValidationError` is a reply whose `expected_row_count_order` is
+  not one of `tens`, `hundreds`, `thousands` or `millions`, or a field of the wrong
+  type; `ValueError` is fewer quality-check groups than queries. A pydantic message
+  quotes the reply it refused, so the report names the class only, and so the cause
+  is not in the report: read it as shown under **Reading a `report assembly failed:`
+  message** below. Before Session 280 this raised out of `DataAgent.run` instead (measured
+  through the script): exit 1 with a traceback on stderr that quoted the reply, no status
+  line, and no `DataReport.json` in the checkpoint directory; a library caller got the
+  same exception. The report does not say which step of the build failed, and neither
+  does `graph crashed:` say which node.
 - `INCOMPLETE_REQUEST`: the `DataRequest` built by the adapter was
   too ambiguous for the Data Agent. Check
   `request.target_description` and `request.required_features`.
@@ -178,6 +192,22 @@ from model_project_constructor_data_agent.graph import build_graph
 llm = make_llm_client("anthropic", model="<the run's --model>")
 request = store.load_payload("<run_id>", "DataRequest")
 build_graph(llm, None).invoke({"request": request, "sql_retry_count": 0, "db_executed": False})
+```
+
+**Reading a `report assembly failed:` message.** The graph succeeds in this case, so the
+recipe above prints nothing. Keep its result and build the report from it yourself; the
+exception reaches you with its traceback, which names the field. `_assemble_complete_report`
+is a private function and may be renamed. The message quotes the model's reply: do not paste
+it. (Run with a stand-in client in Session 280: `ValidationError ... expected_row_count_order
+... Input should be 'tens', 'hundreds', 'thousands' or 'millions'`.)
+
+```python
+from model_project_constructor_data_agent.agent import _assemble_complete_report
+
+final_state = build_graph(llm, None).invoke(
+    {"request": request, "sql_retry_count": 0, "db_executed": False}
+)
+_assemble_complete_report(request, final_state)
 ```
 
 **Resolution:**

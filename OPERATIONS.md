@@ -327,9 +327,11 @@ from before this change can still hold it (`TROUBLESHOOTING.md`
 
 The data stage follows the same rule. An exception that escapes the Data
 Agent's graph is saved in `DataReport.json` as `graph crashed:
-<ExceptionClass>`, and a baseline query the model client could not generate
-as `LLM baseline-query generation failed: <ExceptionClass>` in the baseline's
-`caveats`; neither carries the message (`TROUBLESHOOTING.md` §FAILED_AT_DATA
+<ExceptionClass>`, one raised while the report is built from the model's replies
+(a value outside the row-count vocabulary, too few quality-check groups) as
+`report assembly failed: <ExceptionClass>`, and a baseline query the model client
+could not generate as `LLM baseline-query generation failed: <ExceptionClass>` in
+the baseline's `caveats`; none carries the message (`TROUBLESHOOTING.md` §FAILED_AT_DATA
 says what the classes mean and how to read the message). A `DataReport.json`
 from before Session 279 can still hold the message and a key, and so can the
 project the website stage generated from a `COMPLETE` one (§FAILED_AT_INTAKE

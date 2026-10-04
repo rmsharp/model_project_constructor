@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S280 — docs: a `report assembly failed:` report, what it means, and how to read what it does not carry
+- **Change:** `packages/data-agent/USAGE.md` (error contract: the handler covers building the report from the graph's result, a `report assembly failed: <ExceptionClass>` is the same class-only report, which classes and why, and how a library caller reads the cause), `TROUBLESHOOTING.md` §FAILED_AT_DATA (a root-cause entry; **Reading a `report assembly failed:` message**, a recipe that was run; the note that no traceback reaches the caller now names both reasons), `OPERATIONS.md` and `docs/tutorial.md` (the same name beside `graph crashed:`). `docs/wiki/` not touched.
+- **Commit/PR:** this commit
+- **Session:** S280 · **Verified:** the recipe was run with a stand-in client and prints a traceback naming `_assemble_complete_report` and `expected_row_count_order` (`Input should be 'tens', 'hundreds', 'thousands' or 'millions'`); the "before" claims were measured by running the real script against the unguarded code (exit 1; a traceback on stderr quoting the reply with its ESC as `\x1b`; the checkpoint directory held `DataRequest.json` and `IntakeReport.json` and no `DataReport.json`).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S280 — test: the real script, the real client and a loopback gateway drive route 9 end to end; the Messages-reply helper moves into `loopback.py`
 - **Change:** `tests/scripts/test_run_pipeline_data_bad_reply.py` (new) runs `scripts/run_pipeline.py --llm data` as a subprocess against a loopback gateway that answers each of the data agent's five questions validly except for one field (`expected_row_count_order` is prose, an ESC `[2J` and a searchable phrase), so the graph runs to its end and the assembly is what fails. It asserts exit 1 with `Status:  FAILED_AT_DATA` and no traceback, a saved `DataReport.json` of `EXECUTION_FAILED` / `Data Agent run failed: report assembly failed: ValidationError` with no queries, and that the phrase, `input_value` and a raw ESC are in neither the screen nor any file under the test's directory; and a premise test that pydantic's error does quote the value it refuses, without which "not in the report" proves nothing. `tests/agents/website/loopback.py` gains `message(text)` (the valid Messages API reply `test_gateway_error_text.py` had private as `_message`, now shared), and that test imports it.
 - **Commit/PR:** this commit

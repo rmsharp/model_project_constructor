@@ -501,13 +501,22 @@ curated-producer example.
 ## Error contract
 
 - `DataAgent.run()` never raises for expected failure modes.
-- Unexpected exceptions inside the graph are caught at the outer boundary and
-  surfaced as `DataReport(status="EXECUTION_FAILED")`.
+- Unexpected exceptions inside the graph, or while the report is built from the
+  graph's result, are caught at the outer boundary and surfaced as
+  `DataReport(status="EXECUTION_FAILED")`. (Before Session 280 only the graph was
+  inside the handler, so a model reply the report could not be built from raised
+  out of `run`.)
 - `AnthropicLLMClient` raises `LLMParseError` on unparseable Claude output;
   this propagates through the outer boundary and becomes `EXECUTION_FAILED`.
 - **The report names such an exception's class and never what it said.**
   `summary` reads `Data Agent run failed: graph crashed: <ExceptionClass>` and
-  that is the only `data_quality_concerns` entry; a baseline query the LLM
+  that is the only `data_quality_concerns` entry; a reply the report could not be
+  built from reads `Data Agent run failed: report assembly failed:
+  <ExceptionClass>` the same way (`ValidationError` for an
+  `expected_row_count_order` outside `tens`, `hundreds`, `thousands` and `millions`
+  or a field of the wrong type, `ValueError` for fewer quality-check groups than
+  queries), and its message quotes the model's reply, which is why it is not
+  carried; a baseline query the LLM
   client fails to generate is the baseline's `caveats` entry
   `LLM baseline-query generation failed: <ExceptionClass>` (the report stays
   `COMPLETE`). An exception raised by the LLM client carries a gateway's reply or
@@ -519,7 +528,10 @@ curated-producer example.
   it to its own endpoint). A library caller who needs it, and the node that
   raised, runs `build_graph(llm, db).invoke({"request": request,
   "sql_retry_count": 0, "db_executed": False})` without `DataAgent.run`'s
-  handler: the exception reaches them with its traceback.
+  handler: the exception reaches them with its traceback. For a `report assembly
+  failed:` the graph itself succeeds: call the private
+  `agent._assemble_complete_report(request, final_state)` on its result, and the
+  exception reaches them there, naming the field.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
   error text — with any URL password masked (best-effort), on one line and with
