@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 283 Did
+**Deliverable:** **the repository adapters raise only `RepoClientError` for the three crashes Session 282 filed and left: GitLab's raw `UnicodeEncodeError` for a lone surrogate in the namespace (`gitlab_adapter.py:99`), `RecursionError` from a deeply nested reply in both `_parse_json`, and `httpx.InvalidURL` from a redirect with a very long `Location` in `RepoHttpClient.send` (points 3 to 5 of `BACKLOG.md`'s item at `:596`) (IN PROGRESS)**
+**Started:** 2026-10-04 13:46
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers (the area, then the item; both the first option, recommended). Workstream: `DEVELOPMENT_WORKSTREAM.md`.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 282 Did
 **Deliverable:** **`RepoHttpClient.build_request` turns a request `httpx` cannot build into an `httpx.LocalProtocolError`, so a value the host sent and an adapter writes into its next request fails the call as a `RepoClientError` and no longer ends the run in a traceback — COMPLETE.** Items 1 and 2 of `BACKLOG.md`'s
 *An adapter puts a value the host sent into its next request* (filed by Session 281; now retitled *The id and the branch go into request

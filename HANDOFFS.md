@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S283
+date: 2026-10-04
+status: pending
+active_task: The repository adapters raise only RepoClientError for GitLab's namespace UnicodeEncodeError, a deeply nested reply's RecursionError in both _parse_json, and a redirect's very long Location out of RepoHttpClient.send (BACKLOG.md:596, points 3 to 5). Chosen by the operator at Phase 0 from two pickers.
+```
+
+```handoff
 session: S282
 date: 2026-10-04
 status: complete
