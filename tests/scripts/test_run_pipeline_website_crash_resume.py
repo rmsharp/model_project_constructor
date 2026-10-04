@@ -78,6 +78,9 @@ class Host:
             # Valid JSON, 100,000 levels deep: ``json`` raises ``RecursionError`` for it on CPython
             # 3.11 to 3.13 and parses it on 3.14, and the adapter refuses it either way.
             return _http(400, "Bad Request", b"[" * 100_000 + b"]" * 100_000)
+        if self.how == "deep-json-created":
+            # The same body as a ``201``: the host made the project and the reply cannot be used.
+            return _http(201, "Created", b"[" * 100_000 + b"]" * 100_000)
         if self.how == "not-an-object":
             # A ``201`` whose body is valid JSON but not an object: the adapter subscripts it and
             # gets a ``TypeError``, which is not a ``RepoClientError``. (This stood in for a project
@@ -219,9 +222,11 @@ def test_a_reply_nested_100000_deep_is_a_repository_error_and_not_a_crash(
     serve: Callable[[Host], Host], tmp_path: Path
 ) -> None:
     """This was a ``RecursionError`` out of the adapter (``unexpected_error: RecursionError``, the
-    first case of the test above) until Session 283: the adapters' ``except ValueError`` did not
-    catch it. It is an ordinary failed call now, ``repo_error``, so the net above is not what holds
-    it; ``test_host_reply_nesting.py`` holds every place an adapter reads a reply."""
+    third case of the test above, ``error-body-100000-deep``) until Session 283: the adapters'
+    ``except ValueError`` did not catch it. It is an ordinary failed call now, ``repo_error``, so
+    the net above is not what holds it. The body is a ``400``, where no project exists; the next
+    test is the ``201``. ``test_host_reply_nesting.py`` holds every place an adapter reads a
+    reply."""
     host = serve(Host("project", "deep-json"))
     checkpoints = tmp_path / "checkpoints"
 
@@ -238,6 +243,37 @@ def test_a_reply_nested_100000_deep_is_a_repository_error_and_not_a_crash(
     assert len(reason) < 2_000
     assert TOKEN not in shown + _everything(checkpoints)
     assert host.posts_to_projects() == 1
+
+
+def test_a_created_project_whose_reply_nests_too_deeply_is_a_repository_error_and_resume_refuses(
+    serve: Callable[[Host], Host], tmp_path: Path
+) -> None:
+    """The variant where the host DID make the project (``201``) and the reply cannot be used. It
+    used to be ``unexpected_error: RecursionError (the website stage may already have created a
+    project ...)``; it is now ``repo_error: ... invalid JSON body: the reply nests more than 64
+    levels deep``, the same class of failure a ``201`` with malformed JSON always was. Neither
+    says that a project may exist (``BACKLOG.md``, *A reply of the wrong shape*, files that), so
+    what is held here is what does stand: one project was made, nothing was printed that the host
+    wrote, and ``--resume`` refuses to make a second."""
+    host = serve(Host("project", "deep-json-created"))
+    checkpoints = tmp_path / "checkpoints"
+
+    failed = _run(host, _argv(checkpoints, "--run-id", RUN_ID))
+
+    shown = failed.stdout + failed.stderr
+    assert failed.returncode == 1, shown
+    assert "Traceback" not in shown
+    assert "Status:  FAILED_AT_WEBSITE" in failed.stdout
+    saved = _saved(checkpoints)
+    reason = saved["failure_reason"]
+    assert saved["status"] == "FAILED"
+    assert isinstance(reason, str)
+    assert reason.startswith("repo_error: create_project failed"), reason
+    assert reason.endswith("invalid JSON body: the reply nests more than 64 levels deep"), reason
+    assert TOKEN not in shown + _everything(checkpoints)
+    assert host.posts_to_projects() == 1
+
+    _assert_resume_refuses(host, checkpoints, posts_before=1)
 
 
 def test_an_interrupt_during_the_commit_is_saved_and_resume_makes_no_second_project(
