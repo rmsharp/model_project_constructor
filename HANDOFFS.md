@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S281
+date: 2026-10-03
+status: pending
+active_task: The repository host's success values are scrubbed where ProjectInfo and CommitInfo are built (route 8, BACKLOG.md:524). Chosen by the operator at Phase 0 from a picker.
+```
+
+```handoff
 session: S280
 date: 2026-10-03
 status: complete

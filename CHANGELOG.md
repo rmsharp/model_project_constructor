@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S281 — claim: the repository host's success values scrubbed where `ProjectInfo` and `CommitInfo` are built (in progress)
+- **Change:** `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no code. The deliverable is route 8 of `BACKLOG.md`'s "Seven more routes" item (`:524`): the project address, commit id, `ProjectInfo.id` and `default_branch` come from the host's 2xx reply and are printed raw by `cli.py` and `scripts/run_pipeline.py`, so a host that puts ESC or BEL in them reaches the operator's terminal. Phase 3F records the rest.
+- **Non-commit actions:** the operator answered the Phase 0 task picker (route 8, the recommended option).
+- **Commit/PR:** this commit
+- **Session:** S281 · **Verified:** Phase 0 read of `SAFEGUARDS.md`, `SESSION_RUNNER.md`, the newest `SESSION_NOTES.md` record, `BACKLOG.md:440-550`; working tree clean, 0 unpushed, ledger and receipt frontiers at `HEAD` (`ea38ca0`).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S280 — close out: `DataAgent.run` is total, the report built inside a guard; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 280 record (replacing the claim stub): what was reproduced and fixed, who decided what (the operator chose the item from the Phase 0 picker and answered yes to pushing; the second `try`, the class name, the shared `SITES` arm, the all-sites interrupt test, the hoisted helper and fixing the review's findings about this diff were mine), the review, the Session 279 handoff evaluation (9/10), the self-assessment (7/10: four of the review's eight confirmed findings were claims written without reading what they were about, and a ledger script that aborted was followed by a commit) and the handoff. `HANDOFFS.md` is `status: complete`. `PROJECT_LEARNINGS.md` #349-351 (an assertion about a value the fixture never produces cannot fail; document causes from the shipped producer, not the test double; chain a script and its commit). `CLAUDE.md:122` states 351 learnings and 396.0 KB.
 - **Non-commit actions:** the operator answered two pickers (the Phase 0 task, route 9; push at close-out, yes); one read-only review workflow ran (5 lenses and 24 skeptic runs, 29 agents, 0 errors, 22.5 minutes, 2.95M subagent tokens, 637 tool uses); scratch mutation harnesses under the session's scratchpad directory (not committed); a second full-suite run on the final tree.
