@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 279 Did
+**Deliverable:** the data stage's failure text out of `DataReport.json` — the exception's class, never its message, where the data agent writes `{e}` today (`agent.py:54` `graph crashed: {e}`; `nodes.py:211` `LLM baseline-query generation failed: {e}`; `BACKLOG.md:462`, item 5) (IN PROGRESS)
+**Started:** 2026-10-03 21:19
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 278 Did
 **Deliverable:** **the scripted intake runner's failure report names the exception's class and never its message — COMPLETE.**
 `scripts/run_pipeline.py::_draft_incomplete_from_exception` wrote `str(exc)` into `missing_fields`; `pipeline.py` copies that

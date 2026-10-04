@@ -174,6 +174,15 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S279
+date: 2026-10-03
+status: pending
+active_task: The data stage's exception text out of DataReport.json (agent.py:54 and nodes.py:211, BACKLOG.md:462 item 5), chosen by the operator at Phase 0 from a picker. Claim first, then fix with a test that drives the real path, then close out.
+what_was_done: pending
+commit: pending
+```
+
+```handoff
 session: S278
 date: 2026-10-03
 status: complete

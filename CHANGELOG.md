@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S279 claim: the data stage's exception text out of `DataReport.json` *(in progress)*
+- **Change:** Session 279 is claimed in `SESSION_NOTES.md` and `HANDOFFS.md`. The deliverable is the two places the data agent writes a raw exception into its report: `agent.py:54` (`graph crashed: {e}`, into `data_quality_concerns` and the summary) and `nodes.py:211` (`LLM baseline-query generation failed: {e}`, into `caveats`). Session 278 reproduced the first against a gateway that echoes the API key into a 400: the key reaches `DataReport.json` on disk, not the screen. The operator chose it at Phase 0 from a picker (the recommended first option).
+- **Commit/PR:** this commit
+- **Session:** S279 · **Verified:** ledger-only; the Phase 0 reconcile found both frontiers at HEAD `e8cd064` (gap 0), the tree clean and level with `origin/master`.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S278 — close out: the scripted intake runner's failure report names the exception's class and never its message; pushed to origin
 - **Change:** `SESSION_NOTES.md` carries the full Session 278 record (replacing the claim stub): what was reproduced and fixed, who decided what (the operator chose the item from the Phase 0 picker and answered yes to pushing; importing the log's guarded `_class_name`, fixing the review's eight low findings in the session, adding the `TROUBLESHOOTING.md` recipe and filing the diagnosability cost instead of fixing it were mine and were not put to the operator), the verification, the review (31 agents, 13 non-nit findings, none above low) and the Session 277 handoff evaluation (9/10) and this session's self-assessment (8/10). `HANDOFFS.md`: the S278 receipt is `status: complete`. `PROJECT_LEARNINGS.md` #343-345 (a swallowed exception's message is the only record of its cause; pin the premise of a secret-absence test and avoid characters a timestamp can spell; count before writing "only/all/none"). `CLAUDE.md:122`: 345 learnings, Sessions 9–278, 390.8 KB.
 - **Non-commit actions:** the operator answered two pickers (the Phase 0 task; push at close-out, yes); one read-only review workflow ran (5 lenses and 26 skeptics, 31 agents, 0 errors, 14.4 minutes, 2.67M subagent tokens); the push is `git push origin master` after this commit, four commits including this one.
