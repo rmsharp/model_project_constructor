@@ -24,7 +24,15 @@ class ProjectInfo:
     ``id`` is a host-opaque string identifier: GitLab uses a stringified
     integer project ID, GitHub uses ``"owner/name"``. Callers should treat
     it as an opaque token and pass it back to :meth:`RepoClient.commit_files`
-    unchanged.
+    as they got it.
+
+    All three fields are the host's words. The two shipped adapters hand
+    them back through ``scrubbed_values`` (``_host_text.py``): control
+    characters become spaces, the text is one line of at most 1,000
+    characters, and the adapter's token is removed. For every real id,
+    address and branch that is the identical string. An implementation of
+    this protocol that is not one of the two owns the safety of its own
+    values (``BACKLOG.md``, route 8).
     """
 
     id: str
@@ -34,7 +42,12 @@ class ProjectInfo:
 
 @dataclass
 class CommitInfo:
-    """Information returned by :meth:`RepoClient.commit_files`."""
+    """Information returned by :meth:`RepoClient.commit_files`.
+
+    ``sha`` is the host's word and is scrubbed by the shipped adapters like
+    :class:`ProjectInfo`'s fields; ``files_committed`` is the caller's own
+    list of paths, not the host's.
+    """
 
     sha: str
     files_committed: list[str]

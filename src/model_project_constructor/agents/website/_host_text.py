@@ -24,8 +24,12 @@ What this does not cover. The party that echoes the headers already holds the to
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
 not listed in :func:`_rewrites` (base64, a hash, or a different escaping of some of its characters
 only); one with characters inserted in it, or cut short, or split across lines by the host; a second
-credential (userinfo in the host URL travels as ``Authorization: Basic base64(user:password)``); and
-a message built, or a value returned, by a ``RepoClient`` other than the two adapters.
+credential (userinfo in the host URL travels as ``Authorization: Basic base64(user:password)``); a
+message built, or a value returned, by a ``RepoClient`` other than the two adapters; and a value an
+adapter reads from one reply and puts in its next request, which :func:`scrubbed_values` never
+sees because it is not on what the method returns (GitHub's ``parent_sha`` and commit sha: a
+control character or a lone surrogate there raises ``InvalidURL`` or ``UnicodeEncodeError``;
+``BACKLOG.md``).
 """
 
 from __future__ import annotations
