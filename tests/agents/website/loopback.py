@@ -8,6 +8,7 @@ it answers every request with ``200 {}`` and records the request headers it rece
 from __future__ import annotations
 
 import http.server
+import json
 import os
 import socketserver
 import threading
@@ -149,3 +150,31 @@ def serving_raw(reply: Callable[[bytes], bytes]) -> Iterator[Loopback]:
                 # Raised from the ``finally`` on purpose: when the test body is already failing
                 # with the client's "Server disconnected", this puts the cause in front of it.
                 raise RuntimeError(f"the raw server's handler raised {errors[0]!r}") from errors[0]
+
+
+def echo_the_api_key_in_a_400(request: bytes) -> bytes:
+    """The reply of a gateway that rejects a call and quotes the request headers it got.
+
+    A ``400`` whose body carries the ``x-api-key`` the client sent, as a proxy that echoes request
+    headers does. The Anthropic SDK puts that body into the text of the exception it raises, so
+    whatever turns that exception into text publishes the key. For ``serving_raw``.
+    """
+    head = request.split(b"\r\n\r\n", 1)[0].split(b"\r\n")[1:]
+    sent = {
+        name.decode("latin-1").lower(): value.decode("latin-1").strip()
+        for name, _, value in (line.partition(b":") for line in head)
+    }
+    body = json.dumps(
+        {
+            "type": "error",
+            "error": {
+                "type": "invalid_request_error",
+                "message": f"rejected the request (x-api-key: {sent.get('x-api-key', '')})",
+            },
+        }
+    ).encode()
+    reply = (
+        "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
+    )
+    return reply.encode() + body

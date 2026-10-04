@@ -25,37 +25,13 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.agents.website.loopback import serving_raw
+from tests.agents.website.loopback import echo_the_api_key_in_a_400, serving_raw
 
 KEY = "sk-ant-INTAKELEAK0123456789abcdef"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "run_pipeline.py"
 FIXTURE = REPO_ROOT / "tests" / "fixtures" / "_b2_failmode.yaml"
 RUN_ID = "intake-leak"
-
-
-def _gateway_that_echoes_the_key(request: bytes) -> bytes:
-    """A ``400`` whose body quotes the ``x-api-key`` header the client sent, as a proxy that echoes
-    request headers does. The SDK puts that body into the exception's text."""
-    head = request.split(b"\r\n\r\n", 1)[0].split(b"\r\n")[1:]
-    sent = {
-        name.decode("latin-1").lower(): value.decode("latin-1").strip()
-        for name, _, value in (line.partition(b":") for line in head)
-    }
-    body = json.dumps(
-        {
-            "type": "error",
-            "error": {
-                "type": "invalid_request_error",
-                "message": f"rejected the request (x-api-key: {sent.get('x-api-key', '')})",
-            },
-        }
-    ).encode()
-    reply = (
-        "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
-    )
-    return reply.encode() + body
 
 
 def _everything(directory: Path) -> str:
@@ -68,7 +44,7 @@ def test_the_sdk_puts_the_gateways_reply_into_the_text_of_its_exception() -> Non
     """The premise of the test below: without it, "the key is not in the output" proves nothing."""
     import anthropic
 
-    with serving_raw(_gateway_that_echoes_the_key) as gateway:
+    with serving_raw(echo_the_api_key_in_a_400) as gateway:
         client = anthropic.Anthropic(api_key=KEY, base_url=gateway.url, max_retries=0)
         try:
             client.messages.create(
@@ -86,7 +62,7 @@ def test_a_gateway_that_echoes_the_key_does_not_put_it_on_the_screen_or_on_disk(
     workdir = tmp_path / "cwd"
     workdir.mkdir()
     checkpoints = tmp_path / "checkpoints"
-    with serving_raw(_gateway_that_echoes_the_key) as gateway:
+    with serving_raw(echo_the_api_key_in_a_400) as gateway:
         # ``serving_raw`` has already set the proxy variables aside in this process's environment.
         env = {k: v for k, v in os.environ.items() if not k.startswith(("MPC_", "ANTHROPIC_"))}
         env.update(ANTHROPIC_API_KEY=KEY, ANTHROPIC_BASE_URL=gateway.url)
