@@ -282,8 +282,9 @@ and a lone surrogate in any id or commit reference an adapter sends back to the
 host until Session 282, and JSON nested very deeply and a redirect the HTTP
 library could not build until Session 283, and a GitHub `422` whose `errors`
 field was a number or `true` until Session 284 (that one is now an ordinary
-`repo_error: create_project failed ... 422 ...`; the host had refused the
-request, so no project was made); see *A project address, id, branch
+`repo_error: create_project failed ... 422 ...`, or, when the body says
+"already exists" anywhere, a name conflict like any other; the host had
+refused the request, so no project was made); see *A project address, id, branch
 or commit id with terminal control codes* below. A successful reply nested more
 than 64 levels deep is now `repo_error: ... invalid JSON body: the reply nests
 more than 64 levels deep`, with `repo_error_retry_exhausted:` in place of
