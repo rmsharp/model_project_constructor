@@ -30,6 +30,7 @@ from tests.agents.website.success_hosts import (
     TOKEN,
     Shipped,
     is_clean,
+    recording,
     serve,
 )
 
@@ -237,3 +238,56 @@ def test_a_host_that_echoes_the_token_as_the_project_id_leaves_it_out_of_everyth
     assert "\x07" not in shown and "\\u0007" not in kept
     saved = json.loads((checkpoints / "route8" / "RepoProjectResult.result.json").read_text())
     assert saved["project_id"] == f"{REDACTED} x"
+
+
+def test_a_parent_sha_with_a_control_code_is_a_failed_result_through_the_real_command(
+    intake_report_path: Path, data_report_path: Path, tmp_path: Path
+) -> None:
+    """GitHub's reference reply names a parent commit whose sha holds an escape sequence, and the
+    adapter writes that sha into the path of its next request, which ``httpx`` refuses to build.
+    Before ``RepoHttpClient.build_request`` converted the refusal this was a traceback ending in
+    ``InvalidURL`` and exit 1, with the repository already made on the host. Now it is a ``FAILED``
+    result like any failed commit, and the request the host never saw is absent from what it did."""
+    shipped = HOSTS["github"]
+    project = shipped.project_reply(id_text="", url="https://h.example/g/p", branch="main")
+    parent = "abc\x1b]0;PWNED-TITLE\x07def"
+    router, seen = recording(shipped.router(project, "abc", shas={"parent_sha": parent}))
+    out = tmp_path / "result.json"
+    with serving_raw(serve(router)) as server:
+        done = _command(shipped, server.url, intake_report_path, data_report_path, out)
+    shown = done.stdout + done.stderr
+    assert "Traceback" not in shown and "InvalidURL" not in shown, shown
+    assert "PWNED-TITLE" not in shown
+    assert is_clean(done.stderr) and is_clean(done.stdout.replace("\n", ""))
+    saved = json.loads(out.read_text())
+    assert saved["status"] == "FAILED"
+    assert "could not be built" in saved["failure_reason"], saved["failure_reason"]
+    assert is_clean(saved["failure_reason"])
+    assert not any(p.startswith("/repos/g/n/git/commits/") for _, p in seen), seen
+
+
+def test_a_parent_sha_with_a_control_code_is_a_failed_stage_through_the_real_script(
+    tmp_path: Path,
+) -> None:
+    """The same host through ``scripts/run_pipeline.py``: the pipeline's own account of it is the
+    ``FAILED_AT_WEBSITE`` status line and a saved ``FAILED`` result, not Session 275's net for an
+    exception nobody expected (``unexpected_error``)."""
+    shipped = HOSTS["github"]
+    project = shipped.project_reply(id_text="", url="https://h.example/g/p", branch="main")
+    router, seen = recording(
+        shipped.router(project, "abc", shas={"parent_sha": "abc\x1b]0;PWNED-TITLE\x07def"})
+    )
+    checkpoints = tmp_path / "checkpoints"
+    with serving_raw(serve(router)) as server:
+        done = _script(shipped, server.url, checkpoints)
+    shown = done.stdout + done.stderr
+    assert done.returncode == 1, shown
+    assert "Traceback" not in shown and "InvalidURL" not in shown, shown
+    assert "Status:  FAILED_AT_WEBSITE" in done.stdout
+    kept = _everything(checkpoints)
+    assert "PWNED-TITLE" not in shown + kept
+    saved = json.loads((checkpoints / "route8" / "RepoProjectResult.result.json").read_text())
+    assert saved["status"] == "FAILED"
+    assert "unexpected_error" not in saved["failure_reason"], saved["failure_reason"]
+    assert "could not be built" in saved["failure_reason"], saved["failure_reason"]
+    assert not any(p.startswith("/repos/g/n/git/commits/") for _, p in seen), seen
