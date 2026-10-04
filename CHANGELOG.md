@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S281 — test: the real command and the real script print and save nothing a terminal acts on
+- **Change:** `tests/agents/website/test_host_success_end_to_end.py` (new, 6 tests, ~12 s). Each runs the real website command or the real `scripts/run_pipeline.py` as a subprocess at a socket that answers the whole sequence correctly with an OSC title, `ESC c`, a CSI clear, a bell, a C1 control, DEL and a forged status line in the project address and the commit id (and a lone surrogate in the address). Command, GitLab and GitHub: no control code on either stream, one `Project:` and one `Commit:` line, the same number of output lines as against a host that sent nothing odd, the `-o` file holding the scrubbed text. Script, GitLab and GitHub: the same, the saved `RepoProjectResult` clean, and `--resume` of that run printing the clean address. A project id with an OSC sequence through the real command is a `FAILED` result with no traceback (before: `InvalidURL`, exit 1, the project already made on the host). A host that echoes the token as the project id (Session 275's fixture) leaves it out of everything the script prints and saves. **Run red first:** the first five failed before the fix, on the control codes and on `InvalidURL`; the sixth (the token echo) was added after it and is not covered by the mutation check.
+- **Commit/PR:** this commit
+- **Session:** S281 · **Verified:** `ruff check` clean; the six pass.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S281 — fix: `--resume` of a finished run prints the saved address without its control codes
 - **Change:** `scripts/run_pipeline.py` `_handle_already_complete` prints `scrub_host_text(project_url)`, and `(no project URL recorded)` for an address that scrubs to nothing. The adapters scrub what a host says now, and a checkpoint written before they did (or edited by hand) holds the raw address: `json.loads` turns the file's `\u001b` back into a real ESC, so this print needed its own call. `tests/scripts/test_run_pipeline_resume.py` 7 to 16: six hostile addresses (OSC title, CSI clear, `ESC c`, a C1 control with DEL, a forged status line, a lone surrogate) each asserting the exact line printed, and an only-control, empty and null address each saying none was recorded. Run red first: 7 of the 9 new cases failed (the empty and null ones are the controls).
 - **Commit/PR:** this commit
