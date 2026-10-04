@@ -667,7 +667,7 @@ if result.project_url:
 | `ConfigError: ANTHROPIC_API_KEY is required` | Agent runner needs LLM access | Set `ANTHROPIC_API_KEY` for real LLM-backed runs |
 | `ModuleNotFoundError: langgraph` | Missing `agents` extra | Run `uv sync --extra agents` |
 | Pipeline halts at `FAILED_AT_INTAKE` | Intake report has `DRAFT_INCOMPLETE` status | Check the intake fixture or re-run the intake interview |
-| Pipeline halts at `FAILED_AT_DATA` | Data report has non-COMPLETE status | Check data agent logs or the `DataReport.status` field |
+| Pipeline halts at `FAILED_AT_DATA` | Data report has non-COMPLETE status | Check the `DataReport.status` and `summary` fields; `graph crashed: <ExceptionClass>` names the exception's class and nothing it said (`TROUBLESHOOTING.md` §FAILED_AT_DATA) |
 | Project name conflict on live host | Project already exists in namespace | The website agent auto-suffixes; check the `project_url` in the result |
 
 For detailed failure-mode diagnostics, see `TROUBLESHOOTING.md`.

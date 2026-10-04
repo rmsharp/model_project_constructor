@@ -116,8 +116,10 @@ handler that fails while writing would otherwise have the exception
 chained to its own failure, and `logging` prints that chain).
 
 The wrapper re-raises the exception unchanged, so for an intake or data
-crash the code that called the pipeline can print or scrub it with what
-that code knows. **A website-stage crash is different:** `run_pipeline`
+crash that escapes its agent the code that called the pipeline can print or
+scrub it with what that code knows. (A crash inside the Data Agent's graph does
+not escape: `DataAgent.run` saves it as a report that names the class,
+`TROUBLESHOOTING.md` §FAILED_AT_DATA.) **A website-stage crash is different:** `run_pipeline`
 catches it and saves a FAILED result that names the class and nothing it
 said (`TROUBLESHOOTING.md`, `unexpected_error:`), so that text is recorded
 nowhere. To see it, run the website stage by itself (§4.1–§4.3), which
@@ -328,8 +330,10 @@ Agent's graph is saved in `DataReport.json` as `graph crashed:
 <ExceptionClass>`, and a baseline query the model client could not generate
 as `LLM baseline-query generation failed: <ExceptionClass>` in the baseline's
 `caveats`; neither carries the message (`TROUBLESHOOTING.md` §FAILED_AT_DATA
-says what the classes mean). A `DataReport.json` from before Session 279 can
-still hold the message and a key.
+says what the classes mean and how to read the message). A `DataReport.json`
+from before Session 279 can still hold the message and a key, and so can the
+project the website stage generated from a `COMPLETE` one (§FAILED_AT_INTAKE
+says where to look).
 
 Flags:
 

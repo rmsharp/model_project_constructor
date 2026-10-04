@@ -514,9 +514,12 @@ curated-producer example.
   an upstream error event, and a gateway that quotes the request headers puts
   the API key in it; the report is saved and written into a committed project.
   `db.safe_class_name` is the rule: the class name, or `<unprintable>` when it is
-  not a short ASCII identifier. The message is recorded nowhere. A library
-  caller who needs it calls the LLM client's method itself, which lets the
-  exception reach them.
+  not a short ASCII identifier. The report and this package's code record the
+  message nowhere (LangSmith tracing, if the environment turns it on, exports
+  it to its own endpoint). A library caller who needs it, and the node that
+  raised, runs `build_graph(llm, db).invoke({"request": request,
+  "sql_retry_count": 0, "db_executed": False})` without `DataAgent.run`'s
+  handler: the exception reaches them with its traceback.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
   error text — with any URL password masked (best-effort), on one line and with

@@ -32,12 +32,15 @@ Regardless of which stage failed, start here:
    `duration_ms`. It does not include what the exception said: that text
    can carry a host's reply or a token, so it is never logged (see
    `OPERATIONS.md` §3.1). For the text, see the traceback the caller's
-   own error handler prints (an intake or data crash reaches it), or, for
-   a failure an agent reported itself (a `FAILED_AT_*` status), the
-   `failure_reason` it saved. A website-stage `unexpected_error:` keeps
-   neither: see that entry above. Nor does the scripted intake's
-   `interview_aborted:` (see `FAILED_AT_INTAKE`): `scripts/run_pipeline.py`
-   catches the exception and saves its class only.
+   own error handler prints (an intake or data crash that escapes its
+   agent reaches it), or, for a failure an agent reported itself (a
+   `FAILED_AT_*` status), the `failure_reason` it saved. A website-stage
+   `unexpected_error:` keeps neither: see that entry above. Nor does the
+   scripted intake's `interview_aborted:` (see `FAILED_AT_INTAKE`):
+   `scripts/run_pipeline.py` catches the exception and saves its class
+   only. Nor does the data stage's `graph crashed:` (see `FAILED_AT_DATA`):
+   `DataAgent.run` catches an exception from inside its graph and saves its
+   class only, so no traceback reaches the caller.
 
 4. **Check metrics.** If you used `MetricsRegistry`, call
    `registry.snapshot()` to see the status distribution and per-agent
@@ -101,7 +104,11 @@ grep -rlF 'sk-ant-' <checkpoint dir> <saved CI logs>
 Rotate a key that turns up, then delete or redact those files and logs. (The same search
 finds a `DataReport.json` saved before Session 279 when the data stage's model call failed:
 it recorded the message too. Since Session 279 it names the class only; see
-§FAILED_AT_DATA.)
+§FAILED_AT_DATA. A baseline-query failure from before Session 279 left the report `COMPLETE`,
+so the pipeline went on to the website stage and the message, and a key in it, was written into
+the generated project: also search that project's `reports/data_report.json` and
+`analysis/06_implementation_plan.qmd`, and its history if it was pushed, where deleting a local
+file removes nothing. Do not `--resume` such a run from its saved report.)
 
 ---
 
@@ -142,19 +149,36 @@ for q in report.primary_queries:
   (`BadRequestError` is any 400, `AuthenticationError` a rejected key,
   `RateLimitError`, `APIConnectionError`); `LLMParseError` is a reply or an
   `opencode` run the client could not use, and several different causes share
-  that name; `KeyError` is usually a reply with the wrong fields. Neither the message
-  nor the node that raised is recorded. To read the message, call the same
-  client method yourself with `DataRequest.json` as the request, which lets the
-  exception reach you. A baseline query the client could not generate shows as
+  that name (among them the `opencode` version the client appends to two of its
+  messages); `KeyError` is usually a reply with the wrong fields; `AttributeError`
+  can be a 200 reply that is not a Messages API reply at all, such as a proxy's
+  login page. This code records neither the message nor the node that raised
+  (LangSmith tracing, if the environment turns it on, exports the message to its
+  own endpoint). To read both, run the graph yourself, without the agent's handler,
+  as shown below. A baseline query the client could not generate shows as
   `LLM baseline-query generation failed: <ExceptionClass>` in the baseline's
   `caveats` instead, and the report stays `COMPLETE`. A `DataReport.json` saved
   before Session 279 holds the message instead and may hold a key
-  (§FAILED_AT_INTAKE shows how to search for one).
+  (§FAILED_AT_INTAKE shows how to search for one, and where else to look).
 - `INCOMPLETE_REQUEST`: the `DataRequest` built by the adapter was
   too ambiguous for the Data Agent. Check
   `request.target_description` and `request.required_features`.
 - Database connectivity: the `db_url` or read-only credential was
   wrong or expired.
+
+**Reading a `graph crashed:` message.** Build the graph with the provider and model the
+run used and invoke it without the agent's `try`; the exception reaches you with its
+traceback, which names the node. Pass `ReadOnlyDB(url)` instead of `None` if the crash
+came after the quality checks. The message can hold the API key: do not paste it.
+
+```python
+from model_project_constructor_data_agent.factory import make_llm_client
+from model_project_constructor_data_agent.graph import build_graph
+
+llm = make_llm_client("anthropic", model="<the run's --model>")
+request = store.load_payload("<run_id>", "DataRequest")
+build_graph(llm, None).invoke({"request": request, "sql_retry_count": 0, "db_executed": False})
+```
 
 **Resolution:**
 - Fix the upstream problem (database access, query logic, or the
