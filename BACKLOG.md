@@ -674,8 +674,8 @@ found, on 3.14 and for a leaked message, since killed), and by the touched test 
 3. **CI runs `httpx` 0.28.1 only** (the lock); `pyproject.toml` admits `>=0.27`. The `httpx` 0.27 half of the new tests
    (the body cases skip there, the path, cookie, nesting and redirect cases run) is run by hand with `uv run --with
    httpx==0.27.2 pytest ...`, which Session 282 did (336 passed, 44 skipped) and Session 283 did for its four touched test
-   files and the neighbouring `test_host_reuse_text.py` (224 passed, 44 skipped). Session 283 also ran those five on Python
-   3.11, 3.12 and 3.14 (268 passed on each, in separate
+   files and the neighbouring `test_host_reuse_text.py` (251 passed, 44 skipped on the final tree). Session 283 also ran those five on Python
+   3.11, 3.12 and 3.14 (295 passed on each, in separate
    environments: `UV_PROJECT_ENVIRONMENT=<dir> uv run --frozen --extra agents --extra ui --extra dev --python 3.12
    python -m pytest ...`, since a bare `pytest` there is whatever is first on the `PATH`); CI runs 3.12.3 only. Related
    to the item *CI tests one Python* below, which is about the interpreter.
@@ -901,7 +901,7 @@ you have. **Fix, small, an operator call:** a `.python-version` of 3.12 (what CI
 3.13 (the suite takes about 75 s on CI, so a matrix triples the minutes). Session 275's end-to-end test for a
 100,000-deep JSON reply was skipped on a Python that parses it, and Session 283 replaced it (the crash it caused is
 fixed): the replacement runs on every interpreter, and Session 283 ran its touched test files on 3.11, 3.12 and 3.14 by
-hand (268 passed on each), so a matrix that adds 3.14 would meet no skip of Session 275's.
+hand (295 passed on each), so a matrix that adds 3.14 would meet no skip of Session 275's.
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 
