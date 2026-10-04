@@ -17,19 +17,25 @@ every later request. None of these is an ``httpx.HTTPError``, so the adapters' `
 httpx.HTTPError`` blocks never caught them. An adapter writes values the host sent into its next
 request, so what makes the request unbuildable is the host's to choose.
 
-The third point is a request built from the host's reply, not from the adapter's call: a 3xx's
-``Location``. ``httpx`` builds the request a redirect asks for even when it is told not to follow
-it, because it keeps that request as ``response.next_request``, so the header is read on every 3xx.
-The library parses the address itself and converts what its parser refuses (``RemoteProtocolError``,
-"Invalid URL in location header"), then joins what is left with the request's address, and that
-step raises what the parser let through: ``InvalidURL`` for an address short enough alone and too
-long joined (a window of about 26 characters of ``Location`` length, which moves with the length of
-the request's own address), and ``ValueError`` from the standard library's and ``idna``'s parsers
+The third point is a request built from the host's reply, not from the adapter's call: the
+``Location`` of a 301, 302, 303, 307 or 308 (a 300, 304 or 305 builds nothing). ``httpx`` builds the
+request such a reply asks for even when it is told not to follow it, because it keeps that request
+as ``response.next_request``. The library parses the address itself and converts what its parser
+refuses (``RemoteProtocolError``, "Invalid URL in location header"), then joins what is left with
+the request's address, and that step raises what the parser let through: ``InvalidURL`` for an
+address that is short enough alone and too long joined (a window of about 20 to 26 characters of
+``Location`` length, which moves with the length of the request's own address) and for a reference
+that reads as an absolute URL with a path that does not begin with ``/`` (``mailto:x``, ``urn:x``,
+which a real host can send), and ``ValueError`` from the standard library's and ``idna``'s parsers
 (an unclosed ``[``, a malformed ``xn--`` label). A fuzz of 60,000 random values found those and
 nothing else. The override is on ``_build_redirect_request``, a private method of ``httpx``,
 because that is where the traceback shows the error raised and a catch in ``send`` would also hide
 a ``ValueError`` from the transport; ``test_repo_http_client.py`` fails if a release stops raising
-these or renames the method, so the conversion cannot go inert silently.
+these or renames the method, so the conversion cannot go inert silently. The alternative a reviewer
+argued, a response event hook that drops the ``Location`` so no request is built, uses only public
+API and names no exception class, but it changes what a caller that does follow redirects gets (the
+per-call ``follow_redirects`` is invisible to a hook) and it hides the header from every reader of
+the response; it was not taken, and is the fallback if a release renames the method.
 
 What the library's own message holds, measured on 0.27.2 and 0.28.1: for a control character or a
 surrogate, that one character and its position; for ``NaN`` or an infinity, the number. (Its
@@ -60,8 +66,9 @@ UNBUILDABLE_REQUEST_TEXT = (
 
 UNBUILDABLE_REDIRECT_TEXT = (
     "the host's reply redirected the request, and the HTTP library could not build the "
-    "redirected request from the address the host gave (too long or malformed). Its own message "
-    "is withheld because it repeats part of what the host sent."
+    "redirected request from what the host sent (an address that is too long or malformed, or a "
+    "cookie it set that cannot be sent back). Its own message is withheld because it repeats part "
+    "of what the host sent."
 )
 
 

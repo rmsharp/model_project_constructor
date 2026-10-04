@@ -16,6 +16,14 @@ None of them is an ``httpx.HTTPError``, so none reached the adapters' ``except``
 library's own message repeats only part of what it refused (one character and its position, or the
 number), so the tests that hold the converter are the exact fixed text and the empty chain; the
 assertions that the secret is absent are kept, and they cannot fail for any ``httpx`` today.
+
+The third part is a request ``httpx`` builds from the host's reply, not from the adapter's call: the
+``Location`` of a redirect, built even when it is not followed. It raises ``InvalidURL`` and
+``ValueError`` out of ``send`` for an address its own parser let through (Session 283); the
+conversion is on ``_build_redirect_request``, a private method, so the first test of that section is
+a canary for the method and for what the library still raises. A last test turns a surrogate in the
+GitLab namespace, which ``urllib.parse.quote`` refuses before ``httpx`` is reached, into the call's
+own error.
 """
 
 from __future__ import annotations
@@ -443,12 +451,14 @@ def test_a_namespace_with_a_lone_surrogate_fails_the_call_and_is_never_sent(
 #
 # ``httpx`` builds the request a redirect asks for even when it is told not to follow it, because
 # it keeps that request as ``response.next_request``. So a host's ``Location`` header is read, and a
-# request is built from it, on every 3xx. ``httpx`` converts the addresses its own parser refuses
-# (``RemoteProtocolError``, "Invalid URL in location header") but joins what is left with the
-# request's address afterwards, and that step raises what the parser let through: ``InvalidURL``
-# for an address that is short enough alone and too long joined, and, from the standard library's
-# and ``idna``'s own parsers, ``ValueError`` and its ``UnicodeError`` subclass. A fuzz of 60,000
-# random ``Location`` values (Session 283) found those three classes and no others.
+# request is built from it, for a 301, 302, 303, 307 or 308 (a 300, 304 or 305 builds nothing).
+# ``httpx`` converts the addresses its own parser refuses (``RemoteProtocolError``, "Invalid URL in
+# location header") but joins what is left with the request's address afterwards, and that step
+# raises what the parser let through: ``InvalidURL`` for an address that is short enough alone and
+# too long joined and for a reference that reads as an absolute URL with a path that does not begin
+# with ``/`` (``mailto:x``), and, from the standard library's and ``idna``'s own parsers,
+# ``ValueError`` and its ``UnicodeError`` subclass. A fuzz of 60,000 random ``Location`` values
+# (Session 283) found those classes and no others.
 #
 # The conversion sits on ``httpx.Client._build_redirect_request``, where the traceback shows the
 # error is raised, and not on ``send``: ``send`` also reaches the transport, and a ``ValueError``
@@ -458,6 +468,9 @@ def test_a_namespace_with_a_lone_surrogate_fails_the_call_and_is_never_sent(
 HOSTILE_REDIRECTS = {
     # Under the length limit alone (65,536), over it once joined with the request's address.
     "too-long-once-joined": (b"/" + b"a" * 65_535, httpx.InvalidURL),
+    # A scheme and a path that does not begin with ``/``: "For absolute URLs, path must be empty
+    # or begin with '/'". The easiest of them for a real host to send.
+    "scheme-without-a-slash": (b"mailto:x", httpx.InvalidURL),
     # ``httpx``'s parser lets it through and ``urllib.parse.urljoin`` refuses it.
     "ipv6": (b":http://[/", ValueError),
     # ``idna.InvalidCodepoint`` and ``idna.IDNAError``, both ``UnicodeError``, so ``ValueError``.
@@ -512,6 +525,27 @@ def test_a_redirect_that_keeps_the_method_and_the_body_is_converted_too(status: 
     client = _redirecting(RepoHttpClient, HOSTILE_REDIRECTS["too-long-once-joined"][0], status)
     with pytest.raises(httpx.RemoteProtocolError, match="could not build the redirected request"):
         client.post("/x", json={"a": 1})
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_every_status_httpx_redirects_on_is_converted(status: int) -> None:
+    """The five statuses ``has_redirect_location`` accepts; ``mailto:x`` is the cheapest address
+    to make a real host send."""
+    client = _redirecting(RepoHttpClient, HOSTILE_REDIRECTS["scheme-without-a-slash"][0], status)
+    with pytest.raises(httpx.RemoteProtocolError) as caught:
+        client.get("/x")
+    assert str(caught.value) == UNBUILDABLE_REDIRECT_TEXT
+
+
+@pytest.mark.parametrize("status", [300, 304, 305])
+@pytest.mark.parametrize("client", [httpx.Client, RepoHttpClient], ids=["plain", "repo"])
+def test_a_status_httpx_does_not_redirect_on_is_returned_untouched(
+    status: int, client: type[httpx.Client]
+) -> None:
+    """No request is built from its ``Location``, so there is nothing to refuse, for either."""
+    location = HOSTILE_REDIRECTS["scheme-without-a-slash"][0]
+    response = _redirecting(client, location, status).get("/x")
+    assert response.status_code == status and response.next_request is None
 
 
 def test_the_stream_path_converts_a_redirect_too() -> None:
