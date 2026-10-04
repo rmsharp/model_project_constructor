@@ -148,6 +148,32 @@ class TestImport:
         assert str(adapter._client.base_url) == "https://github.example.com/api/v3/"
 
 
+# What a host could put in a 422's ``errors`` field. The first four are truthy and cannot be
+# iterated, which is what once left ``_is_name_conflict`` (and so ``create_project``) raising a bare
+# ``TypeError``; the rest already answered cleanly and are held so a change to the guard cannot
+# trade one for another.
+NON_ITERABLE_ERRORS: list[object] = [5, -1, 1.5, True]
+ERRORS_FIELD_SHAPES: list[object] = [
+    *NON_ITERABLE_ERRORS,
+    0,
+    0.0,
+    False,
+    None,
+    "",
+    "x",
+    [],
+    [5],
+    [None],
+    [[]],
+    [{}],
+    [{"message": 5}],
+    [{"message": None}],
+    {},
+    {"message": "x"},
+    {"a": [1]},
+]
+
+
 class TestNameConflictSniffing:
     @staticmethod
     def _response(
@@ -197,6 +223,33 @@ class TestNameConflictSniffing:
     def test_non_json_body_falls_back_to_raw_text(self) -> None:
         response = self._response(422, text="name already exists (plain text)")
         assert _is_name_conflict(response) is True
+
+    @pytest.mark.parametrize("errors", ERRORS_FIELD_SHAPES, ids=repr)
+    def test_422_whatever_the_errors_field_holds_is_answered_and_never_raised(
+        self, errors: object
+    ) -> None:
+        # The host's reply is not ours to type: ``5`` and ``true`` in ``errors`` are truthy and not
+        # iterable, and the adapter once looped over them.
+        response = self._response(422, json_body={"errors": errors})
+        assert _is_name_conflict(response) is False
+
+    @pytest.mark.parametrize("errors", ERRORS_FIELD_SHAPES, ids=repr)
+    def test_422_with_a_non_list_errors_still_matches_a_conflict_said_elsewhere(
+        self, errors: object
+    ) -> None:
+        # Skipping the entry-by-entry loop for a non-list must not skip the loose whole-body match
+        # that follows it: the wording-drift rule holds whatever shape ``errors`` has.
+        response = self._response(
+            422, json_body={"errors": errors, "message": "Repository already exists"}
+        )
+        assert _is_name_conflict(response) is True
+
+    @pytest.mark.parametrize("body", [[], [5], 5, 1.5, True, "x", None], ids=repr)
+    def test_422_whose_whole_body_is_not_an_object_is_answered_and_never_raised(
+        self, body: object
+    ) -> None:
+        response = self._response(422, text=json.dumps(body))
+        assert _is_name_conflict(response) is False
 
 
 class TestNestedNamespaceGuard:
@@ -293,6 +346,42 @@ class TestCreateProject:
                     ("POST", "/orgs/acme/repos"): httpx.Response(
                         422,
                         json={"errors": [{"message": "name already exists on this account"}]},
+                    ),
+                }
+            )
+        )
+        with pytest.raises(RepoNameConflictError) as excinfo:
+            adapter.create_project(namespace="acme", name="foo", visibility="private")
+        assert excinfo.value.name == "foo"
+
+    @pytest.mark.parametrize("errors", ERRORS_FIELD_SHAPES, ids=repr)
+    def test_create_project_422_whatever_the_errors_field_holds_raises_client_error(
+        self, errors: object
+    ) -> None:
+        adapter = _adapter_with_transport(
+            _route(
+                {
+                    ("GET", "/orgs/acme"): httpx.Response(200, json={"login": "acme"}),
+                    ("POST", "/orgs/acme/repos"): httpx.Response(422, json={"errors": errors}),
+                }
+            )
+        )
+        with pytest.raises(RepoClientError, match="create_project failed") as excinfo:
+            adapter.create_project(namespace="acme", name="foo", visibility="private")
+        # A ``RepoNameConflictError`` is a ``RepoClientError`` too, and here the name is not taken.
+        assert type(excinfo.value) is RepoClientError
+        assert "422" in str(excinfo.value)
+
+    @pytest.mark.parametrize("errors", NON_ITERABLE_ERRORS, ids=repr)
+    def test_create_project_422_with_a_non_list_errors_and_a_taken_name_is_a_name_conflict(
+        self, errors: object
+    ) -> None:
+        adapter = _adapter_with_transport(
+            _route(
+                {
+                    ("GET", "/orgs/acme"): httpx.Response(200, json={"login": "acme"}),
+                    ("POST", "/orgs/acme/repos"): httpx.Response(
+                        422, json={"errors": errors, "message": "Repository already exists"}
                     ),
                 }
             )

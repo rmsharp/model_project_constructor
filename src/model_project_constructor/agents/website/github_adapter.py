@@ -304,7 +304,10 @@ def _is_name_conflict(response: httpx.Response) -> bool:
     ``{"errors": [{"message": "name already exists on this account"}]}``.
     We match loosely (any 422 whose body mentions "already exists"
     anywhere, not just in the ``errors`` list) so minor wording changes
-    don't break the adapter.
+    don't break the adapter. The reply is the host's, so ``errors`` may
+    hold anything: only a list is searched entry by entry (a number or
+    ``true`` cannot be iterated), and the whole-body match below still
+    sees every other shape.
     """
 
     if response.status_code != 422:
@@ -314,11 +317,13 @@ def _is_name_conflict(response: httpx.Response) -> bool:
     except ValueError:
         body = None
     if isinstance(body, dict):
-        for err in body.get("errors", []) or []:
-            if isinstance(err, dict):
-                message = str(err.get("message", "")).lower()
-                if "already exists" in message:
-                    return True
+        errors = body.get("errors")
+        if isinstance(errors, list):
+            for err in errors:
+                if isinstance(err, dict):
+                    message = str(err.get("message", "")).lower()
+                    if "already exists" in message:
+                        return True
     text = str(body) if body is not None else response_text(response)
     return "already exists" in text.lower()
 
