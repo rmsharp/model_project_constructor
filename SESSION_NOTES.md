@@ -95,10 +95,133 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 279 Did
-**Deliverable:** the data stage's failure text out of `DataReport.json` — the exception's class, never its message, where the data agent writes `{e}` today (`agent.py:54` `graph crashed: {e}`; `nodes.py:211` `LLM baseline-query generation failed: {e}`; `BACKLOG.md:462`, item 5) (IN PROGRESS)
-**Started:** 2026-10-03 21:19
-**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **the data stage's report names the exception's class and never its message — COMPLETE.** `DataAgent.run` wrote
+`f"graph crashed: {e}"` into `summary` and `data_quality_concerns`, and the baseline collection wrote `f"LLM baseline-query
+generation failed: {e}"` into `caveats`. I reproduced the first before changing anything: the real script (`--llm data`)
+against a loopback gateway that answers a 400 quoting the `x-api-key` it received put the key into `DataReport.json` (2,258 B,
+on disk, not on the screen). Now the summary reads `Data Agent run failed: graph crashed: BadRequestError`, the key appears
+nowhere, and the file is 1,966 B (the same script, re-run on the final code). Closes route 5 of `BACKLOG.md`'s "Seven more
+routes" item. Chosen by the operator at Phase 0 from a picker (first option, recommended). **The operator also decided:** push
+at close-out (yes). **Mine, and not put to the operator:** copying the rule into the standalone package as `db.safe_class_name`
+(it cannot import `orchestrator.logging._class_name`) with a parity test, rather than moving it; the class name rather than the
+planned `safe_message(e)` (measured: a bare `sk-ant-` token and `Authorization: Bearer <key>` survive it, the `x-api-key:`
+header echo does not); hoisting the echoing-gateway handler into `tests/agents/website/loopback.py`; fixing 13 of the review's
+17 findings in this session and filing the other four; adding the missing arm to the decoupling guard. **Started:** 2026-10-03 21:19.
+**Completed:** 2026-10-03. **Commits: ten** — `2ad0d58` (claim, alone), `0e46e7d` (the helper), `aa95b3a` (the two sites),
+`ed0be6f` (end-to-end tests), `a4e08aa` (docs), `48ce1cd` and `0337a50` (tests, from the review), `f9ac4cc` and `da87d37` (docs,
+from the review) and this close-out. Each carries its own `CHANGELOG.md` entry; the push is recorded in the close-out's. (I told
+the operator at the push picker there were 11 commits. There were nine, and ten with this one.)
+
+#### What changed
+- **`db.py:456` `safe_class_name(error)`:** the class name, or `<unprintable>` unless an exact-`str` ASCII identifier of at most 100
+  characters; it asks the exception for nothing and reads the name under a `try`. **`agent.py:57`** and **`nodes.py:218`** write it
+  in place of `{e}`. `{e}` was also a raise site inside the `except`: an exception whose `__str__` raises made `DataAgent.run`
+  raise, against its documented contract.
+- **Tests (+34, 3,019 → 3,053):** the two tests that pinned the message as behaviour are inverted; `test_data_agent.py` §Session 279
+  (both sites × hostile text with the key bare and as a header echo, every control character and a newline; an exception that
+  cannot be printed; four odd names `type()` can build; two it cannot, `NameThatRaises` and `NameThatIsAHostileStr`, now in
+  `tests/hostile_text.py`); `TestSafeClassName` and a parity test against the orchestrator's copy (`test_db.py:1076`);
+  `tests/scripts/test_run_pipeline_data_error_text.py` (the real script, screen and every file) and
+  `tests/agents/data/test_gateway_error_text.py` (the real client and SDK against a socket that answers four calls validly and
+  rejects the baseline call; it also pins the SDK premise); a third arm in `tests/test_data_agent_decoupling.py` (the standalone
+  package imports nothing from `model_project_constructor`, with a self-check).
+- **Docs:** `TROUBLESHOOTING.md` §FAILED_AT_DATA (the classes, a recipe that was run for reading a crash's message, the committed
+  project the old baseline leak went into), `OPERATIONS.md`, `packages/data-agent/USAGE.md`, `docs/tutorial.md`; `docs/wiki/` not
+  touched. **`BACKLOG.md`:** route 5 closed (`:462`); route 9 new (`:530`); route 6 notes the whole dump is committed; the
+  discovery item gains point 2 (`:648`); the data stage's cost joins the intake item (`:674`); the index row counts seven again.
+
+#### Verification
+Full suite with `GITHUB_ACTIONS=true`: **3,053 passed, 9 skipped**, coverage 98%; `ruff check src/ tests/ packages/ scripts/` and
+`mypy` clean; both ledger guards 82 passed. Mutation, all caught: `{e}` back at each site, `safe_message(e)` at each, a bare
+`type(e).__name__` at each, six helper mutants (no length limit, no exact-`str`, no ASCII, no identifier check, unguarded read,
+`__qualname__`); and after the review, inline copies of the rule at each site without the `try` and without the exact-`str` check.
+Each end-to-end test fails against its own site's mutant and passes against the other's. **Runtime smoke (3E), done:** the fixture
+pipeline exits 0 with `COMPLETE`; the failing scripted data stage exits 1, `FAILED_AT_DATA`, key on neither the screen nor any file.
+
+#### The review, and what it found
+One workflow: five read-only lenses (leak channels, test faithfulness, compatibility, docs and ledger, hostile inputs), two
+skeptics per non-nit finding. 39 agents, 0 errors, 14.7 minutes, 3.79M subagent tokens, 896 tool uses. **17 non-nit findings and
+20 nits; none refuted by every skeptic; every one low** (a skeptic called several nits). The fix itself held: the leaks lens
+probed the real SDK, the CLI, the script and a fake `opencode` binary, and in every case `DataAgent.run` caught, the key was
+absent from the report, the screen and the checkpoint files. What it found was around the fix. **Fixed:** the old-leak advice named
+the checkpoint directory and CI logs, and missed that a baseline failure left the report `COMPLETE`, so the website stage
+published the message into the generated project (three lenses, independently); "call the same client method yourself" contradicted
+"the node is not recorded" and I had not run it; two diagnostics steps still said a data crash reaches the caller's handler; my
+CHANGELOG said each helper mutant is caught by "at least two tests" (the `__qualname__` one by one: the parity list held no nested
+class); "12 new cases", not 14; "the one place" in a title and a comment (`discovery.py` has four raw reads); my docstring's
+"cannot import" was checked by nothing (the decoupling guard forbade only intake tokens). **Filed:** route 9 (`run` guards only
+`invoke`, so report assembly can raise on a model reply with a bad enum), `reports/data_report.json` as the whole dump, the four raw
+class-name reads in `discovery.py`, and the `opencode` version the report no longer carries (two wiki pages promise it).
+
+### Session 278 Handoff Evaluation (by Session 279)
+
+**Score: 9/10.**
+- **+** The first recommendation was the deliverable, exactly: `BACKLOG.md:462`, `agent.py:54`, `nodes.py:211` all resolved as
+  written, "reproduced by two skeptics, disk only, not the screen" was true (I reproduced it in one run), and "the sturdier fix is
+  the class name, not `safe_message`" proved right when I measured what `safe_message` leaves. The harness pointer
+  (`tests/scripts/test_run_pipeline_intake_error_text.py`) was the template for both new end-to-end tests, and gotchas 1 and 2
+  (`uv run python`; strip `MPC_*` and `ANTHROPIC_*`, empty working directory) each saved a round trip.
+- **−** It did not say the data agent is a standalone package that cannot import `orchestrator.logging._class_name`, which shaped
+  the design (a copy, a parity test, and a guard I then found did not exist). And gotcha 4, "`_website_failure` is the one unguarded
+  copy left", was a universal: `discovery.py` has four raw reads (#345 again, in the predecessor's prose this time).
+- **ROI: high.**
+
+### Session 279 Self-Assessment
+
+**Score: 8/10.**
+- **+** Claimed first, reproduced before the change, wrote the tests first and watched 14 fail for the right reason, mutated every
+  site and the helper, kept every commit at five files or fewer, drove the second site with the real SDK and a socket instead of
+  a stand-in, ran the review before closing, and fixed what it found about this diff's own tests and prose.
+- **−** The review found real defects in my own work: advice that stopped where I had looked (the checkpoint directory) although I
+  had read that the templates publish the caveat; a recipe and a "recorded nowhere" I wrote without running or checking
+  (LangSmith exports it); a CHANGELOG count I never measured per mutant; a test helper that could end the whole pytest session
+  (`INTERNALERROR`) if the code regressed. And my own mutation harness printed only pytest's last line, so a run that aborted at the
+  failing test read "47 passed", four tests short: I caught it only because the count differed from the unmutated 51. I also told
+  the operator the wrong commit count at the push picker.
+- **Decay term:** nothing was removed from a mandated-read file. `SESSION_NOTES.md` is 121,644 B before this record (the live
+  trigger is 196,608 B), `PROJECT_LEARNINGS.md` grows by three rows (it was 390,757 B), `BACKLOG.md` 149,335 → 153,194 B. **A
+  twelfth trim is not due:** about five or six more closing records at this size is an estimate (about 75 KB of room over roughly
+  12 KB each); the 262,144 B refusal ceiling is about 140 KB away.
+
+**What's next** (sizes and effort are estimates unless measured; none is blocking).
+1. **Route 9: `DataAgent.run` can still raise** (`BACKLOG.md:530`). Small, no ruling: put `_assemble_complete_report` inside the same
+   `try`, writing `report assembly failed: ` and `safe_class_name(e)`, with a test (a model reply with an out-of-range
+   `expected_row_count_order`, or fewer quality-check groups than queries) and the TROUBLESHOOTING class list gaining the case.
+2. **Rulings owed, as before:** one named error class per cause for the scripted intake's stop reasons and the data stage's
+   `LLMParseError` (`BACKLOG.md:655`, `:674`; adds names to two agents' surfaces); the discovery log line and the four raw class-name
+   reads (`:634`, `:648`; small now that `safe_class_name` exists); `L10`'s completeness gap and second hole (`:938`, `:959`); publish
+   the wiki correction (`:607`) and, new, the two wiki sentences about `opencode`'s version (`:674`); wire or stop documenting
+   `MPC_LOG_LEVEL` (`:686`); whether the coverage harness from Session 277 should be committed.
+3. **Observed, not filed:** `stash@{0}` (Session 270's claim commit), the branches `worktree-wf_5f96c807-d00-3` and
+   `worktree-wf_c93ee390-506-3` with `.claude/worktrees/wf_5f96c807-d00-3`, the root `methodology_dashboard.py` at v2.18.0 against
+   v2.19.0, Session 277's `gitleaks` count of 9 (not re-measured), `TROUBLESHOOTING.md` §FAILED_AT_DATA's first bullet ("a SQL
+   query failed against the database"; a failing quality check is `ERROR` on that check and the report stays `COMPLETE`, so the
+   bullet is imprecise: not changed, outside this deliverable), and `tests/agents/website/loopback.py`'s module docstring, which
+   still says the module answers every request `200 {}` (it also holds `serving_raw` and now a 400 handler).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `packages/data-agent/src/model_project_constructor_data_agent/db.py:456` (`safe_class_name`), `agent.py:57`, `nodes.py:218`.
+- `tests/agents/data/test_data_agent.py:1213-1500` (the Session 279 section, `_crash_report` at `:1279`);
+  `tests/data_agent_package/test_db.py:1076` (`TestSafeClassName`); `tests/hostile_text.py` (the exotic names, at the end);
+  `tests/scripts/test_run_pipeline_data_error_text.py` and `tests/agents/data/test_gateway_error_text.py` (the end-to-end pair);
+  `tests/test_data_agent_decoupling.py:70-93`; `tests/agents/website/loopback.py:155` (`echo_the_api_key_in_a_400`).
+- `TROUBLESHOOTING.md:115` §FAILED_AT_DATA (the recipe at `:169`); `BACKLOG.md:462, 530, 607, 634, 648, 655, 674, 686, 938`;
+  `PROJECT_LEARNINGS.md` #346-348.
+
+**Gotchas.**
+1. **A mutation harness must compare the test count, not read the last line.** Against a mutant that made `run()` raise an exception
+   whose class name cannot be read, pytest hit `INTERNALERROR` while formatting the failure and its last line read "47 passed".
+   `_crash_report` raises its own failure outside the `except` block for that reason; keep it that way (#346).
+2. **`DataAgent.run` is still not total** (route 9): the report assembly is outside its `try`, so the new docs' "becomes
+   `EXECUTION_FAILED`" is true of the graph and not of the assembly.
+3. **The data agent cannot import the main package** and now has a guard that says so; a rule shared with `orchestrator/logging.py`
+   is copied and held in step by `test_it_agrees_with_the_orchestrators_copy_of_the_rule`, so change both or neither.
+4. **`COMPLETE` is not "nothing was published".** The baseline site leaves the report `COMPLETE`, which sends it to the website
+   stage; only `EXECUTION_FAILED` halts before a project exists (#347).
+5. **`CLAUDE.md:122` states the learnings count and the file's size**; a close-out that appends learnings edits it (now 348, Sessions
+   9–279). `docs/wiki/` was not touched, so no commit this session published the wiki.
+6. Never `git stash` (#316). `uv run pytest tests/test_read_budget.py tests/test_session_notes_census.py --no-cov` before every commit
+   that touches `SESSION_NOTES.md`, `CLAUDE.md` or `BACKLOG.md`. Use `uv run python`, never bare `python3`.
 
 ### What Session 278 Did
 **Deliverable:** **the scripted intake runner's failure report names the exception's class and never its message — COMPLETE.**
