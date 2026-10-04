@@ -323,6 +323,14 @@ saved to disk, so the message stays out of both. A report saved by a run
 from before this change can still hold it (`TROUBLESHOOTING.md`
 §FAILED_AT_INTAKE says how to find one).
 
+The data stage follows the same rule. An exception that escapes the Data
+Agent's graph is saved in `DataReport.json` as `graph crashed:
+<ExceptionClass>`, and a baseline query the model client could not generate
+as `LLM baseline-query generation failed: <ExceptionClass>` in the baseline's
+`caveats`; neither carries the message (`TROUBLESHOOTING.md` §FAILED_AT_DATA
+says what the classes mean). A `DataReport.json` from before Session 279 can
+still hold the message and a key.
+
 Flags:
 
 - `--llm {none,data,both}` — `none` runs the fixture pipeline, `data`

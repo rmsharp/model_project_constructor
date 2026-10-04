@@ -505,6 +505,18 @@ curated-producer example.
   surfaced as `DataReport(status="EXECUTION_FAILED")`.
 - `AnthropicLLMClient` raises `LLMParseError` on unparseable Claude output;
   this propagates through the outer boundary and becomes `EXECUTION_FAILED`.
+- **The report names such an exception's class and never what it said.**
+  `summary` reads `Data Agent run failed: graph crashed: <ExceptionClass>` and
+  that is the only `data_quality_concerns` entry; a baseline query the LLM
+  client fails to generate is the baseline's `caveats` entry
+  `LLM baseline-query generation failed: <ExceptionClass>` (the report stays
+  `COMPLETE`). An exception raised by the LLM client carries a gateway's reply or
+  an upstream error event, and a gateway that quotes the request headers puts
+  the API key in it; the report is saved and written into a committed project.
+  `db.safe_class_name` is the rule: the class name, or `<unprintable>` when it is
+  not a short ASCII identifier. The message is recorded nowhere. A library
+  caller who needs it calls the LLM client's method itself, which lets the
+  exception reach them.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
   error text — with any URL password masked (best-effort), on one line and with

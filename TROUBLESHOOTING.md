@@ -99,8 +99,9 @@ grep -rlF 'sk-ant-' <checkpoint dir> <saved CI logs>
 ```
 
 Rotate a key that turns up, then delete or redact those files and logs. (The same search
-finds `DataReport.json` when the data stage's model call failed: that report still records
-the message, a separate open item in `BACKLOG.md`.)
+finds a `DataReport.json` saved before Session 279 when the data stage's model call failed:
+it recorded the message too. Since Session 279 it names the class only; see
+§FAILED_AT_DATA.)
 
 ---
 
@@ -131,6 +132,24 @@ for q in report.primary_queries:
   `report.primary_queries` for individual query statuses and error
   messages. Common causes: table doesn't exist, column renamed, read-
   only credential lacks permission on a specific schema.
+- `EXECUTION_FAILED` with `Data Agent run failed: graph crashed:
+  <ExceptionClass>` in `report.summary` (and as the only
+  `data_quality_concerns` entry): an exception escaped the agent's graph,
+  usually a model call or a reply the client could not read. The report names
+  the class and never the message, because an SDK error carries the gateway's
+  reply and a gateway that quotes the request headers puts the API key in it.
+  An `anthropic` class names the HTTP status or the connection
+  (`BadRequestError` is any 400, `AuthenticationError` a rejected key,
+  `RateLimitError`, `APIConnectionError`); `LLMParseError` is a reply or an
+  `opencode` run the client could not use, and several different causes share
+  that name; `KeyError` is usually a reply with the wrong fields. Neither the message
+  nor the node that raised is recorded. To read the message, call the same
+  client method yourself with `DataRequest.json` as the request, which lets the
+  exception reach you. A baseline query the client could not generate shows as
+  `LLM baseline-query generation failed: <ExceptionClass>` in the baseline's
+  `caveats` instead, and the report stays `COMPLETE`. A `DataReport.json` saved
+  before Session 279 holds the message instead and may hold a key
+  (§FAILED_AT_INTAKE shows how to search for one).
 - `INCOMPLETE_REQUEST`: the `DataRequest` built by the adapter was
   too ambiguous for the Data Agent. Check
   `request.target_description` and `request.required_features`.
