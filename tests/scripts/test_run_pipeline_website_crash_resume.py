@@ -8,6 +8,12 @@ prints ``RESUMED from: website`` and creates the project again. Every test drive
 as a subprocess at a real socket and counts the ``POST /api/v4/projects`` the host received;
 ``tests/orchestrator/test_pipeline_website_failure.py`` holds the same behaviour for every
 exception kind without the socket.
+
+Session 285 made the adapters read every shape of reply cleanly, so a host can no longer make the
+website stage raise something that is not a ``RepoClientError``, which is what the net is FOR (a
+bug). The net is still held: ``BUGGY_BOOT`` runs the script with an adapter that raises a bare
+``KeyError`` or ``TypeError`` where it reads the creation or the commit reply, which is the shape
+the host used to produce. What a host's wrong-shaped reply does now is held beside it.
 """
 
 from __future__ import annotations
@@ -42,6 +48,29 @@ BOOT = (
     "runpy.run_path(sys.argv[0], run_name='__main__')"
 )
 
+#: The script with a bug in the adapter: ``_parse_json`` raises a bare exception for the reply to
+#: the request ``ADAPTER_BUG_FOR_TEST`` names (``project:KeyError``, ``commit:TypeError``), AFTER
+#: the host answered it, so the project exists exactly as it did when a wrong-shaped reply caused
+#: this.
+BUGGY_BOOT = """
+import os, runpy, sys
+import model_project_constructor.agents.website.gitlab_adapter as gitlab
+
+where, _, kind = os.environ["ADAPTER_BUG_FOR_TEST"].partition(":")
+prefix = {"project": "create_project failed", "commit": "commit_files failed"}[where]
+raises = {"KeyError": KeyError, "TypeError": TypeError}[kind]
+real = gitlab._parse_json
+
+def parse(response, context):
+    if context.startswith(prefix):
+        raise raises("id")
+    return real(response, context)
+
+gitlab._parse_json = parse
+sys.argv = sys.argv[1:]
+runpy.run_path(sys.argv[0], run_name="__main__")
+"""
+
 
 def _http(status: int, reason: str, body: bytes, content_type: str = "application/json") -> bytes:
     head = (
@@ -70,6 +99,9 @@ class Host:
 
     def posts_to_projects(self) -> int:
         return sum(1 for m, p in self.requests if (m, p) == ("POST", "/api/v4/projects"))
+
+    def posts_to_commits(self) -> int:
+        return sum(1 for m, p in self.requests if m == "POST" and p.endswith("/repository/commits"))
 
     def _failing(self) -> bytes:
         if self.how == "no-id":
@@ -148,11 +180,16 @@ def _argv(checkpoints: Path, *extra: str) -> list[str]:
     return ["--live", "--host", "gitlab", "--checkpoint-dir", str(checkpoints), *extra]
 
 
-def _run(host: Host, args: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(host: Host, args: list[str], bug: str = "") -> subprocess.CompletedProcess[str]:
+    command = (
+        [sys.executable, "-c", BUGGY_BOOT, str(SCRIPT), *args]
+        if bug
+        else [sys.executable, str(SCRIPT), *args]
+    )
     return subprocess.run(
-        [sys.executable, str(SCRIPT), *args],
+        command,
         cwd=REPO_ROOT,
-        env=_env(host),
+        env={**_env(host), **({"ADAPTER_BUG_FOR_TEST": bug} if bug else {})},
         capture_output=True,
         encoding="utf-8",
         errors="replace",
@@ -183,22 +220,24 @@ def _assert_resume_refuses(host: Host, checkpoints: Path, *, posts_before: int) 
 
 
 @pytest.mark.parametrize(
-    ("fails_at", "how", "error_class"),
+    ("bug", "error_class"),
     [
-        pytest.param("commit", "no-id", "KeyError", id="commit-reply-without-an-id"),
-        pytest.param("project", "no-id", "KeyError", id="project-created-but-reply-without-an-id"),
-        pytest.param(
-            "project", "not-an-object", "TypeError", id="project-created-but-reply-not-an-object"
-        ),
+        pytest.param("commit:KeyError", "KeyError", id="commit-reply-read-with-a-bug"),
+        pytest.param("project:KeyError", "KeyError", id="project-created-reply-read-with-a-bug"),
+        pytest.param("project:TypeError", "TypeError", id="project-created-reply-type-bug"),
     ],
 )
 def test_a_crash_is_saved_and_resume_makes_no_second_project(
-    serve: Callable[[Host], Host], tmp_path: Path, fails_at: str, how: str, error_class: str
+    serve: Callable[[Host], Host], tmp_path: Path, bug: str, error_class: str
 ) -> None:
-    host = serve(Host(fails_at, how))
+    """Session 275's net, held with a bug and not a host: the host is honest and makes the project
+    (or takes the commit), and the adapter then raises something that is not a repository error.
+    Until Session 285 a host's reply with no ``id`` or that was an array made it; the adapters read
+    those as repository errors now (the tests below)."""
+    host = serve(Host("", ""))
     checkpoints = tmp_path / "checkpoints"
 
-    crashed = _run(host, _argv(checkpoints, "--run-id", RUN_ID))
+    crashed = _run(host, _argv(checkpoints, "--run-id", RUN_ID), bug=bug)
 
     shown = crashed.stdout + crashed.stderr
     assert crashed.returncode == 1, shown
@@ -214,6 +253,71 @@ def test_a_crash_is_saved_and_resume_makes_no_second_project(
     assert [line.split("Failure:", 1)[1].strip() for line in printed] == [reason]
     assert TOKEN not in shown + _everything(checkpoints)
     assert host.posts_to_projects() == 1
+
+    _assert_resume_refuses(host, checkpoints, posts_before=1)
+
+
+@pytest.mark.parametrize(
+    ("how", "names"),
+    [
+        pytest.param("no-id", 'has no usable "id"', id="reply-without-an-id"),
+        pytest.param("not-an-object", "is not a JSON object", id="reply-not-an-object"),
+    ],
+)
+def test_a_created_project_whose_reply_has_the_wrong_shape_is_a_repository_error_that_says_so(
+    serve: Callable[[Host], Host], tmp_path: Path, how: str, names: str
+) -> None:
+    """The two replies that used to be ``unexpected_error: KeyError`` and ``: TypeError``. The host
+    made the project (``201``) and the reply cannot be used, so the failure is an ordinary
+    ``repo_error`` that names the field and says a project may exist, and ``--resume`` refuses to
+    make a second."""
+    host = serve(Host("project", how))
+    checkpoints = tmp_path / "checkpoints"
+
+    failed = _run(host, _argv(checkpoints, "--run-id", RUN_ID))
+
+    shown = failed.stdout + failed.stderr
+    assert failed.returncode == 1, shown
+    assert "Traceback" not in shown
+    assert "Status:  FAILED_AT_WEBSITE" in failed.stdout
+    saved = _saved(checkpoints)
+    reason = saved["failure_reason"]
+    assert saved["status"] == "FAILED"
+    assert isinstance(reason, str)
+    assert reason.startswith("repo_error: create_project failed"), reason
+    assert names in reason and "a project may already exist" in reason, reason
+    assert "unexpected_error" not in reason and "KeyError" not in shown and "TypeError" not in shown
+    assert TOKEN not in shown + _everything(checkpoints)
+    assert host.posts_to_projects() == 1
+
+    _assert_resume_refuses(host, checkpoints, posts_before=1)
+
+
+def test_a_commit_reply_of_the_wrong_shape_is_retried_and_then_a_repository_error(
+    serve: Callable[[Host], Host], tmp_path: Path
+) -> None:
+    """The commit path, where the project is already known: the reply with no ``id`` takes the
+    ordinary retry (three attempts, with the real waits of 1 s and 2 s), as a reply that is not
+    JSON does, and ends as ``repo_error_retry_exhausted`` naming the field. The project is made
+    once."""
+    host = serve(Host("commit", "no-id"))
+    checkpoints = tmp_path / "checkpoints"
+
+    failed = _run(host, _argv(checkpoints, "--run-id", RUN_ID))
+
+    shown = failed.stdout + failed.stderr
+    assert failed.returncode == 1, shown
+    assert "Traceback" not in shown
+    saved = _saved(checkpoints)
+    reason = saved["failure_reason"]
+    assert saved["status"] == "FAILED"
+    assert isinstance(reason, str)
+    assert reason.startswith("repo_error_retry_exhausted: commit_files failed"), reason
+    assert 'has no usable "id"' in reason and "(after 3 attempts)" in reason, reason
+    assert "may already exist" not in reason
+    assert TOKEN not in shown + _everything(checkpoints)
+    assert host.posts_to_projects() == 1
+    assert host.posts_to_commits() == 3
 
     _assert_resume_refuses(host, checkpoints, posts_before=1)
 
@@ -250,11 +354,10 @@ def test_a_created_project_whose_reply_nests_too_deeply_is_a_repository_error_an
 ) -> None:
     """The variant where the host DID make the project (``201``) and the reply cannot be used. It
     used to be ``unexpected_error: RecursionError (the website stage may already have created a
-    project ...)``; it is now ``repo_error: ... invalid JSON body: the reply nests more than 64
-    levels deep``, the same class of failure a ``201`` with malformed JSON always was. Neither
-    says that a project may exist (``BACKLOG.md``, *A reply of the wrong shape*, files that), so
-    what is held here is what does stand: one project was made, nothing was printed that the host
-    wrote, and ``--resume`` refuses to make a second."""
+    project ...)``; it is ``repo_error: ... invalid JSON body: the reply nests more than 64 levels
+    deep``, the same class of failure a ``201`` with malformed JSON always was, and since Session
+    285 it says that a project may exist, as the net did. One project was made, nothing was printed
+    that the host wrote, and ``--resume`` refuses to make a second."""
     host = serve(Host("project", "deep-json-created"))
     checkpoints = tmp_path / "checkpoints"
 
@@ -269,7 +372,8 @@ def test_a_created_project_whose_reply_nests_too_deeply_is_a_repository_error_an
     assert saved["status"] == "FAILED"
     assert isinstance(reason, str)
     assert reason.startswith("repo_error: create_project failed"), reason
-    assert reason.endswith("invalid JSON body: the reply nests more than 64 levels deep"), reason
+    assert "invalid JSON body: the reply nests more than 64 levels deep" in reason, reason
+    assert reason.endswith("so a project may already exist on it)"), reason
     assert TOKEN not in shown + _everything(checkpoints)
     assert host.posts_to_projects() == 1
 

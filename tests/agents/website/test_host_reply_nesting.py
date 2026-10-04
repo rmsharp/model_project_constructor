@@ -18,7 +18,10 @@ level wide on 3.11 and about 12,000 on 3.14, so the repair is not a catch at eit
 host sends and far below the lowest depth at which any supported CPython fails. It also refuses a
 reply whose deep part nothing reads, which an unlimited read accepted below those depths, and that
 is a choice (``BACKLOG.md``). ``test_host_reuse_text.py`` holds the other requests an adapter
-cannot build.
+cannot build. Since Session 285 a value that goes back to the host is a string or an integer
+(``test_host_reply_shape.py``), so the window above cannot be reached through an adapter any more;
+the limit still stands for the parse and for every reply, and the control that a value AT it is
+sent on became one that it is refused as the wrong kind of value, by name.
 
 Three levels, as for the neighbouring failure: the helper, each place an adapter reads a reply (a
 real socket that RECORDS what reached it, so a value that was refused is shown never to have been
@@ -355,16 +358,22 @@ def test_a_value_nested_just_past_the_limit_is_refused_before_it_is_written_back
 
 
 @pytest.mark.parametrize("site", [s for s in SITES if s.carries], ids=lambda s: s.name)
-def test_a_value_nested_to_the_limit_is_still_sent_on(site: Site) -> None:
-    """The control: the limit refuses a nest past it and nothing at it, so the request that carries
-    the value is sent (the host's answer to it is not the subject)."""
+def test_a_value_nested_to_the_limit_is_not_refused_by_the_limit(site: Site) -> None:
+    """The control: the limit refuses a nest past it and nothing at it, so a value nested exactly to
+    the limit gets past ``reply_json``. Session 285 then refuses it for what it is, an array where
+    the adapter needs a text or an identifier (``test_host_reply_shape.py``), by field name, and the
+    request that would have carried it is never sent. Until then the request WAS sent, which is the
+    window the limit was chosen over a catch to close: since a value that goes back is a string or
+    an integer, no nested value reaches a request through an adapter, and the limit is now what
+    keeps a reply that is only read, never written back, from running a parser out of stack."""
     assert site.carries is not None
     outcome, seen = _run(site, site.with_value_nested(MAX_REPLY_NESTING))
-    assert not (
-        isinstance(outcome, RepoClientError) and "invalid JSON body" in str(outcome)
-    ), repr(outcome)
+    error = _assert_a_repo_error(outcome)
+    assert "invalid JSON body" not in str(error), str(error)
+    assert "nests more than" not in str(error), str(error)
+    assert "has no usable" in str(error), str(error)
     method, prefix = site.carries
-    assert any(m == method and p.startswith(prefix) for m, p in seen), seen
+    assert not any(m == method and p.startswith(prefix) for m, p in seen), seen
 
 
 @pytest.mark.parametrize("site", SITES, ids=lambda s: s.name)

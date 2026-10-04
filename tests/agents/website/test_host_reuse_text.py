@@ -16,6 +16,11 @@ a traceback and the pipeline in ``unexpected_error``, possibly after the host ha
 levels, each against a real socket that RECORDS what reached it, because a refused request must be
 absent from that list: a request sent with something cleaned out of it would also have "failed
 cleanly", and only the list tells the two apart. ``test_repo_http_client.py`` holds the client.
+
+Session 285 narrowed what reaches it: a ``NaN`` or an infinity as a sha or a group id is not text
+or an identifier, so the adapter refuses it by field name before a request is built
+(``test_host_reply_shape.py``), on every ``httpx``; the tests for those are at the foot of each
+level below. A lone surrogate is a string, and is still ``httpx``'s to refuse.
 """
 
 from __future__ import annotations
@@ -56,13 +61,17 @@ REFUSED_AT = {
 }
 #: The values GitHub's git-data calls hand back, which go into a JSON body next.
 BODY_SHAS = ["base_tree_sha", "blob_sha", "tree_sha", "commit_sha"]
-#: What ``httpx`` 0.28 cannot write into a JSON body: a lone surrogate, ``NaN``, an infinity (a
-#: reply of ``{"sha": NaN}`` parses to a float; the routers write one with ``json.dumps``).
+#: What ``httpx`` 0.28 cannot write into a JSON body and an adapter still reads as text: a lone
+#: surrogate, which is a string like any other.
 UNENCODABLE = {
     "lone-surrogate": f"abc{HOSTILE['lone-surrogate']}def",
-    "nan": float("nan"),
-    "infinity": float("inf"),
 }
+#: The other two ``httpx`` 0.28 cannot write: ``NaN`` and an infinity (a reply of ``{"sha": NaN}``
+#: parses to a float; the routers write one with ``json.dumps``). They were in ``UNENCODABLE`` until
+#: Session 285 and are no longer ``httpx``'s to refuse: an adapter reads a sha as TEXT and a group
+#: id as a string or an integer, so a float is refused there, naming the field, before any request
+#: is built and on every ``httpx`` (0.27 sent them).
+NOT_FINITE = {"nan": float("nan"), "infinity": float("inf")}
 #: Every kind of text but the C1 control, which ``httpx`` percent-encodes in a path instead of
 #: refusing (``test_repo_http_client.py`` holds that), so the request is sent and the host answers.
 REFUSED_IN_A_PATH = sorted(kind for kind in HOSTILE if kind != "c1-csi")
@@ -216,6 +225,37 @@ def test_a_group_id_httpx_cannot_encode_is_a_clean_error_and_the_project_is_neve
     assert any(p.startswith("/api/v4/groups/") for _, p in seen)
 
 
+@pytest.mark.parametrize("kind", sorted(NOT_FINITE))
+@pytest.mark.parametrize("site", BODY_SHAS)
+def test_a_sha_that_is_not_a_finite_number_is_refused_as_an_unusable_field(
+    site: str, kind: str
+) -> None:
+    """Not ``httpx``'s refusal any more: the adapter reads a sha as text, so a float is refused
+    where it is read, naming the field, whatever ``httpx`` would have done with it (0.27 sent it,
+    0.28 could not build the request). No skip: this holds on every version."""
+    value = NOT_FINITE[kind]
+    if site == "commit_sha":
+        outcome, seen = _commit_files({}, commit_sha=value)
+    else:
+        outcome, seen = _commit_files({site: value})
+    assert type(outcome) is RepoClientError, repr(outcome)
+    assert "has no usable" in str(outcome), str(outcome)
+    assert UNBUILDABLE_REQUEST_TEXT not in str(outcome)
+    assert is_clean(str(outcome))
+    assert not _reached(seen, REFUSED_AT[site]), seen
+
+
+@pytest.mark.parametrize("kind", sorted(NOT_FINITE))
+def test_a_group_id_that_is_not_a_finite_number_is_refused_and_the_project_never_asked_for(
+    kind: str,
+) -> None:
+    outcome, seen = _create_project(NOT_FINITE[kind])
+    assert type(outcome) is RepoClientError, repr(outcome)
+    assert 'has no usable "id"' in str(outcome), str(outcome)
+    assert UNBUILDABLE_REQUEST_TEXT not in str(outcome)
+    assert ("POST", "/api/v4/projects") not in seen, seen
+
+
 # ---------------------------------------------------------------------------------------------
 # The agent over each adapter: what an operator sees.
 # ---------------------------------------------------------------------------------------------
@@ -297,4 +337,41 @@ def test_a_run_whose_host_sent_an_unencodable_group_id_is_a_failed_result_not_a_
     assert result.failure_reason.startswith("repo_error: create_project failed"), result
     assert "repo_error_retry_exhausted" not in result.failure_reason
     assert UNBUILDABLE_REQUEST_TEXT in result.failure_reason, result.failure_reason
+    assert [method for method, _ in seen] == ["GET"], seen
+
+
+@pytest.mark.parametrize("kind", sorted(NOT_FINITE))
+@pytest.mark.parametrize(
+    "shipped", [s for s in SHIPPED if s.host == "github"], ids=lambda s: s.name
+)
+def test_a_run_whose_host_sent_a_commit_sha_that_is_not_text_is_a_failed_result_not_a_crash(
+    shipped: Shipped, kind: str, intake_report: IntakeReport, data_report: DataReport
+) -> None:
+    """What an operator reads for the ``NaN`` and the infinity that ``test_a_run_whose_host_sent_an_
+    unencodable_commit_sha...`` held on 0.28 only: the field named, and retried like any failed
+    commit."""
+    project = shipped.project_reply(id_text="", url=URL, branch="main")
+    router = shipped.router(project, NOT_FINITE[kind])
+    result, seen = _run(shipped, router, intake_report, data_report)
+    assert result.status == "FAILED", result
+    reason = result.failure_reason or ""
+    assert reason.startswith("repo_error_retry_exhausted: commit_files failed"), reason
+    assert 'has no usable "sha"' in reason and is_clean(reason), reason
+    assert UNBUILDABLE_REQUEST_TEXT not in reason
+    assert not _reached(seen, REFUSED_AT["commit_sha"]), seen
+
+
+@pytest.mark.parametrize("kind", sorted(NOT_FINITE))
+def test_a_run_whose_host_sent_a_group_id_that_is_not_a_number_is_a_failed_result_not_a_crash(
+    kind: str, intake_report: IntakeReport, data_report: DataReport
+) -> None:
+    project = GITLAB.project_reply(id_text="", url=URL, branch="main")
+    router = GITLAB.router(project, "abc", group_id=NOT_FINITE[kind])
+    result, seen = _run(GITLAB, router, intake_report, data_report)
+    assert result.status == "FAILED", result
+    reason = result.failure_reason or ""
+    assert reason.startswith("repo_error: group lookup failed"), reason
+    assert 'has no usable "id"' in reason and is_clean(reason), reason
+    assert "repo_error_retry_exhausted" not in reason
+    assert UNBUILDABLE_REQUEST_TEXT not in reason
     assert [method for method, _ in seen] == ["GET"], seen
