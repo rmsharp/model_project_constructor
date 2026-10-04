@@ -37,12 +37,13 @@ paths unquoted).
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import html
 import json
 import re
-from collections.abc import Callable
-from typing import Concatenate, ParamSpec, Protocol, TypeVar, cast
+from collections.abc import Callable, Iterable
+from typing import Any, Concatenate, ParamSpec, Protocol, TypeVar, cast
 from urllib.parse import quote, quote_plus
 
 import httpx
@@ -172,6 +173,58 @@ def response_text(response: httpx.Response) -> str:
         return response.text
     except Exception:
         return response.content.decode("utf-8", "replace")
+
+
+#: How many levels of arrays and objects a reply may nest. ``json`` fails on a body nested about
+#: 10,000 levels deep with ``RecursionError``, which is not a ``ValueError`` (CPython 3.11 to 3.13;
+#: 3.14 parses one), and a value that does parse goes back to the host inside the next request,
+#: which ``httpx`` writes with ``json.dumps``, which fails at about the same depth. How wide the
+#: window between the two is depends on the interpreter, so the limit is the repair and a catch at
+#: either end is not. A real reply nests under ten levels and the adapters read three; 64 is far
+#: above that and far below where any supported CPython fails (a test writes a value nested this
+#: deep into a body, a path and a message).
+MAX_REPLY_NESTING = 64
+
+
+def _nests_deeper_than(value: object, limit: int) -> bool:
+    """Whether ``value`` holds arrays or objects nested more than ``limit`` levels deep.
+
+    Walks it with a list and not by recursion, because a value this deep is exactly what recursion
+    fails on. The outermost array or object is level 1.
+    """
+    pending: list[tuple[object, int]] = [(value, 1)]
+    while pending:
+        item, depth = pending.pop()
+        children: Iterable[object]
+        if isinstance(item, dict):
+            children = item.values()
+        elif isinstance(item, list):
+            children = item
+        else:
+            continue
+        if depth > limit:
+            return True
+        pending.extend((child, depth + 1) for child in children)
+    return False
+
+
+def reply_json(response: httpx.Response) -> Any:
+    """``response.json()``, or a ``ValueError`` for a body this repository cannot use.
+
+    The adapters catch ``ValueError`` for a body that is not JSON. ``json`` raises
+    ``RecursionError`` for one nested about 10,000 levels deep, which that ``except`` does not
+    catch, so a host's reply ended the run in a traceback; and one that parses but nests past
+    :data:`MAX_REPLY_NESTING` could not always be written into the next request. Both become the
+    ``ValueError`` a body that is not JSON already is, with text of this module's own, which holds
+    no word the host wrote. It is raised after the handler, so the ``RecursionError`` (whose
+    traceback holds thousands of frames) is not kept reachable behind it. A body that is not JSON
+    keeps the library's own error. The adapters parse a body in no other way (a test holds that).
+    """
+    with contextlib.suppress(RecursionError):
+        body = response.json()
+        if not _nests_deeper_than(body, MAX_REPLY_NESTING):
+            return body
+    raise ValueError(f"the reply nests more than {MAX_REPLY_NESTING} levels deep")
 
 
 class _HoldsSecret(Protocol):

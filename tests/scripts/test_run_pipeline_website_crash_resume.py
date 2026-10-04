@@ -43,18 +43,6 @@ BOOT = (
 )
 
 
-def _deep_json_raises_recursion_error() -> bool:
-    """CPython 3.11 to 3.13 raise ``RecursionError`` for 100,000 open brackets; 3.14 parses them
-    and raises ``JSONDecodeError``, which the adapter handles as an ordinary error reply."""
-    try:
-        json.loads(b"[" * 100_000)
-    except RecursionError:
-        return True
-    except ValueError:
-        return False
-    return False
-
-
 def _http(status: int, reason: str, body: bytes, content_type: str = "application/json") -> bytes:
     head = (
         f"HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\n"
@@ -87,7 +75,9 @@ class Host:
         if self.how == "no-id":
             return _http(201, "Created", b"{}")
         if self.how == "deep-json":
-            return _http(400, "Bad Request", b"[" * 100_000)
+            # Valid JSON, 100,000 levels deep: ``json`` raises ``RecursionError`` for it on CPython
+            # 3.11 to 3.13 and parses it on 3.14, and the adapter refuses it either way.
+            return _http(400, "Bad Request", b"[" * 100_000 + b"]" * 100_000)
         if self.how == "not-an-object":
             # A ``201`` whose body is valid JSON but not an object: the adapter subscripts it and
             # gets a ``TypeError``, which is not a ``RepoClientError``. (This stood in for a project
@@ -195,16 +185,6 @@ def _assert_resume_refuses(host: Host, checkpoints: Path, *, posts_before: int) 
         pytest.param("commit", "no-id", "KeyError", id="commit-reply-without-an-id"),
         pytest.param("project", "no-id", "KeyError", id="project-created-but-reply-without-an-id"),
         pytest.param(
-            "project",
-            "deep-json",
-            "RecursionError",
-            id="error-body-100000-deep",
-            marks=pytest.mark.skipif(
-                not _deep_json_raises_recursion_error(),
-                reason="this Python parses 100,000 nested brackets; unit tests raise it directly",
-            ),
-        ),
-        pytest.param(
             "project", "not-an-object", "TypeError", id="project-created-but-reply-not-an-object"
         ),
     ],
@@ -233,6 +213,31 @@ def test_a_crash_is_saved_and_resume_makes_no_second_project(
     assert host.posts_to_projects() == 1
 
     _assert_resume_refuses(host, checkpoints, posts_before=1)
+
+
+def test_a_reply_nested_100000_deep_is_a_repository_error_and_not_a_crash(
+    serve: Callable[[Host], Host], tmp_path: Path
+) -> None:
+    """This was a ``RecursionError`` out of the adapter (``unexpected_error: RecursionError``, the
+    first case of the test above) until Session 283: the adapters' ``except ValueError`` did not
+    catch it. It is an ordinary failed call now, ``repo_error``, so the net above is not what holds
+    it; ``test_host_reply_nesting.py`` holds every place an adapter reads a reply."""
+    host = serve(Host("project", "deep-json"))
+    checkpoints = tmp_path / "checkpoints"
+
+    failed = _run(host, _argv(checkpoints, "--run-id", RUN_ID))
+
+    shown = failed.stdout + failed.stderr
+    assert failed.returncode == 1, shown
+    assert "Traceback" not in shown
+    assert "Status:  FAILED_AT_WEBSITE" in failed.stdout
+    reason = _saved(checkpoints)["failure_reason"]
+    assert isinstance(reason, str)
+    assert reason.startswith("repo_error: create_project failed"), reason
+    assert "unexpected_error" not in reason and "RecursionError" not in shown
+    assert len(reason) < 2_000
+    assert TOKEN not in shown + _everything(checkpoints)
+    assert host.posts_to_projects() == 1
 
 
 def test_an_interrupt_during_the_commit_is_saved_and_resume_makes_no_second_project(

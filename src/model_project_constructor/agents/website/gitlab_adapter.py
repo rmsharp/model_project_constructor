@@ -33,6 +33,7 @@ from urllib.parse import quote
 import httpx
 
 from model_project_constructor.agents.website._host_text import (
+    reply_json,
     response_text,
     scrubbed_errors,
     scrubbed_values,
@@ -202,10 +203,11 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
 
 def _parse_json(response: httpx.Response, context: str) -> dict[str, Any]:
     """Parse a 2xx response body, raising :class:`RepoClientError` on
-    malformed JSON instead of letting a raw ``ValueError`` escape."""
+    malformed JSON, or JSON nested too deeply to use (:func:`reply_json`), instead of letting a
+    raw ``ValueError`` or ``RecursionError`` escape."""
 
     try:
-        body: dict[str, Any] = response.json()
+        body: dict[str, Any] = reply_json(response)
     except ValueError as exc:
         raise RepoClientError(f"{context}: invalid JSON body: {exc}") from exc
     return body
@@ -222,7 +224,7 @@ def _is_name_conflict(response: httpx.Response) -> bool:
     if response.status_code not in (400, 409):
         return False
     try:
-        body: Any = response.json()
+        body: Any = reply_json(response)
     except ValueError:
         body = None
     text = str(body) if body is not None else response_text(response)
