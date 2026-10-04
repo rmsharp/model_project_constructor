@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 280 Did
+**Deliverable:** **`DataAgent.run` is total: the report is assembled inside the same `try` as the graph (route 9 of `BACKLOG.md`'s "Seven more routes" item, `:530`) (IN PROGRESS)**
+**Started:** 2026-10-03 22:14
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from a picker (first option, recommended).
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 279 Did
 **Deliverable:** **the data stage's report names the exception's class and never its message — COMPLETE.** `DataAgent.run` wrote
 `f"graph crashed: {e}"` into `summary` and `data_quality_concerns`, and the baseline collection wrote `f"LLM baseline-query

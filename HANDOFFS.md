@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S280
+date: 2026-10-03
+status: pending
+active_task: DataAgent.run is total -- the report is assembled inside the same try as the graph (route 9, BACKLOG.md:530). Chosen by the operator at Phase 0 from a picker.
+```
+
+```handoff
 session: S279
 date: 2026-10-03
 status: complete
