@@ -29,6 +29,7 @@ import pytest
 from model_project_constructor.agents.website import GitHubAdapter, GitLabAdapter
 from model_project_constructor.agents.website._http import (
     PROTOCOL_ERROR_TEXT,
+    UNBUILDABLE_REDIRECT_TEXT,
     UNBUILDABLE_REQUEST_TEXT,
     RepoHttpClient,
 )
@@ -434,3 +435,139 @@ def test_a_namespace_with_a_lone_surrogate_fails_the_call_and_is_never_sent(
     assert "\\ud800" in str(caught.value)
     assert caught.value.__cause__ is None and caught.value.__context__ is None
     assert sent == []
+
+
+# ---------------------------------------------------------------------------------------------
+# A redirect the library cannot build
+# ---------------------------------------------------------------------------------------------
+#
+# ``httpx`` builds the request a redirect asks for even when it is told not to follow it, because
+# it keeps that request as ``response.next_request``. So a host's ``Location`` header is read, and a
+# request is built from it, on every 3xx. ``httpx`` converts the addresses its own parser refuses
+# (``RemoteProtocolError``, "Invalid URL in location header") but joins what is left with the
+# request's address afterwards, and that step raises what the parser let through: ``InvalidURL``
+# for an address that is short enough alone and too long joined, and, from the standard library's
+# and ``idna``'s own parsers, ``ValueError`` and its ``UnicodeError`` subclass. A fuzz of 60,000
+# random ``Location`` values (Session 283) found those three classes and no others.
+#
+# The conversion sits on ``httpx.Client._build_redirect_request``, where the traceback shows the
+# error is raised, and not on ``send``: ``send`` also reaches the transport, and a ``ValueError``
+# from there is somebody's bug that must keep its own message.
+
+#: ``Location`` values as raw bytes (what a host sends) and the class the plain library raises.
+HOSTILE_REDIRECTS = {
+    # Under the length limit alone (65,536), over it once joined with the request's address.
+    "too-long-once-joined": (b"/" + b"a" * 65_535, httpx.InvalidURL),
+    # ``httpx``'s parser lets it through and ``urllib.parse.urljoin`` refuses it.
+    "ipv6": (b":http://[/", ValueError),
+    # ``idna.InvalidCodepoint`` and ``idna.IDNAError``, both ``UnicodeError``, so ``ValueError``.
+    "idna-codepoint": (b"//xn--a", ValueError),
+    "idna-malformed": (b"//xn--", ValueError),
+}
+
+
+def _redirecting(
+    client: type[httpx.Client], location: bytes, status: int = 302
+) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, headers=[(b"Location", location)])
+
+    return client(base_url="https://host.example", transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.parametrize(("location", "raised"), HOSTILE_REDIRECTS.values(), ids=HOSTILE_REDIRECTS)
+def test_the_installed_httpx_still_raises_what_this_client_converts_for_a_redirect(
+    location: bytes, raised: type[Exception]
+) -> None:
+    """The canary: if a release of ``httpx`` stops raising these, or renames the method the
+    override sits on, this and the test below disagree, and the conversion is not silently inert."""
+    assert hasattr(httpx.Client, "_build_redirect_request")
+    with pytest.raises(raised):
+        _redirecting(httpx.Client, location).get("/x")
+
+
+@pytest.mark.parametrize(
+    "location", [loc for loc, _ in HOSTILE_REDIRECTS.values()], ids=list(HOSTILE_REDIRECTS)
+)
+@pytest.mark.parametrize("follow", [False, True], ids=["not-following", "following"])
+def test_a_redirect_httpx_cannot_build_is_the_fixed_text_with_nothing_chained(
+    location: bytes, follow: bool
+) -> None:
+    client = _redirecting(RepoHttpClient, location)
+    with pytest.raises(httpx.RemoteProtocolError) as caught:
+        client.get("/x", follow_redirects=follow)
+    assert str(caught.value) == UNBUILDABLE_REDIRECT_TEXT
+    # Raised after the handler: the library's own error, which repeats part of the address the
+    # host gave, is not reachable from this one.
+    assert caught.value.__cause__ is None and caught.value.__context__ is None
+    # It carries the request that was sent, as the library's own error for an address it refuses
+    # does (the first, ``RemoteProtocolError`` "Invalid URL in location header").
+    assert caught.value.request.url == "https://host.example/x"
+    # An ``httpx.HTTPError``, so the adapters' ``except httpx.HTTPError`` blocks catch it.
+    assert isinstance(caught.value, httpx.HTTPError)
+
+
+@pytest.mark.parametrize("status", [307, 308], ids=["307", "308"])
+def test_a_redirect_that_keeps_the_method_and_the_body_is_converted_too(status: int) -> None:
+    client = _redirecting(RepoHttpClient, HOSTILE_REDIRECTS["too-long-once-joined"][0], status)
+    with pytest.raises(httpx.RemoteProtocolError, match="could not build the redirected request"):
+        client.post("/x", json={"a": 1})
+
+
+def test_the_stream_path_converts_a_redirect_too() -> None:
+    client = _redirecting(RepoHttpClient, HOSTILE_REDIRECTS["ipv6"][0])
+    with pytest.raises(httpx.RemoteProtocolError) as caught, client.stream("GET", "/x"):
+        pass
+    assert str(caught.value) == UNBUILDABLE_REDIRECT_TEXT
+
+
+@pytest.mark.parametrize("client", [httpx.Client, RepoHttpClient], ids=["plain", "repo"])
+def test_a_redirect_the_library_already_refuses_keeps_its_own_error(
+    client: type[httpx.Client],
+) -> None:
+    """Only what the library leaves unconverted is converted: a control character in the address
+    is its own ``RemoteProtocolError`` already, for both clients, and this client leaves it be."""
+    with pytest.raises(httpx.RemoteProtocolError) as caught:
+        _redirecting(client, b"/a\x00b").get("/x")
+    assert str(caught.value) != UNBUILDABLE_REDIRECT_TEXT
+
+
+def test_a_redirect_httpx_can_build_is_built_and_kept_as_before() -> None:
+    client = _redirecting(RepoHttpClient, b"/end")
+    response = client.get("/start")
+    assert response.status_code == 302
+    assert response.next_request is not None
+    assert str(response.next_request.url) == "https://host.example/end"
+
+
+def test_a_value_error_from_the_transport_keeps_its_own_message() -> None:
+    """Why the conversion is not on ``send``: a ``ValueError`` out of the transport is not a
+    redirect the library could not build, and hiding its message would hide a bug."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise ValueError("the transport broke")
+
+    client = RepoHttpClient(base_url="https://host.example", transport=httpx.MockTransport(handler))
+    with pytest.raises(ValueError, match="the transport broke"):
+        client.get("/x")
+
+
+@pytest.mark.parametrize(
+    ("adapter", "step"),
+    [(GitLabAdapter, "group lookup failed"), (GitHubAdapter, "owner lookup failed")],
+    ids=["gitlab", "github"],
+)
+def test_an_adapter_turns_an_unbuildable_redirect_into_its_own_error(
+    adapter: type[GitLabAdapter] | type[GitHubAdapter], step: str
+) -> None:
+    """The adapters never follow a redirect and treat any 3xx as a failure, so a ``Location`` the
+    library cannot build changes the message and nothing else; before Session 283 it was an
+    ``InvalidURL`` (or ``ValueError``) out of the adapter, in a window of about 26 characters of
+    ``Location`` length that depends on the address of the host."""
+    built = adapter(host_url="https://host.example", private_token=TOKEN)
+    built._client = _redirecting(RepoHttpClient, HOSTILE_REDIRECTS["too-long-once-joined"][0])
+    with pytest.raises(RepoClientError) as caught:
+        built.create_project(namespace="g", name="n", visibility="private")
+    assert step in str(caught.value)
+    assert UNBUILDABLE_REDIRECT_TEXT in str(caught.value)
+    assert caught.value.__cause__ is None and caught.value.__context__ is None
