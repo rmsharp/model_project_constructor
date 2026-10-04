@@ -374,15 +374,21 @@ value as it was saved.
 **What this does not cover:** a `RepoClient` of your own is not scrubbed (the same limit as for
 failure text), and a value an adapter reads and sends in its next request (GitHub's commit
 references, GitLab's group id) is not on what it returns, so it goes back to the host as it came.
-Before Session 282 a control code in GitHub's parent commit reference, or a broken half of a
-character in any of those values, made the next request impossible to build and the website
-command ended in a traceback (`InvalidURL`, `UnicodeEncodeError`), possibly after the project
-already existed. Now that call fails like any failed call: the `failure_reason` says `the
-request could not be built`, the HTTP library's own words are not shown, and the commit is
-retried (`repo_error_retry_exhausted`) **with the project already created**. Retrying cannot
-help, because the value is the host's; look at what the host answered at that step. The project
-id and the branch are still sent in an address without being encoded (`BACKLOG.md`, *The id and
-the branch go into request paths unquoted*).
+Before Session 282 a request the HTTP library could not build from such a value (a control code
+in GitHub's parent commit reference; a broken half of a character, a `NaN` or an infinity in any
+of them; a cookie the host set that is not ASCII) ended the run in a traceback (`InvalidURL`,
+`UnicodeEncodeError`, `ValueError`), and for GitHub's commit that was possibly after the project
+already existed. Now the call fails like any failed call, the `failure_reason` says `the request
+could not be built` and the HTTP library's own words are not shown. Which failure you get depends
+on the step. For GitHub's commit references the commit is attempted three times
+(`repo_error_retry_exhausted`) **with the project already created**; retrying cannot help,
+because the value is the host's, so look at what the host answered at that step. For GitLab's
+group id the run fails at `repo_error: create_project failed ...`, before anything exists on the
+host, and is not retried. A cookie a host set that is not ASCII is permanent for that adapter:
+every later request it makes fails the same way. The project id and the branch are still sent in
+an address without being encoded (`BACKLOG.md`, *The id and the branch go into request paths
+unquoted*), a broken half of a character in the GitLab group name you pass still ends in a
+traceback, and so does a reply nested about 10,000 levels deep (`unexpected_error`, above).
 
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).
