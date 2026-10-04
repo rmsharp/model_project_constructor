@@ -72,7 +72,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 sys.path.insert(0, str(PROJECT_ROOT / "packages" / "data-agent" / "src"))
 
-from model_project_constructor.agents.website._host_text import scrub_host_text  # noqa: E402
+from model_project_constructor.agents.website._host_text import (  # noqa: E402
+    MAX_HOST_TEXT,
+    NOTICE_ROOM,
+    scrub_host_text,
+)
 from model_project_constructor.agents.website.agent import WebsiteAgent  # noqa: E402
 from model_project_constructor.agents.website.fake_client import FakeRepoClient  # noqa: E402
 from model_project_constructor.agents.website.governance_templates import (  # noqa: E402
@@ -407,8 +411,12 @@ def _handle_already_complete(store: CheckpointStore, run_id: str) -> None:
     status = payload.get("status", "UNKNOWN")
     # The address is the host's words (BACKLOG route 8). The adapters scrub what a host says NOW;
     # this one was read back from a file that may predate them, and ``json.loads`` has turned the
-    # file's escapes into real control characters again.
-    project_url = scrub_host_text(payload.get("project_url") or "") or "(no project URL recorded)"
+    # file's escapes into real control characters again. The room for the notice leaves an address
+    # the adapter already cut as it was saved, instead of cutting it again with a false count.
+    project_url = (
+        scrub_host_text(payload.get("project_url") or "", limit=MAX_HOST_TEXT + NOTICE_ROOM)
+        or "(no project URL recorded)"
+    )
 
     if status == "COMPLETE":
         print(

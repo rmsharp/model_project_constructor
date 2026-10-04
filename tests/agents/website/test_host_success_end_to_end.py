@@ -138,7 +138,8 @@ def test_the_real_command_prints_and_writes_nothing_a_terminal_acts_on(
     (hostile_run, hostile_out), (clean_run, _) = outputs
 
     # Nothing on either stream is a control code, and the host's line break did not make a line.
-    assert is_clean(hostile_run.stderr)
+    # (Line breaks are the streams' own: a warning on stderr is not a finding.)
+    assert is_clean(hostile_run.stderr.replace("\n", ""))
     assert is_clean(hostile_run.stdout.replace("\n", ""))
     assert len(hostile_run.stdout.splitlines()) == len(clean_run.stdout.splitlines())
     assert _line(hostile_run.stdout, "Project:") == f"Project: {scrub_host_text(URL)}"
@@ -180,7 +181,10 @@ def test_the_pipeline_script_prints_and_saves_nothing_a_terminal_acts_on(
     assert saved["project_url"] == scrub_host_text(URL)
     assert saved["initial_commit_sha"] == scrub_host_text(SHA)
 
-    # The run is complete, so resuming it prints the saved address; it must be the clean one.
+    # The run is complete, so resuming it prints the saved address; it must be the clean one. (The
+    # adapter already scrubbed what was saved, so this leg holds the round trip; the resume print's
+    # own scrub, for a file saved before the adapters scrubbed, is held by
+    # ``tests/scripts/test_run_pipeline_resume.py``.)
     with serving_raw(serve(shipped.router(hostile, SHA))) as server:
         resumed = _script(shipped, server.url, hostile_ckpt, "--resume", "route8")
     assert resumed.returncode == 0, resumed.stdout + resumed.stderr
@@ -229,6 +233,7 @@ def test_a_host_that_echoes_the_token_as_the_project_id_leaves_it_out_of_everyth
     assert "Status:  FAILED_AT_WEBSITE" in done.stdout
     kept = _everything(checkpoints)
     assert TOKEN not in shown + kept
-    assert "\x07" not in shown + kept
+    # The checkpoint is JSON, where a bell would be the six characters ``\u0007``.
+    assert "\x07" not in shown and "\\u0007" not in kept
     saved = json.loads((checkpoints / "route8" / "RepoProjectResult.result.json").read_text())
     assert saved["project_id"] == f"{REDACTED} x"

@@ -233,6 +233,36 @@ def test_resume_already_complete_prints_a_saved_address_without_its_control_code
     )
 
 
+def test_resume_already_complete_prints_an_address_the_adapter_cut_exactly_as_it_was_saved(
+    run_pipeline_module, tmp_path, capsys
+):
+    """An address over 1,000 characters was cut by the adapter and saved with its notice. Scrubbed
+    again with the default limit it would lose that notice and gain a new one with a false count
+    (Session 281's review); with ``NOTICE_ROOM`` it prints as saved, and a raw over-long address
+    from an old file is still cut, with its own true count."""
+    from model_project_constructor.agents.website._host_text import (
+        MAX_HOST_TEXT,
+        NOTICE_ROOM,
+        scrub_host_text,
+    )
+
+    raw = "https://h.example/" + "p" * 5000
+    saved = scrub_host_text(raw)
+    assert saved.endswith(f"[{len(raw) - MAX_HOST_TEXT} more characters not shown]")  # premise
+    _seed_complete_run(tmp_path, "cut_run", saved)
+    with pytest.raises(SystemExit):
+        run_pipeline_module._resolve_resume(tmp_path, "cut_run")
+    assert capsys.readouterr().out.endswith(f"Result: {saved}\n")
+
+    _seed_complete_run(tmp_path, "old_long_run", raw)
+    with pytest.raises(SystemExit):
+        run_pipeline_module._resolve_resume(tmp_path, "old_long_run")
+    limit = MAX_HOST_TEXT + NOTICE_ROOM
+    assert capsys.readouterr().out.endswith(
+        f"Result: {raw[:limit]}... [{len(raw) - limit} more characters not shown]\n"
+    )
+
+
 @pytest.mark.parametrize("saved", ["\x1b\x07", "", None], ids=["only-controls", "empty", "null"])
 def test_resume_already_complete_says_so_when_there_is_no_address_to_print(
     run_pipeline_module, tmp_path, capsys, saved

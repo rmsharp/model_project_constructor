@@ -28,10 +28,13 @@ class ProjectInfo:
 
     All three fields are the host's words. The two shipped adapters hand
     them back through ``scrubbed_values`` (``_host_text.py``): control
-    characters become spaces, the text is one line of at most 1,000
-    characters, and the adapter's token is removed. For every real id,
-    address and branch that is the identical string. An implementation of
-    this protocol that is not one of the two owns the safety of its own
+    characters become spaces, the text is one line cut at 1,000 characters
+    (a cut adds a notice of about 40 more), a lone surrogate becomes U+FFFD
+    and the adapter's token becomes ``***``. A value with none of those and
+    no whitespace but single spaces between words comes back as the host
+    wrote it, which is every real id, address and branch seen so far;
+    ``scrub_project_info`` says what becomes of the rest. An implementation
+    of this protocol that is not one of the two owns the safety of its own
     values (``BACKLOG.md``, route 8).
     """
 
