@@ -416,12 +416,13 @@ def test_the_adapters_read_a_response_body_only_through_response_text(module: ob
     "module", [gitlab_adapter_module, github_adapter], ids=["gitlab", "github"]
 )
 def test_the_adapters_parse_a_response_body_only_through_reply_json(module: object) -> None:
-    """``response.json()`` raises ``RecursionError`` for a body nested about 10,000 levels deep
-    (CPython 3.11 to 3.13), which an ``except ValueError`` does not catch, and a body that parses
-    can still be too deep to write into the next request; ``reply_json`` turns both into the
-    ``ValueError`` the adapters already handle. A direct ``.json()`` added later would reopen the
-    crash (the name conflict check, which reads a 4xx body, had its own copy of the call). The
-    ``json=`` keyword of a request is not an attribute access and is not matched."""
+    """``response.json()`` raises ``RecursionError`` for a body nested deeply enough (from 995
+    levels on CPython 3.11, 9,998 on 3.12, 9,999 on 3.13, 116,211 on 3.14), which an ``except
+    ValueError`` does not catch, and a body that parses can still be too deep to write into the
+    next request; ``reply_json`` turns both into the ``ValueError`` the adapters already handle. A
+    direct ``.json()`` added later would reopen the crash (the name conflict check, which reads a
+    4xx body, had its own copy of the call). The ``json=`` keyword of a request is not an
+    attribute access and is not matched."""
     tree = ast.parse(inspect.getsource(module))  # type: ignore[arg-type]
     direct = [
         node.lineno

@@ -3,19 +3,22 @@
 Session 282 filed and Session 283 closed three crashes in which a value a host (or the caller) chose
 left an adapter as something that is not a ``RepoClientError``; this is the second. The adapters
 read a reply with ``response.json()`` and catch ``ValueError``. ``json`` raises ``RecursionError``,
-which is not one, for a body nested about 10,000 levels deep on CPython 3.11 to 3.13, and 3.14 has
-no such limit and parses it. So the website command ended in a traceback and the pipeline saved
-``unexpected_error: RecursionError``, possibly after the host had made the project. The same read
-sits in each adapter's name-conflict check, which runs on a 4xx body.
+which is not one, for a body nested deeply enough, and every supported CPython has such a depth
+(measured by bisection: 995 levels on 3.11.15, 9,998 on 3.12.13, 9,999 on 3.13.5, 116,211 on
+3.14.6). So the website command ended in a traceback and the pipeline saved ``unexpected_error:
+RecursionError``, possibly after the host had made the project. The same read sits in each
+adapter's name-conflict check, which runs on a 4xx body.
 
 A body that does parse is not safe either: a value nested a little under the parser's limit goes
 back to the host inside the next request (GitHub's shas, GitLab's group id), and ``httpx`` writes a
-body with ``json.dumps``, which gives up at about the same depth, so the request could not be built
-(``RecursionError`` out of ``build_request``, measured from 9,995 levels on 3.13). How wide that
-window is depends on the interpreter, so the repair is not a catch at either end: ``reply_json``
-refuses a reply nested past ``MAX_REPLY_NESTING``, which is far above anything a host sends and far
-below where any supported CPython fails to write one back. ``test_host_reuse_text.py`` holds the
-other requests an adapter cannot build.
+body with ``json.dumps``, which gives up a little sooner (994, 9,997, 9,998 and about 104,600), so
+the request could not be built (``RecursionError`` out of ``build_request``). That window is one
+level wide on 3.11 and about 12,000 on 3.14, so the repair is not a catch at either end:
+``reply_json`` refuses a reply nested past ``MAX_REPLY_NESTING``, which is far above anything a
+host sends and far below the lowest depth at which any supported CPython fails. It also refuses a
+reply whose deep part nothing reads, which an unlimited read accepted below those depths, and that
+is a choice (``BACKLOG.md``). ``test_host_reuse_text.py`` holds the other requests an adapter
+cannot build.
 
 Three levels, as for the neighbouring failure: the helper, each place an adapter reads a reply (a
 real socket that RECORDS what reached it, so a value that was refused is shown never to have been
@@ -46,8 +49,10 @@ FILES = {"README.md": "# r\n"}
 GITLAB = SHIPPED[0]
 GITHUB = SHIPPED[1]
 
-#: Deep enough to raise ``RecursionError`` out of ``json`` on 3.11 to 3.13, and nested far past the
-#: limit where 3.14 parses it.
+#: Deep enough to raise ``RecursionError`` out of ``json`` on 3.11 to 3.13 and nested far past the
+#: limit on 3.14, whose own failing depth (116,211) this stays under: there it parses and the limit
+#: refuses it. So this does not run the ``RecursionError`` handler on every interpreter; the stub
+#: below does.
 DEEP = 100_000
 
 
@@ -102,14 +107,49 @@ def test_a_reply_nested_past_the_limit_is_a_value_error(
     depth: int, shape: Callable[[int], bytes]
 ) -> None:
     """``ValueError`` is what both adapters already catch for a body that is not JSON. Whether the
-    library itself fails on it (``RecursionError`` from ``json`` on 3.11 to 3.13, at depths far
-    past the limit) or parses it (the first case, and everything on 3.14) makes no difference."""
+    library itself fails on it (``RecursionError`` from ``json``, from 995 levels on 3.11 and a
+    higher depth on each later version) or parses it (the first case everywhere, the second on
+    3.12 and later, the third on 3.14) makes no difference."""
     with pytest.raises(ValueError, match="nests more than") as caught:
         reply_json(_reply(shape(depth)))
     # Raised after the handler that swallowed the ``RecursionError``: its traceback, which holds
     # thousands of frames, is not kept reachable behind this one.
     assert caught.value.__cause__ is None and caught.value.__context__ is None
-    assert str(MAX_REPLY_NESTING) in str(caught.value)
+    assert str(caught.value) == f"the reply nests more than {MAX_REPLY_NESTING} levels deep"
+
+
+class _ParserRunsOutOfStack(httpx.Response):
+    """A reply whose ``json()`` raises what ``json`` raises for a body nested past its depth."""
+
+    def json(self, **kwargs: object) -> object:
+        raise RecursionError("maximum recursion depth exceeded while decoding a JSON array")
+
+
+def test_a_recursion_error_from_the_parser_is_a_value_error_on_every_interpreter() -> None:
+    """The handler itself, which no input runs on every CPython: ``DEEP`` stays under the depth at
+    which 3.14's parser fails. Deleting the handler is invisible there without this."""
+    with pytest.raises(ValueError, match="nests more than") as caught:
+        reply_json(_ParserRunsOutOfStack(200))
+    assert caught.value.__cause__ is None and caught.value.__context__ is None
+
+
+def test_the_message_holds_none_of_the_hosts_words() -> None:
+    """Its text is this module's own: a deep reply that carries text of a host's choosing in
+    shallow places (a forged status line, a window-title escape) is not quoted back."""
+    forged = "\x1b]0;PWNED\x07 Status:  COMPLETE"
+    body = b'{"message": "' + json.dumps(forged)[1:-1].encode() + b'", "deep": ' + nest(DEEP) + b"}"
+    with pytest.raises(ValueError) as caught:
+        reply_json(_reply(body))
+    assert str(caught.value) == f"the reply nests more than {MAX_REPLY_NESTING} levels deep"
+
+
+def test_a_reply_whose_deep_part_nothing_reads_is_refused_too() -> None:
+    """The cost of a limit over a catch, stated and held: the whole reply is measured, not only the
+    values the adapters read, so ``{"id": 7, "unused": <100 levels>}`` is refused although an
+    unlimited read accepted it (100 levels parse on every supported CPython)."""
+    body = b'{"id": 7, "web_url": "https://h.example/g/p", "unused": ' + nest(100) + b"}"
+    with pytest.raises(ValueError, match="nests more than"):
+        reply_json(_reply(body))
 
 
 def test_the_limit_counts_levels_of_either_kind_together() -> None:
@@ -325,3 +365,16 @@ def test_a_value_nested_to_the_limit_is_still_sent_on(site: Site) -> None:
     ), repr(outcome)
     method, prefix = site.carries
     assert any(m == method and p.startswith(prefix) for m, p in seen), seen
+
+
+@pytest.mark.parametrize("site", SITES, ids=lambda s: s.name)
+def test_the_error_for_a_deep_success_reply_holds_none_of_the_hosts_words(site: Site) -> None:
+    """The text is this repository's own for a ``2xx`` reply (a ``4xx`` body is the host's error
+    page, shown scrubbed and cut, as for any failure). The deep reply carries a marker in a shallow
+    place, which must not come back."""
+    marker = "FORGED-STATUS-LINE-9f3k"
+    hostile = b'{"message": "' + marker.encode() + b'", "deep": ' + nest(DEEP) + b"}"
+    outcome, _ = _run(site, hostile)
+    error = _assert_a_repo_error(outcome)
+    assert marker not in str(error)
+    assert "the reply nests more than" in str(error)
