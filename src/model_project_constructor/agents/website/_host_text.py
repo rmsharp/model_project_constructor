@@ -23,8 +23,8 @@ adapter, past :func:`scrubbed_errors`, because it is not a ``RepoClientError``.
 A host's replies arrive as JSON too, and its shape is the host's to choose: :func:`reply_json` is
 the one way the adapters parse one, and turns a body nested too deeply for ``json`` (a
 ``RecursionError``) or too deeply to write into the next request into the ``ValueError`` they
-already handle (``BACKLOG.md`` holds the one shape it does not cover: a reply that parses and has
-the wrong fields).
+already handle (``BACKLOG.md`` holds what it does not cover: a reply that parses and has the wrong
+fields).
 
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way

@@ -54,8 +54,8 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
-| The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed (and from three crashes it filed and Session 283 closed: a request the HTTP library cannot build, a control character, a broken half of a character or a number such as `NaN` in a value the host sent, used to end the run in a traceback and is now a clean failure like any other; so, since Session 283, are a broken half of a character in the GitLab group name you pass, a reply nested about 10,000 levels deep, and a redirect whose address is about 65,500 characters or is malformed in one of three other ways). What is left is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran the touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
-| A reply of the wrong shape ends as a raw `KeyError` or `TypeError` out of the adapter | Found by Session 283. If the repository host answers a successful call with valid JSON that is not the object the adapter expects (an empty object, an array, `null`, a string or a number), the adapter reads a field from it without checking and fails with a bare `KeyError` or `TypeError` at every one of the nine places it reads a reply. The website command then ends in a traceback and the pipeline saves "unexpected error: KeyError", possibly after the host made the project. It is the last known way a host's reply makes an adapter fail with something other than a repository error, so the adapters do not yet "raise only `RepoClientError` for any host reply". | **Small; a choice:** check each field where it is read and name it in a clean error, or catch the two error classes around the read; and whether GitHub's three attempts should apply to it. Closing it also needs a new way for one pipeline test to make the website stage crash. |
+| The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed. Session 282 made a request the HTTP library cannot build (a control character, a broken half of a character or a number such as `NaN` in a value the host sent) fail cleanly like any other call. Session 283 did the same for three more: a reply nested more than 64 levels (a limit it chose; it also refuses a reply whose deep part nothing reads, and real ones nest at most 5), a redirect the library cannot build (an address such as `mailto:x`, or about 65,500 characters, or malformed in a few other ways), and a broken half of a character in the GitLab group name, **when the adapter is called directly: the website command and the pipeline script still end in a traceback for such a name, from another layer** (see the item on channels that write a file that will not reload). What is left here is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran its touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
+| A reply of the wrong shape ends as a raw `KeyError` or `TypeError` out of the adapter | Found by Session 283, widened by its review. If the repository host answers a successful call with valid JSON that is not the object the adapter expects (an empty object, an array, `null`, a string or a number), the adapter reads a field from it without checking and fails with a bare `KeyError` or `TypeError` at every one of the nine places it reads a reply; GitHub's check for "that name is taken" does the same on a `422` whose `errors` field is a number. The website command then ends in a traceback and the pipeline saves "unexpected error: KeyError" (with the warning that a project may exist). The inverse also stands: a successful reply that is not usable JSON (malformed, or nested too deeply) is a clean repository error that does **not** warn that a project may exist. These are the last known ways a host's reply makes an adapter fail with something other than a clean repository error, so the adapters do not yet "raise only `RepoClientError` for any host reply". | **Small; a choice:** check each field where it is read and name it in a clean error, or catch the two error classes around the read (the `422` case has no choice in it); say in the text that a project may exist; and whether a wrong shape should be retried (six of the nine sites are, three times). Closing it also needs a new way for one pipeline test to make the website stage crash. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
 | One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
@@ -409,12 +409,25 @@ validates, is written with exit 0, and then fails to load.
 3. **`intake_qa_pairs_to_inventory`** (`orchestrator/adapters.py:197-199`) builds `request_context`
    from `IntakeReport.stakeholder_id` and `session_id`, which accept the same text, and
    `model_dump_json` then raises. `merge_inventories` embeds only counts, so it is not affected.
+4. **The website command's `--namespace`, and the pipeline script's.** *(Found by Session 283's review while the
+   GitLab adapter's own catch for the same text was being closed; the command reproduced by Session 283, the script by
+   the reviewer.)* A command-line argument that is not UTF-8 arrives as a lone surrogate.
+   `GitLabAdapter.create_project` now refuses it cleanly (a `RepoClientError`), but through the shipped entry points the
+   adapter is never reached: `python -m model_project_constructor.agents.website ... --namespace $'a\xffb'` ends in a
+   traceback, `TypeError: string contains surrogates` out of LangGraph's checkpointer (exit 1), and
+   `scripts/run_pipeline.py --live --host gitlab` with `MPC_NAMESPACE` set the same way dies at its own
+   `print(f"... Target: {repo_target.namespace} ...")` (`scripts/run_pipeline.py:634`, `UnicodeEncodeError` under a UTF-8
+   locale), or, with `LANG=C`, in the checkpoint save (`PydanticSerializationError`, `checkpoints.py:67`, before the
+   website stage). `validate_namespace` (`orchestrator/config.py:360`) rejects a URL and nothing else, and the website
+   command never calls it. Session 283's documents said, wrongly, that a surrogate namespace "now fails cleanly"; that is
+   true of a direct call of the adapter only.
 
 **Sketch, once ruled.** For 1, `DataRequest.model_validate_json(path.read_text())` rejects it before
 any work runs (it changes the exception type for malformed JSON); a usage error, exit 2, is
 `discover`'s shape. For 2, serialise with `report.model_dump_json(indent=2)` inside a `try` and exit 1
 without writing, or check each model-returned string at the `DataAgent` boundary. For 3, a field
-validator on the two ids, or `validate_request_context` on the f-string. **Needs an operator ruling
+validator on the two ids, or `validate_request_context` on the f-string. For 4, a check where the argument is read (a
+usage error, exit 2, as for `discover`) or in `RepoTarget` or `validate_namespace`. **Needs an operator ruling
 per channel** (reject or degrade; the exit status for `run`), which is why none was done inside
 Session 267's one deliverable. The library check that exists now is
 `discovery.validate_request_context`, and the CLI wires it as an option callback (`cli.py`,
@@ -617,23 +630,37 @@ two end-to-end tests (the real command and the real script), and by a mutation c
 strict expected failures (`GITHUB_REUSES_THE_SHA`) are gone: those runs now FAIL cleanly, which is the outcome the new
 tests hold.
 
-**Session 283 closed the three more that Session 282's review filed here** (`e265f8c` and `8cde06f`, `f445c5d`, `ee8fec0`),
-each with a test that failed first. (a) *A reply nested very deeply.* `json` raised `RecursionError` out of both adapters'
-`_parse_json` and, which the filing did not list, out of both `_is_name_conflict` (a 409 or 422 body), from about 10,000
-levels on CPython 3.11 to 3.13 (3.14 parses it); and a value nested a little under that (9,995 on 3.13) parsed and then
-could not be written into the next request. A catch in `_parse_json` would have closed the first and left the second,
-whose width depends on the interpreter, so `_host_text.reply_json` is now the one reader of a reply: it turns the
-`RecursionError` into a `ValueError` and refuses a reply nested more than `MAX_REPLY_NESTING` (64) levels, far above
-anything a host sends (a real reply nests under ten) and far below where any supported CPython fails to write a value
-back. **The limit is a choice the operator was not asked.** (b) *A lone surrogate in the GitLab namespace* is a
-`RepoClientError` ("group lookup failed for ...: the namespace holds a character that cannot be written into an
-address") where `quote` raises it. (c) *A redirect `httpx` cannot build.* A fuzz of 60,000 random `Location` values found
-three classes of error leaving `send`, not the one filed (`InvalidURL`, `idna`'s errors and a plain `ValueError`), and a
-catch in `send` would also have hidden a `ValueError` from the transport, so `RepoHttpClient._build_redirect_request` (a
-private method of `httpx`, on 0.27.2 and 0.28.1, held by a canary test that fails if it is renamed) converts them to an
-`httpx.RemoteProtocolError` with a fixed text. Held by `test_host_reply_nesting.py`, `test_repo_http_client.py` and the
-pipeline test, by a mutation check of 24 mutants (all caught), and by the touched files run by hand on Python 3.11, 3.12,
-3.13 and 3.14 and on `httpx` 0.27.2.
+**Session 283 closed the three more that Session 282's review filed here** (`e265f8c` and `8cde06f`, `f445c5d`, `ee8fec0`,
+then the review's corrections), each with a test that failed first. (a) *A reply nested very deeply.* `json` raised
+`RecursionError` out of both adapters' `_parse_json` and, which the filing did not list, out of both `_is_name_conflict`
+(GitHub reads a 422 body, GitLab a 400 or 409), from a depth that depends on the interpreter (measured by bisection:
+995 levels on CPython 3.11, 9,998 on 3.12, 9,999 on 3.13, 116,211 on 3.14); and a value nested a little under that
+parsed and then could not be written into the next request (`json.dumps` fails at 994, 9,997, 9,998 and about
+104,600), a window of one level on 3.11 and about 12,000 on 3.14. A catch in `_parse_json` would have closed the first
+and left the second, so `_host_text.reply_json` is now the one reader of a reply: it turns the `RecursionError` into a
+`ValueError` and refuses a reply nested more than `MAX_REPLY_NESTING` (64) levels, which does not depend on the
+interpreter. **The limit is a choice the operator was not asked, and it has a cost:** it refuses a reply whose deep part
+nothing reads (at `6075853` a `201` with an unused field 100 levels deep completed), and for a `2xx` the project may
+then exist while `failure_reason` says only `repo_error: ... invalid JSON body: the reply nests more than 64 levels
+deep`, with no project address and no warning (a `201` with malformed JSON always did the same; see the next item).
+The real replies measured nest at most 5 levels (GitHub's and GitLab's own, live, and GitHub's published examples), so
+64 leaves a margin of more than ten; a narrower design (catch at the read, check the six values written back) would
+have changed no working reply and was not taken because those checks are the wrong-shape item below. (b) *A lone
+surrogate in the GitLab namespace* is a `RepoClientError` ("group lookup failed for ...: the namespace holds a
+character that cannot be written into an address") where `quote` raises it, **for a direct call of the adapter only:**
+the website command and the pipeline script end in a traceback for such a namespace before the adapter is reached
+(*Three more channels can still write a file that will not reload*, point 4). (c) *A redirect `httpx` cannot build.*
+`httpx` builds the request a 301, 302, 303, 307 or 308 asks for even when told not to follow it. A fuzz of 60,000
+random `Location` values found three classes of error leaving `send`, not the one filed (`InvalidURL`, `idna`'s errors
+and a plain `ValueError`), and `InvalidURL` also for `mailto:x` or `urn:x`, which a real host can send and which is far
+easier to meet than a 65,500-character address. A catch in `send` would also have hidden a `ValueError` from the
+transport, so `RepoHttpClient._build_redirect_request` (a private method of `httpx`, on 0.27.2 and 0.28.1, held by a
+canary test that fails if it is renamed) converts them to an `httpx.RemoteProtocolError` with a fixed text; a response
+hook that drops the `Location` is the public-API alternative, not taken (a caller that follows redirects would lose
+them) and the fallback if a release renames the method. Held by `test_host_reply_nesting.py`,
+`test_repo_http_client.py` and the pipeline tests, by a mutation check of 24 mutants (all caught; the two the review
+found, on 3.14 and for a leaked message, since killed), and by the touched test files run by hand on Python 3.11, 3.12, 3.13 and 3.14 and on
+`httpx` 0.27.2.
 
 1. **The id, the branch and GitHub's `parent_sha` go into paths unquoted** (`gitlab_adapter.py:158,175`;
    `github_adapter.py:191,201,209,221,234,244,258`, `:209` being the parent; the namespace is quoted, at
@@ -646,31 +673,46 @@ pipeline test, by a mutation check of 24 mutants (all caught), and by the touche
    logging pages filed above.
 3. **CI runs `httpx` 0.28.1 only** (the lock); `pyproject.toml` admits `>=0.27`. The `httpx` 0.27 half of the new tests
    (the body cases skip there, the path, cookie, nesting and redirect cases run) is run by hand with `uv run --with
-   httpx==0.27.2 pytest ...`, which Session 282 did (336 passed, 44 skipped) and Session 283 did for its five files (224
-   passed, 44 skipped). Session 283 also ran those files on Python 3.11, 3.12 and 3.14 (268 passed on each, in separate
+   httpx==0.27.2 pytest ...`, which Session 282 did (336 passed, 44 skipped) and Session 283 did for its four touched test
+   files and the neighbouring `test_host_reuse_text.py` (224 passed, 44 skipped). Session 283 also ran those five on Python
+   3.11, 3.12 and 3.14 (268 passed on each, in separate
    environments: `UV_PROJECT_ENVIRONMENT=<dir> uv run --frozen --extra agents --extra ui --extra dev --python 3.12
    python -m pytest ...`, since a bare `pytest` there is whatever is first on the `PATH`); CI runs 3.12.3 only. Related
    to the item *CI tests one Python* below, which is about the interpreter.
 
 ### A reply of the wrong shape ends as a raw `KeyError` or `TypeError` out of the adapter
 
-**Found by Session 283 while converting the three crashes above by cause. Older than it, and listed in
-`TROUBLESHOOTING.md` as a cause of `unexpected_error` since Session 275, but never filed as work.** An adapter subscripts
-the JSON it read without checking its shape (`_parse_json(response, context)["object"]["sha"]`, `group["id"]`,
-`project["web_url"]`). Measured at all nine places an adapter reads a reply (GitLab: the group lookup, the create reply,
-the commit reply; GitHub: the create reply, the ref, the parent commit, a blob, the tree and the commit): a `2xx` reply
-that is valid JSON and an empty object leaves as a bare `KeyError`, and one that is an array, `null`, a string or a number
-as a `TypeError`: 45 of 45 combinations. Neither is a `RepoClientError`, so the standalone website command ends in a
-traceback and the pipeline saves `unexpected_error: KeyError` (Session 275's net), possibly after the host made the
-project. It is the last known way a host's REPLY makes an adapter raise something else, so until it is closed "the
-adapters raise only `RepoClientError` for any host reply" is not true, which is the capability Session 282's hand-off
-named. Two shapes: check the shape where each value is read and raise `RepoClientError` naming the field (text made of
-this repository's own words and the field name, never the host's), or catch `(KeyError, TypeError)` around the read; the
-first says which field. A reply of the wrong shape is the same on a retry, so whether GitHub's commit sites should be
-attempted three times for it is part of the choice. **Closing it removes the triggers
-`tests/scripts/test_run_pipeline_website_crash_resume.py` uses for its crash cases** (`no-id` is `{}`, `not-an-object` is
-`[]`), as Session 283's fix removed its deep-nest case: it needs another way to make the website stage raise, a
-`RepoClient` of its own that raises a bare error for instance, because Session 275's net must stay held.
+**Found by Session 283 while converting the three crashes above by cause, and widened by its review. Older than it, and
+listed in `TROUBLESHOOTING.md` as a cause of `unexpected_error` since Session 275, but never filed as work.** An adapter
+subscripts the JSON it read without checking its shape (`_parse_json(response, context)["object"]["sha"]`, `group["id"]`,
+`project["web_url"]`). **(1)** Measured at all nine places an adapter reads a `2xx` reply (GitLab: the group lookup, the
+create reply, the commit reply; GitHub: the create reply, the ref, the parent commit, a blob, the tree and the commit): a
+reply that is valid JSON and an empty object leaves as a bare `KeyError`, and one that is an array, `null`, a string or a
+number as a `TypeError`: 45 of 45 combinations. **(2)** The review found a tenth place on a `4xx`: GitHub's
+`_is_name_conflict` (`github_adapter.py`, the loop over `body.get("errors", []) or []`) iterates a truthy non-list, so a
+`422` whose JSON object carries `"errors": 5` or `true` or `1.5` raises `TypeError` out of `create_project` (`[5]`, `"x"`,
+`{}` and `null` give a `RepoClientError`; a 30,000-iteration random-JSON fuzz found this the only raw escape at a
+non-`2xx` status); the fix has no choice in it, `isinstance(errors, list)` before the loop, and was not made because it
+is a different cause from the three the session had been asked to close. GitLab's reads the body with `str()` and is not
+affected. Neither is a `RepoClientError`, so the standalone website command ends in a traceback and the pipeline saves
+`unexpected_error: KeyError` (Session 275's net, which names the class and adds that the project may exist). **(3) The
+inverse inconsistency:** a `2xx` reply the adapter reads but cannot use as JSON (malformed, or since Session 283
+nested more than 64 levels) is a clean `RepoClientError`, `repo_error: create_project failed ... invalid JSON body`,
+with `project_url` empty and **no** warning that the host answered `201` and a project may exist, where the wrong-shape
+reply above gets the warning from the net. `--resume` refuses in both and prints where the result file is.
+
+These are the last known ways a host's REPLY makes an adapter fail with something other than a clean repository error,
+so until they are closed "the adapters raise only `RepoClientError` for any host reply" is not true, which is the
+capability Session 282's hand-off named. Two shapes for (1) and (2): check the shape where each value is read and raise
+`RepoClientError` naming the field (text made of this repository's own words and the field name, never the host's), or
+catch `(KeyError, TypeError)` around the read; the first says which field. For (3), say in the text that a project may
+exist, as the net does. A reply of the wrong shape is the same on a retry; the three attempts belong to the website graph
+(`MAX_COMMIT_ATTEMPTS = 3`, `nodes.py`), which retries any `RepoClientError` from either adapter's `commit_files`: six of
+the nine reply sites (GitLab's commit reply, and GitHub's ref, parent commit, blob, tree and commit), not the three
+`create_project` ones, so whether a wrong shape should be retried is part of the choice. **Closing it removes the
+triggers `tests/scripts/test_run_pipeline_website_crash_resume.py` uses for its crash cases** (`no-id` is `{}`,
+`not-an-object` is `[]`), as Session 283's fix removed its deep-nest case: it needs another way to make the website stage
+raise, a `RepoClient` of its own that raises a bare error for instance, because Session 275's net must stay held.
 
 ### A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded
 
@@ -857,8 +899,9 @@ machine's project environment is 3.13.5. A stdlib exception class differs betwee
 been red on the first push for that reason alone; learning #303 already says to run the tests on the other interpreters
 you have. **Fix, small, an operator call:** a `.python-version` of 3.12 (what CI uses), or a CI matrix over 3.11, 3.12 and
 3.13 (the suite takes about 75 s on CI, so a matrix triples the minutes). Session 275's end-to-end test for a
-100,000-deep JSON reply is skipped on a Python that parses it: 3.14 raises `JSONDecodeError` instead of
-`RecursionError`, so a matrix that adds 3.14 would meet that skip and nothing else of Session 275's.
+100,000-deep JSON reply was skipped on a Python that parses it, and Session 283 replaced it (the crash it caused is
+fixed): the replacement runs on every interpreter, and Session 283 ran its touched test files on 3.11, 3.12 and 3.14 by
+hand (268 passed on each), so a matrix that adds 3.14 would meet no skip of Session 275's.
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 

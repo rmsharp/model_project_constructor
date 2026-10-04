@@ -279,11 +279,13 @@ is not a JSON object; `BACKLOG.md`, *A reply of the wrong shape*), or a bug. (A
 project id or branch with a control character was on this list until Session
 281, and so were a control character in the commit reference GitHub hands back
 and a lone surrogate in any id or commit reference an adapter sends back to the
-host until Session 282, and JSON nested very deeply, a lone surrogate in the
-GitLab group name you pass and a redirect the HTTP library could not build
-until Session 283; see *A project address, id, branch or commit id with
-terminal control codes* below. A reply nested more than 64 levels deep is now
-`repo_error: ... invalid JSON body: the reply nests more than 64 levels deep`.)
+host until Session 282, and JSON nested very deeply and a redirect the HTTP
+library could not build until Session 283; see *A project address, id, branch
+or commit id with terminal control codes* below. A successful reply nested more
+than 64 levels deep is now `repo_error: ... invalid JSON body: the reply nests
+more than 64 levels deep`, with `repo_error_retry_exhausted:` in place of
+`repo_error:` at the commit steps; an error page that deep is shown cut, like
+any other.)
 The exit code is 1 and
 the status `FAILED_AT_WEBSITE`, as for any other failure. **No traceback is
 printed and none is saved**: the reason names the exception's class and nothing
@@ -390,13 +392,19 @@ group id the run fails at `repo_error: create_project failed ...`, before anythi
 host, and is not retried. A cookie a host set that is not ASCII is permanent for that adapter:
 every later request it makes fails the same way. The project id and the branch are still sent in
 an address without being encoded (`BACKLOG.md`, *The id and the branch go into request paths
-unquoted*). Until Session 283 a broken half of a character in the GitLab group name you pass, a
-reply nested about 10,000 levels deep and a redirect whose address the HTTP library could not
-build (about 65,500 characters, or malformed in a few other ways) also ended the run in a
-traceback; each now fails the call like any other (`repo_error`), with text of this repository's
-own and none of the host's: "the namespace holds a character that cannot be written into an
-address", "the reply nests more than 64 levels deep" and "the host's reply redirected the request,
-and the HTTP library could not build the redirected request".
+unquoted*). Until Session 283 a reply nested about 1,000 to 100,000 levels deep (the depth depends on
+the Python) and a redirect whose address the HTTP library could not build (`Location: mailto:x`,
+about 65,500 characters, or malformed in a few other ways) also ended the run in a traceback; each
+now fails the call like any other, with text of this repository's own: "the reply nests more than
+64 levels deep" (a successful reply; **any** reply nested that deep is refused, including one whose
+deep part nothing reads) and "the host's reply redirected the request, and the HTTP library could
+not build the redirected request". A successful reply that is not usable as JSON does not say that
+a project may exist, although one may (`BACKLOG.md`, *A reply of the wrong shape*). A broken half
+of a character in the GitLab group name is refused by the adapter ("the namespace holds a
+character that cannot be written into an address") **only when the adapter is called directly**:
+the website command and the pipeline script, given such a name (a command-line argument that is
+not UTF-8), still end in a traceback before the adapter is reached (`BACKLOG.md`, *Three more
+channels can still write a file that will not reload*, point 4).
 
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).
