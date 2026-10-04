@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S280 — docs: `BACKLOG.md` closes route 9 and files what the assembly's report still does not say
+- **Change:** `BACKLOG.md`. Route 9 of *Seven more routes* is CLOSED (what it was, the script's measured symptom before the fix, what holds the fix), the header and the **Cost** paragraph count six routes remaining (1, 2, 3, 4, 6 and 8), and the index row says "Six more places" and names the two that closed since it was written. The data stage's cost paragraph under *The scripted intake stops for four reasons* gains the assembly: three causes share two class names, and a fixed sentence per cause that names the field and never the value would say which, filed and not built. The index row for that item says so too.
+- **Commit/PR:** this commit
+- **Session:** S280 · **Verified:** both ledger guards 82 passed; the symptom is the Session 280 script run recorded in the `TROUBLESHOOTING.md` entry above.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S280 — docs: a `report assembly failed:` report, what it means, and how to read what it does not carry
 - **Change:** `packages/data-agent/USAGE.md` (error contract: the handler covers building the report from the graph's result, a `report assembly failed: <ExceptionClass>` is the same class-only report, which classes and why, and how a library caller reads the cause), `TROUBLESHOOTING.md` §FAILED_AT_DATA (a root-cause entry; **Reading a `report assembly failed:` message**, a recipe that was run; the note that no traceback reaches the caller now names both reasons), `OPERATIONS.md` and `docs/tutorial.md` (the same name beside `graph crashed:`). `docs/wiki/` not touched.
 - **Commit/PR:** this commit
