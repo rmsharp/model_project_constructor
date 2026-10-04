@@ -9,10 +9,12 @@ EXECUTION_FAILED branch.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from model_project_constructor_data_agent import agent as agent_module
 from model_project_constructor_data_agent.llm import BaselineQuerySpec
 
 from model_project_constructor.agents.data import DataAgent, LLMClient
@@ -1285,18 +1287,26 @@ def _crash_report(
     summary_response: SummaryResult,
     datasheet_response: Datasheet,
 ) -> DataReport:
-    """The report of an agent whose LLM raises ``error`` at ``site`` ("graph" or "baseline")."""
+    """The report of an agent that raises ``error`` at ``site``: its LLM at "graph" or "baseline",
+    or, at "assembly" (Session 280), the step that builds the report from the graph's state."""
     common = {
         "primary_queries_sequence": [[primary_query_spec_valid]],
         "qc_response": [qc_specs_valid],
         "summary_response": summary_response,
         "datasheet_response": datasheet_response,
     }
+
+    def _assembly_that_raises(request: DataRequest, final_state: dict[str, object]) -> DataReport:
+        raise error
+
     try:
         if site == "graph":
             return DataAgent(
                 llm=_RaisesWhileGeneratingQueries(**common, error=error), db=None
             ).run(sample_request)
+        if site == "assembly":
+            with patch.object(agent_module, "_assemble_complete_report", _assembly_that_raises):
+                return DataAgent(llm=FakeLLMClient(**common), db=None).run(sample_request)
         return DataAgent(
             llm=_RaisesWhileGeneratingTheBaseline(**common, error=error), db=None
         ).run(_request_with_baseline(sample_request))
@@ -1332,7 +1342,7 @@ def _every_string(report: DataReport) -> list[str]:
 
 def _own_text(site: str, report: DataReport) -> str:
     """The text this site wrote: the failure's reason, or the baseline's caveat."""
-    if site == "graph":
+    if site in ("graph", "assembly"):
         assert report.status == "EXECUTION_FAILED"
         (concern,) = report.data_quality_concerns
         assert report.summary == f"Data Agent run failed: {concern}"
@@ -1350,6 +1360,9 @@ SITES = pytest.mark.parametrize(
         pytest.param("graph", "graph crashed: ", id="agent.py-graph-crashed"),
         pytest.param(
             "baseline", "LLM baseline-query generation failed: ", id="nodes.py-baseline"
+        ),
+        pytest.param(
+            "assembly", "report assembly failed: ", id="agent.py-report-assembly"
         ),
     ],
 )
@@ -1489,3 +1502,179 @@ def test_a_crash_whose_class_name_the_helper_must_guard_still_returns_a_report(
 
     assert _own_text(site, report) == f"{prefix}<unprintable>"
     assert GATEWAY_KEY not in report.model_dump_json()
+
+
+# ---------------------------------------------------------------------------
+# Session 280 — the report is assembled inside the guard, so ``run`` is total.
+#
+# ``BACKLOG.md``, route 9 of *Seven more routes*. ``DataAgent.run`` guarded only
+# ``self._app.invoke``. ``_assemble_complete_report`` runs after it and builds
+# ``PrimaryQuery`` objects (``expected_row_count_order`` is a ``Literal``), zips the specs, the
+# quality-check groups and the datasheets with ``strict=True``, and builds the ``DataReport``
+# itself, so a model reply with a value outside the vocabulary, or fewer quality-check groups
+# than queries, made ``run`` raise instead of returning ``EXECUTION_FAILED``, against its module
+# docstring and ``packages/data-agent/USAGE.md``. The exception pydantic raises quotes the
+# model's reply (``input_value``), so the text also reached the operator's screen.
+#
+# The three tests below drive the real causes through the real assembly. The ``"assembly"`` arm of
+# ``SITES`` above holds the guard's own properties (the class and not the message, a name that
+# cannot be read, a message that cannot be printed) the same way it holds the other two sites'.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _AnswersNoQualityCheckGroups(FakeLLMClient):
+    """A model that returns an empty list where one group per query was asked for."""
+
+    def generate_quality_checks(
+        self,
+        request: DataRequest,
+        primary_queries: list[PrimaryQuerySpec],
+    ) -> list[list[QualityCheckSpec]]:
+        return []
+
+
+def _llm_whose_reply_is_faulty(
+    fault: str,
+    spec: PrimaryQuerySpec,
+    qc_specs: list[QualityCheckSpec],
+    summary: SummaryResult,
+    datasheet: Datasheet,
+) -> FakeLLMClient:
+    common = {
+        "primary_queries_sequence": [[spec]],
+        "qc_response": [qc_specs],
+        "summary_response": summary,
+        "datasheet_response": datasheet,
+    }
+    if fault == "order-outside-the-vocabulary":
+        faulty = replace(spec, expected_row_count_order=_hostile_text())
+        return FakeLLMClient(**{**common, "primary_queries_sequence": [[faulty]]})
+    if fault == "fewer-quality-check-groups-than-queries":
+        return _AnswersNoQualityCheckGroups(**common)
+    if fault == "summary-that-is-not-text":
+        return FakeLLMClient(**{**common, "summary_response": replace(summary, summary=None)})
+    raise AssertionError(fault)
+
+
+@SITES
+def test_an_interrupt_is_not_swallowed_by_any_of_the_guards(
+    site: str,
+    prefix: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Each guard catches ``Exception``, so Ctrl-C reaches the orchestrator, which saves a FAILED
+    result for it (Session 275). A guard that caught ``BaseException`` would return a report and
+    the run would go on to the next stage."""
+    with pytest.raises(KeyboardInterrupt):
+        _crash_report(
+            site,
+            KeyboardInterrupt(),
+            sample_request,
+            primary_query_spec_valid,
+            qc_specs_valid,
+            summary_response,
+            datasheet_response,
+        )
+
+
+FAULTS = pytest.mark.parametrize(
+    ("fault", "class_name"),
+    [
+        # ``PrimaryQuery``'s ``Literal`` refuses it.
+        pytest.param("order-outside-the-vocabulary", "ValidationError", id="order"),
+        # ``zip(..., strict=True)``.
+        pytest.param("fewer-quality-check-groups-than-queries", "ValueError", id="qc-groups"),
+        # ``DataReport``'s own construction: the second place assembly can raise.
+        pytest.param("summary-that-is-not-text", "ValidationError", id="summary"),
+    ],
+)
+
+
+def _run_or_fail(llm: FakeLLMClient, request: DataRequest) -> DataReport:
+    try:
+        return DataAgent(llm=llm, db=None).run(request)
+    except Exception:
+        pass
+    # Outside the handler for the reason ``_crash_report`` gives.
+    pytest.fail("DataAgent.run raised instead of returning a report", pytrace=False)
+
+
+@FAULTS
+def test_a_faulty_model_reply_becomes_a_failed_report_not_a_raise(
+    fault: str,
+    class_name: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    llm = _llm_whose_reply_is_faulty(
+        fault, primary_query_spec_valid, qc_specs_valid, summary_response, datasheet_response
+    )
+
+    report = _run_or_fail(llm, sample_request)
+
+    assert report.status == "EXECUTION_FAILED"
+    assert report.summary == f"Data Agent run failed: report assembly failed: {class_name}"
+    assert report.data_quality_concerns == [f"report assembly failed: {class_name}"]
+    # Nothing is half-built: the report carries no queries, and the graph itself ran to its end,
+    # so the failure is the assembly's and no node's.
+    assert report.primary_queries == []
+    assert report.baseline_snapshot is None
+    assert llm.summarize_calls == 1
+
+
+@FAULTS
+def test_a_faulty_model_reply_is_not_quoted_in_the_failed_report(
+    fault: str,
+    class_name: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """Pydantic's error quotes the value it refused (``input_value``). The report is saved and
+    written into a committed project, so none of it may be carried."""
+    report = _run_or_fail(
+        _llm_whose_reply_is_faulty(
+            fault, primary_query_spec_valid, qc_specs_valid, summary_response, datasheet_response
+        ),
+        sample_request,
+    )
+
+    everything = "\n".join(_every_string(report))
+    assert GATEWAY_KEY not in everything
+    assert "x-api-key" not in everything
+    assert SECRET not in everything
+    assert "line two" not in everything
+    assert "input_value" not in everything
+    assert [s for s in _every_string(report) if unsafe(s.replace("\n", " "))] == []
+    assert GATEWAY_KEY not in report.model_dump_json()
+
+
+def test_the_same_stand_in_with_a_sound_reply_still_completes(
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """The control for the two above: the guard does not turn a good run into a failure."""
+    llm = FakeLLMClient(
+        primary_queries_sequence=[[primary_query_spec_valid]],
+        qc_response=[qc_specs_valid],
+        summary_response=summary_response,
+        datasheet_response=datasheet_response,
+    )
+
+    report = _run_or_fail(llm, sample_request)
+
+    assert report.status == "COMPLETE"
+    assert [q.name for q in report.primary_queries] == ["tx_claims_2024"]
