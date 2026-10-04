@@ -95,10 +95,128 @@ updates rather than contradicts.
 ## ACTIVE TASK
 
 ### What Session 282 Did
-**Deliverable:** **`RepoHttpClient` turns a request it cannot build (`httpx.InvalidURL`, `UnicodeEncodeError`) into an `httpx.HTTPError`, so a value the host sent and an adapter sends back no longer crashes the run (items 1 and 2 of `BACKLOG.md`'s "An adapter puts a value the host sent into its next request", `:596`) (IN PROGRESS)**
-**Started:** 2026-10-04 07:55
-**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers (the area, then the item; both the first option, recommended).
-**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+**Deliverable:** **`RepoHttpClient.build_request` turns a request `httpx` cannot build into an `httpx.LocalProtocolError`, so a value the host sent and an adapter writes into its next request fails the call as a `RepoClientError` and no longer ends the run in a traceback — COMPLETE.** Items 1 and 2 of `BACKLOG.md`'s
+*An adapter puts a value the host sent into its next request* (filed by Session 281; now retitled *The id and the branch go into request
+paths unquoted, and one wiki sentence is now imprecise*, with the two points that were never part of the fix and four new ones). `httpx`
+raises `InvalidURL` (a C0 control or DEL in a path) and `ValueError` (a lone surrogate, as `UnicodeEncodeError`, in a path or, from 0.28,
+a body; a `NaN` or an infinity in a body) while it BUILDS a request; none is an `httpx.HTTPError`, so no adapter `except` caught it.
+**The filed fix said to extend the client's `send` override. That cannot work:** the error is raised in `build_request`, before `send`
+(a probe of the plain client and its traceback), so the override is `build_request`. Chosen by the operator at Phase 0 from two pickers
+(the area, then the item; both the first option, recommended). **The operator also decided:** push at close-out (yes). **Mine, and not
+put to the operator:** `build_request` and not `send` (the evidence decided it); converting `ValueError`, not two class names (the
+review found `NaN`); leaving `RecursionError` out (a deeper nest bypasses it); reusing `LocalProtocolError` with a second fixed text;
+rewriting the four strict expected failures instead of unmarking them (the run now FAILS, it does not complete); filing, not fixing,
+what the review found beside it. **Started:** 2026-10-04 07:55. **Completed:** 2026-10-04. **Commits: eight** (counted with
+`git rev-list` after this one lands): `13fec02` (claim), `e5ebd40` (fix), `64c8124` (adapter, agent and end-to-end tests),
+`c1688a4` (docs), `8f7fb72`, `818853a`, `78792f3` (the review's findings: client, tests, docs) and this close-out. Each carries its own
+`CHANGELOG.md` entry; the push is recorded in the close-out's.
+
+#### What changed
+- **`_http.py`:** `UNBUILDABLE_REQUEST_TEXT` (`:40`), `RepoHttpClient.build_request` (`:66`, `suppress(httpx.InvalidURL, ValueError)`,
+  raised after the handler so nothing is chained), class and module docstrings that record what the library's message holds and the
+  three build-time causes (a path, a body, a host's non-ASCII `Set-Cookie`, which refuses every later request). `send` (`:73`) unchanged.
+- **Tests (3,232 passed + 4 xfailed → 3,369 passed, 9 skipped):** `test_repo_http_client.py` 20 → 87 (a canary that the plain library still
+  raises what the client converts; every method, `request`, `stream`, `build_request`; a body; headers compared as well as the address
+  and body; a caller's `TypeError` passes through; the cookie; an adapter turns it into its own error). `test_host_reuse_text.py` new, 68
+  (a real socket that RECORDS what reached the host, so a refused request is shown ABSENT and not sent cleaned: GitHub's `parent_sha` and
+  four body shas, GitLab's group id, controls that the sequences complete on ordinary values, the agent over each adapter).
+  `test_host_success_end_to_end.py` 6 → 8 (the real command and the real script at a GitHub host whose parent sha holds an escape
+  sequence). `test_host_success_text.py` 121 → 117 (`GITHUB_REUSES_THE_SHA` gone). `success_hosts.py`: `recording` (`:154`), `shas` and
+  `group_id` overrides (`:78`), a prefix match for GitHub's parent commit, `HTTPX_WRITES_JSON_AS_UTF8` (`:30`, moved).
+- **Docs:** `BACKLOG.md` item at `:596` (points 1 to 6) and its index row (`:57`) and route 8's cross-reference; `TROUBLESHOOTING.md` (the
+  limit paragraph, the `unexpected_error` causes); `_host_text.py` docstring; `PROJECT_LEARNINGS.md` #356-358; `CLAUDE.md:122` (358,
+  402.1 KB). `docs/wiki/` not touched.
+
+#### Verification
+Red first: with only the text constant added, **56 of the new tests failed, each at the crash** (`InvalidURL`, `UnicodeEncodeError`, or
+`isinstance(..., RepoClientError)` false); one `KeyError` was my own test's premise (GitLab percent-encodes the namespace, so a control
+code there builds) and was fixed in the test. Final tree: **full suite 3,369 passed, 9 skipped, coverage 98.34%** (`GITHUB_ACTIONS=true`),
+`ruff check` and `mypy` clean, both ledger guards 82 passed. **16 mutants** of the client and the fixtures (no override, one class only,
+the former two-class catch, catch everything, catch `TypeError` too, raise inside the handler, wrong text, quote the original, send
+something else, not an `HTTPError`, `send` override removed, a header dropped, `recording` records nothing, the parent prefix route
+removed, a cleaned value sent) all caught, each run's total equal to the unmutated run's (368). **`httpx` 0.27.2** (overlay, which
+`pyproject.toml` admits and CI never runs): the focused files 336 passed, 44 skipped (the JSON-body cases), on 0.28.1 376 passed.
+**Runtime smoke (3E), done:** the two end-to-end tests drive the real command and the real script as subprocesses (they fail without
+the fix: 2 failed, 6 passed); the fixture pipeline (`run_pipeline.py`, fake host) exits 0 with `Status:  COMPLETE`, and `--resume` of it
+prints the address.
+
+#### The review, and what it found
+One workflow: five read-only lenses (hostile inputs, completeness and callers, test faithfulness, docs and ledger, behaviour and
+compatibility) and two skeptics per non-nit finding: 39 agents, 0 errors, 32.8 minutes, 3.68M subagent tokens, 643 tool uses. 28 findings
+(11 nits, not put to skeptics); of the other 17, 11 confirmed by both skeptics, 3 split, 3 refuted by both. **Fixed:** a host reply of
+`{"sha": NaN}` (or an infinity) ended in a bare `ValueError` after the project existed (three lenses; I reproduced it); my premise that
+the library's error "quotes the value" was false for a path (one character and its position; #333 had refuted it, and my own red run
+had printed it); I had written GitLab's group-id failure as "a retried commit with the project already created" in three documents, and
+it fails at `create_project`, before anything is made, with no retry; the "built exactly as before" test ignored headers (a
+`build_request` that dropped `Accept` passed 668 tests); two stale docstrings; a wrong retry comment of mine. **Filed (older, not
+caused):** GitLab's raw `UnicodeEncodeError` for a surrogate in the namespace (`quote` raises it before `httpx`); the deep-nesting
+`RecursionError`; a 3xx with a very long `Location` (raised in `send`; I reproduced it, the skeptics ruled it out of scope for this
+change); CI never runs `httpx` 0.27. **Not changed:** `RecursionError` in the catch; the website command exiting 0 for a `FAILED` result
+(the ruling already owed at `BACKLOG.md:346`); that a deterministic failure still costs three attempts and 3 s of waiting.
+
+### Session 281 Handoff Evaluation (by Session 282)
+
+**Score: 8/10.**
+- **+** Item 1 of "What's next" was the deliverable and its pointer (`BACKLOG.md:596`) held; "no ruling" held. Gotcha 1 (route a fixture on
+  the parsed path) is exactly what `success_hosts.serve` does and I built on it; gotcha 3 (`GITHUB_REUSES_THE_SHA` applies from `httpx`
+  0.28 only) held, and I measured the other side on 0.27.2; gotcha 5 (never `git stash`, both guards) held.
+- **−** The item's fix line named the wrong hook ("have `RepoHttpClient` turn ... into an `httpx.HTTPError`" reads as an extension of the
+  existing `send` override, and the error is raised in `build_request`) and called the fix "one place, it covers a value added later",
+  which `NaN` shows was only as wide as the classes it listed. "Remove `GITHUB_REUSES_THE_SHA` (its four strict cases go red the moment
+  it works)" was half right: they go red, but because the run now fails cleanly, so removing the mark was not the fix (#357).
+- **ROI: high.**
+
+### Session 282 Self-Assessment
+
+**Score: 7/10.**
+- **+** Claimed first, measured the premise (a traceback frame) before choosing the override, wrote the tests red first and read why each
+  failed, found my own test premise wrong (the namespace) from the red run, drove a mutation check to 16 mutants with totals compared,
+  measured `httpx` 0.27.2 instead of guessing, ran the review before closing and fixed or filed every finding, corrected earlier
+  ledger entries by a "Corrections" bullet instead of editing them, counted the new test cases before writing a number (31 became 47).
+- **−** I wrote "both quote the value" into six places after #333 had refuted it and after my own red run printed the opposite; I wrote
+  GitLab's outcome from the GitHub flow without running it; I chose the catch list from the filed item (two class names) when the claim was
+  "a request it cannot build" (#356). I went long stretches without saying what I was doing, and the harness had to prompt me for it
+  several times.
+- **Decay term:** nothing was removed from a mandated-read file. `SESSION_NOTES.md` 160,370 B before this record (trigger 196,608 B);
+  `BACKLOG.md` 165,622 → 168,449 B; `PROJECT_LEARNINGS.md` 398,801 → 402,079 B. **A twelfth trim is not due:** 172,828 B now against the trigger at 196,608 B, and this record is about 13 KB, so one or two more
+  closing records at this size is an estimate.
+
+**What's next** (sizes and effort are estimates unless measured; none is blocking).
+1. **Small, no ruling, one capability: make the adapters raise only `RepoClientError` for any host reply.** Three gaps filed by this
+   session (`BACKLOG.md:596`, points 3 to 5): catch `UnicodeEncodeError` where GitLab quotes the namespace (`gitlab_adapter.py:99`); catch
+   `RecursionError` in both `_parse_json`; also convert `InvalidURL` in `RepoHttpClient.send` for a redirect's long `Location`. Route 2(b)
+   (`BACKLOG.md:451`, a logging filter on the `sqlalchemy` loggers) is the other small one.
+2. **Rulings owed, as Session 281 listed (line numbers are current):** the `[]` reply (`:795`); one named error class per cause (`:754`);
+   the discovery log line (`:706`); the lone-surrogate channels (`:387`) and what `run` exits with for a failed report (`:346`);
+   `L10`'s completeness gap; the wiki corrections (`:596` point 2 and `:706`); `MPC_LOG_LEVEL` (`:809`); the Session 277 coverage harness.
+3. **Observed, not filed:** as Session 281 listed (`stash@{0}`, the two `worktree-wf_*` branches, the dashboard at v2.18.0 against
+   v2.19.0, the `gitleaks` count, `TROUBLESHOOTING.md` §FAILED_AT_DATA's first bullet, `loopback.py`'s module docstring, `README.md:97`'s
+   "199 website agent tests"), and `nodes.py:243`'s docstring "Delay doubles each attempt (1s, 2s, 4s)", where three attempts sleep twice (1 s, 2 s).
+
+**Key files** (line numbers read off `grep -n` at this close-out).
+- `src/model_project_constructor/agents/website/_http.py:40,48,66,73`; `github_adapter.py:204-258` (the values read from one reply,
+  `:204,213,226,239,253`, and written into the next request: the parent into a path at `:208`, the rest into bodies); `gitlab_adapter.py:99` (the namespace, `quote`), `:113` (the group id into a body);
+  `_host_text.py:15-36` (the docstring).
+- `tests/agents/website/test_host_reuse_text.py:50,61,80,97,110,224`; `test_repo_http_client.py` (from "A request `httpx` cannot build");
+  `success_hosts.py:30,78,154`; `test_host_success_end_to_end.py` (the last two tests); `BACKLOG.md:57,596`; `TROUBLESHOOTING.md`
+  (`unexpected_error` causes, and the limit paragraph under "A project address, id, branch or commit id with terminal control codes");
+  learnings #356-358.
+
+**Gotchas.**
+1. **The error is raised in `build_request`, not `send`.** Keep the canary test (the plain library still raises what the client
+   converts) green on a library bump, or the fix goes inert silently (#356).
+2. **The catch is `InvalidURL` and `ValueError`.** A `TypeError` passes through on purpose (a caller's type JSON cannot hold, which a JSON
+   reply cannot produce); `RecursionError` is deliberately not caught. Widening either needs a test that says why.
+3. **GitLab's group-id failure is at `create_project`: nothing made, not retried.** GitHub's commit sites are attempted three times with a
+   1 s and a 2 s wait, with the repository already made. Do not write one outcome for both (#358).
+4. **The `httpx` 0.27 half is run by hand:** `uv run --with "httpx==0.27.2" pytest <files> --no-cov` (the overlay replaces the locked
+   version; check with `python -c "import httpx; print(httpx.__version__)"`). The JSON-body cases skip there; the path and cookie cases run.
+5. **A "never sent" claim needs the recording router.** A request sent with something cleaned out also fails cleanly; only the list of what
+   reached the host tells the two apart (`success_hosts.recording`, routing on the parsed path).
+6. **Do not `cd` into a subdirectory in a Bash call**: the working directory carried over twice this session and I used absolute paths
+   from then on. Never `git stash` (#316). Both ledger guards before every commit touching `SESSION_NOTES.md`, `CLAUDE.md` or
+   `BACKLOG.md`. `uv run python` for anything that imports the package. `CLAUDE.md:122` states the learnings count and size (358,
+   Sessions 9–282).
 
 ### What Session 281 Did
 **Deliverable:** **the repository host's success values are scrubbed where they leave the adapters — COMPLETE.** Route 8 of
