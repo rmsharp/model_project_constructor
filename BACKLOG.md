@@ -53,7 +53,7 @@ rows below it are the smaller residue that closing it exposed.
 | Enterprise migration | Handing the project to an enterprise as a one-time copy of the public GitHub repository. Landing the branch, closing public exposure, removing LGPL dependencies, and the legal packet are **done**. **Session 263 audited readiness: not ready yet, but close.** Its one blocker — unpushed commits the copy would have dropped — was cleared by the operator's push that session, and reopens whenever a session leaves commits unpushed. Five small fixes should land on the original first (a leftover licence text, a local-only commit, a missing tag, a stale secrets report, a missing pre-flight check). The runtime-readiness phase was never started: not a gate, but "only the fork remains" was wrong. | The fork itself still waits on five decisions only the operator can make: destination host, import strategy, contributor agreement, wiki destination, and what happens to existing releases. The punch list is in the item. |
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
-| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Six remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own, and the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274; the language model's error text copied into the data report closed in Session 279). | **Small** for the SQLAlchemy lines and the host's address, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
+| Seven more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Seven remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own, the repository host's project address and commit id printed raw (its *error* page, which could carry the access token itself, closed in Session 274), and, found by Session 279's review, the data agent's report assembly, which can still raise instead of returning a failed report (the language model's error text copied into the data report closed in Session 279). | **Small** for the SQLAlchemy lines, the host's address and the report assembly, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
 | One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
@@ -431,7 +431,7 @@ traceback; the "database unreachable" concern; the quality-check and baseline SQ
 `db.safe_message` now, and the review of that change filed the rest. **Each of routes 1 to 7 was
 reproduced by a lens and re-checked by two skeptics and none was fixed when filed; since then route 1's secrets half
 closed (Session 271), route 7 closed (Session 274) and route 5 closed (Session 279). Route 8 was found by Session 274's scouting workflow and
-measured by one agent, not re-run.** What each was reproduced on: a real SQLite file where the
+measured by one agent, not re-run. Route 9 was found by Session 279's review and reproduced by probe.** What each was reproduced on: a real SQLite file where the
 route allows it, otherwise a **simulated** driver (a fake SQLAlchemy dialect whose DBAPI error carries what
 PostgreSQL echoes of a role name), so no route below was reproduced against a live PostgreSQL, MySQL,
 Oracle or SQL Server.
@@ -483,6 +483,9 @@ Oracle or SQL Server.
    summary reached `analysis/02_data.qmd`, `analysis/06_implementation_plan.qmd` and
    `reports/data_report.md` (measured). **Fix:** either say the guarantee is the producer's, or a one-line
    sanitiser in the templates for report-derived strings, which makes the producer fixes defence in depth.
+   *(Session 279's review: `render_reports_data_json` writes the whole `DataReport` into `reports/data_report.json`,
+   so up to five sample rows of every quality check, each `result_summary` and the inventory's producer notes are
+   committed as well; a sanitiser has to run over that dump, not only over the four rendered fields.)*
 7. **Repo-host failure text — CLOSED in Session 274** (commits `043af67`, `b4480e3`, `b5d7ee7`, `f18639d`,
    `0f3508b`, then the review's fixes `32292f0`, `69303d1`, `58b21ba`).
    A host or proxy that echoed the request headers in an error reply (a debug gateway, an echoing reverse proxy,
@@ -524,14 +527,25 @@ Oracle or SQL Server.
    `scrub_host_text(value)` (no secret) in the adapters where `ProjectInfo` and `CommitInfo` are built, so every
    consumer gets a clean string, or at the three prints; it also cuts to 1,000 characters and appends a notice,
    which a URL or a sha may not want.
+9. **`DataAgent.run` can still raise: the report is assembled outside its `try`.** *Found by Session 279's review (a
+   probe by one lens; two skeptics reproduced it, one calling it a nit and one low).* Only `self._app.invoke` is
+   guarded. `_assemble_complete_report` builds `PrimaryQuery` objects whose `expected_row_count_order` is a `Literal`
+   and zips the specs, quality-check groups and datasheets with `strict=True`, so a model reply with a value outside the
+   `Literal`, or fewer quality-check groups than primary queries, makes `run` raise instead of returning
+   `EXECUTION_FAILED`, against `agent.py`'s module docstring and `packages/data-agent/USAGE.md`. Nothing names a class
+   there: pydantic's `input_value` quotes the model's reply on the operator's screen. The API key was not in either
+   reproduction (the model never sees it). Not caused by Session 279; it showed because the new docs say a crash
+   "becomes `EXECUTION_FAILED`". **Fix, small, no ruling:** the same `try` around the assembly, writing
+   `report assembly failed: ` and `safe_class_name(e)`.
 
 Left out on purpose: the Unicode format characters (`Cc`'s neighbour `Cf`: bidirectional marks,
 zero-width characters, the tag block; 170 on Python 3.13) are not scrubbed. They are not the escape
 and control codes this was about, and scrubbing them would split Persian and emoji sequences. Whether a
 given terminal reorders text on them was not measured.
 
-**Cost:** routes 5, 2(b) and 8 are small and need no ruling; 6 is one decision then one function; 3 is an
-operator call; 1 and 4 are nits. (Route 7 closed in Session 274; route 8 replaced it, so seven remain.)
+**Cost:** routes 2(b), 8 and 9 are small and need no ruling; 6 is one decision then one function; 3 is an
+operator call; 1 and 4 are nits. (Routes 7 and 5 closed in Sessions 274 and 279 and route 9 is new, so seven remain:
+1, 2, 3, 4, 6, 8 and 9. The title keeps the count at filing.)
 
 ### A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded
 
@@ -631,6 +645,12 @@ real script against a gateway that echoes the API key. What is left:
    token through Python's last-resort handler when no handler is configured (reproduced). `discovery.py:240-244` keeps
    such text out of the persisted note for that reason and still logs it. A documented best-effort trade-off the
    operator has not ruled on for the log. **Low, a choice:** log the class name only, as the orchestrator now does.
+2. **`discovery.py` names an exception's class with a bare `type(e).__name__`** (`:292` and `:316` for a driver's and a
+   ranker's exception, `:304` and `:345` for a skipped entity's), into the log line and the persisted inventory note
+   (`RANKING_FAILED_NOTE_PREFIX (<name>)`), where Session 279's `db.safe_class_name` is the guarded form. *(Found by
+   Session 279's review.)* A class built at run time can be named anything and reaches the file, and a metaclass whose
+   `__name__` raises would raise inside the `except`. Real driver and SDK classes are named by code, so this is
+   hypothetical today. **Low, small:** the four reads through `safe_class_name`.
 
 ### The scripted intake stops for four reasons, and the saved report gives one name for all of them
 
@@ -657,7 +677,10 @@ only place the cause was written, and the node that raised is not recorded eithe
 sites in `anthropic_client.py` and 8 in `opencode_client.py` (`grep -c 'raise LLMParseError'`): an empty content list, a
 reply cut off at `max_tokens`, JSON that does not parse, `opencode` timing out, rejecting its invocation or reporting an
 error event. The report now says `LLMParseError` for all of them, and a `KeyError` from a reply with the wrong fields
-names no key. **The fix has the same shape as the intake's:** a subclass per cause, with no message to leak.
+names no key. It also lost the `opencode` version the client appends to two of those messages (`opencode_client.py`,
+`_version_suffix`), which `docs/wiki/model_project_constructor/AI-Dependencies.md` and
+`Software-Bill-of-Materials.md` present as how a schema break diagnoses itself; for the data stage's report that is no
+longer so, and `docs/wiki/` is the operator's to republish. **The fix has the same shape as the intake's:** a subclass per cause, with no message to leak.
 `TROUBLESHOOTING.md` §FAILED_AT_DATA says what the classes mean meanwhile.
 
 ### `MPC_LOG_LEVEL` is read and used by nothing
