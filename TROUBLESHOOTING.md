@@ -275,9 +275,10 @@ print(result["project_url"])       # may be set even on FAILED if the project wa
 **`failure_reason: unexpected_error: <ClassName> (the website stage may already have created a project ...)`**
 (since Session 275). The website stage raised something that is not a
 repository-host error: a reply the adapter could not read (no `id`, JSON
-nested very deeply, a body that is not a JSON object, or, on GitHub, a control
-character in the commit reference the host hands back), or a bug. (A project id
-or branch with a control character was on this list until Session 281; see
+nested very deeply, a body that is not a JSON object, a control character in
+the commit reference GitHub hands back, or a lone surrogate in any id or commit
+reference an adapter sends back to the host), or a bug. (A project id or branch
+with a control character was on this list until Session 281; see
 *A project address, id, branch or commit id with terminal control codes* below.)
 The exit code is 1 and
 the status `FAILED_AT_WEBSITE`, as for any other failure. **No traceback is
@@ -358,19 +359,21 @@ raw by the website command's `Project:` and `Commit:` lines and by the pipeline 
 `Project:` line, and saved in `<checkpoint_dir>/<run_id>/RepoProjectResult.result.json`, which
 `--resume` printed again. JSON escapes most control characters but not DEL or the C1 controls,
 so a `cat` of an old result file can still deliver those. An id or branch with a control
-character made the website command end in a traceback (`InvalidURL`), after the project already
-existed. Since Session 281 both adapters scrub the four values before anyone sees them (each
+character (other than a C1 one, which is percent-encoded) made the website command end in a
+traceback (`InvalidURL`), after the project already existed. Since Session 281 both adapters scrub the four values before anyone sees them (each
 control character becomes a space, one line, cut at 1,000 characters, a lone surrogate becomes
-`?`, your access token becomes `***`), and `--resume` scrubs the address it reads from a
-checkpoint. The cleaned id is what goes back to the host: a control code at the end of an id
-simply disappears, one in the middle names no project, and the commit then fails like any failed
-commit (`repo_error_retry_exhausted`) **with the project already created**, so look for it as for
-`unexpected_error`. Nothing rewrites a result file already on disk, and a snippet that prints
-`result['project_url']` after `json.loads` (see above) prints an old value as it was saved.
+the replacement character U+FFFD, your access token becomes `***`), and `--resume` scrubs the
+address it reads from a checkpoint (but cannot remove a token from it). The cleaned id is what
+goes back to the host: a control code at the end of an id simply disappears, one in the middle
+names no project, and the commit then fails like any failed commit (`repo_error_retry_exhausted`)
+**with the project already created**, so look for it as for `unexpected_error`. An id or branch
+made of nothing but control codes is sent empty. Nothing rewrites a result file already on disk,
+and a snippet that prints `result['project_url']` after `json.loads` (see above) prints an old
+value as it was saved.
 **What this does not cover:** a `RepoClient` of your own is not scrubbed (the same limit as for
-failure text), and a value an adapter reads and uses in its next request is not on what it
-returns (GitHub's commit reference: `BACKLOG.md`, *An adapter puts a value the host sent into
-its next request*).
+failure text), and a value an adapter reads and sends in its next request is not on what it
+returns (GitHub's commit references, GitLab's group id: `BACKLOG.md`, *An adapter puts a value
+the host sent into its next request*).
 
 **Resolution:**
 - Fix the host-side issue (token, permissions, namespace).

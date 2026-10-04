@@ -54,7 +54,7 @@ rows below it are the smaller residue that closing it exposed.
 | Three more channels can still write a file that will not reload | Session 267 closed the one this backlog had named, `--request-context`. Its review then found three siblings with the same defect: the `run` command's request file, a model's reply, and the interview's stakeholder and session ids can each carry half an emoji or a stray byte that is accepted, written with exit 0, and refused when the next step loads it. | **Operator call** per channel (reject or degrade; what `run` should exit with). The fixes are small once ruled. |
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
-| A repository host can still crash a GitHub run with text the adapter sends straight back to it | Found while closing the item above, by Session 281. That fix cleans what the two repository adapters hand to the rest of the program, but it cannot reach a value an adapter reads from one reply and puts in its next request. For GitHub that is the commit reference the host returns: a control character in it, or a broken half of a character (a "surrogate", which cannot be written out at all), makes the next request impossible to build, so the website command ends in a traceback and the pipeline saves a failed result, after the project already exists on the host. The project id and the branch are also sent in a path without being encoded (a nit: the host already holds the token). One sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it. | **Small**, no ruling: make the shared HTTP client turn a request it cannot build into the failure the adapters already handle. The wiki sentence is an operator call. |
+| A repository host can still crash a run with text the adapter sends straight back to it | Found while closing the item above, by Session 281. That fix cleans what the two repository adapters hand to the rest of the program, but it cannot reach a value an adapter reads from one reply and puts in its next request. A broken half of a character (a "surrogate", which cannot be written out at all) in any of those values (GitHub's commit references and ids, GitLab's group id), or a control character in the GitHub commit reference that goes into an address, makes the next request impossible to build, so the website command ends in a traceback and the pipeline saves a failed result, possibly after the project already exists on the host. The project id and the branch are also sent in an address without being encoded (a nit: the host already holds the token). One sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it. | **Small**, no ruling: make the shared HTTP client turn a request it cannot build into the failure the adapters already handle. The wiki sentence is an operator call. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
 | One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
@@ -522,38 +522,50 @@ Oracle or SQL Server.
    exception that is not a `RepoClientError`, which left no result and let `--resume` create a second project
    (**closed in Session 275**: the orchestrator saves a FAILED result for any exception, and for an interrupt); and a `RepoClient` that is neither adapter, though the registry-wide test goes red for a
    registered one whose protocol methods do not carry `scrubbed_errors`'s marker.
-8. **The repository host's success values, printed raw — CLOSED in Session 281** (`ab71441` and `24e6091`; tests
-   `d132f1e` and `71c5ff8`). *Found by Session 274's scouting workflow and measured there by one agent; Session 281
-   reproduced it first, through the real command and the real script against a socket.* The project address,
-   project id, default branch and commit id are the host's words, and went (1) to the website command's `Project:`
-   and `Commit:` lines and the script's `Project:` line raw (the command's `echo` strips a CSI sequence when stdout
-   is not a terminal, but an OSC title sequence, `ESC c`, a bell and the C1 controls passed; the script's `print`
-   passed everything), (2) into `RepoProjectResult.result.json` (pydantic escapes the C0 controls and writes DEL and
+8. **The repository host's success values, printed raw — CLOSED in Session 281** (`ab71441`, `24e6091`, and after the
+   review `1f205ea`, `2e759ae`; tests `d132f1e`, `71c5ff8`). *Found by Session 274's scouting workflow and measured there
+   by one agent; Session 281 reproduced it first, through the real command and the real script against a socket.* The
+   project address, project id, default branch and commit id are the host's words, and went (1) to the website
+   command's `Project:` and `Commit:` lines and the script's `Project:` line raw (the command's `echo` strips a CSI
+   sequence when stdout is not a terminal, but an OSC title sequence, `ESC c`, a bell and the C1 controls passed; the
+   script's `print` passed everything; the command's `-o` file is JSON with every non-ASCII character escaped, so it
+   was safe to `cat`), (2) into `RepoProjectResult.result.json` (pydantic escapes the C0 controls and writes DEL and
    every C1 control raw), (3) back out of that file on `--resume`, where `json.loads` turns the escapes into real
-   control characters again, and (4) for the id and the branch, into the next request's path, where a control
-   character made `httpx.InvalidURL` escape from `commit_files` (the website command ended in a traceback, after the
-   host had already made the project). A lone surrogate in the address or the sha made the graph's checkpointer
-   raise `TypeError` before anything was printed. **Fixed:** `create_project` and `commit_files` of both adapters
-   leave through `scrubbed_values` (`_host_text.py`), the return-side twin of `scrubbed_errors`: `scrub_host_text`
-   over the four values with the adapter's own token (each control character a space, one line, 1,000 characters
-   and a notice, a lone surrogate `?`), a new object each time, `files_committed` (the caller's own paths) left
-   alone, a `TypeError` for any other result type, and a registry-wide test that every registered host's adapter
-   carries the marker on every protocol method. `--resume` of a finished run scrubs the address it reads back, which
-   no adapter can reach. **Why the adapters, and not the three prints or the nodes:** the prints do not reach the
-   id, the branch or the saved file; the nodes are where every `RepoClient` funnels but hold no token, and Session
-   275's own fixture models a host that echoes it as the project id. **What it does not do:** (a) a `RepoClient`
-   that is not one of the two adapters is not scrubbed (the limit `scrubbed_errors` has; a test states it); (b)
-   nothing rewrites a checkpoint already on disk, which `cat` can still show DEL and C1 controls from (whether a
-   terminal acts on the UTF-8 form was not measured); (c) a cleaned id is a different string: a control code at the
-   end just disappears (`42` and a bell is `42`), one in the middle names no project and the commit fails as any
-   other does (retried three times), the project already made either way; (d) the cut and its notice apply to an
-   address and a sha as to any host text (pinned by a test; no real value is 1,000 characters); (e) a GitHub
-   commit sha that is not text now comes back as its text, where it was a pydantic error; (f) a value an adapter
-   reads and uses itself is not on what it returns: filed below as *An adapter puts a value the host sent into its
-   next request*. Held by `tests/agents/website/test_host_success_text.py` (every field, every kind of hostile text,
-   all three host sequences, the token, the registry), `test_host_success_end_to_end.py` (the real command and
-   script, `--resume`, an id with a control code, a token echoed as the id), `tests/scripts/test_run_pipeline_resume.py`
-   and `test_host_text.py`, and by a mutation check of 17 mutants of the fix, all caught.
+   control characters again, and (4) for the id and the branch, into the next request's path, where a C0 control or
+   DEL made `httpx.InvalidURL` escape from `commit_files` (the website command ended in a traceback, after the host had
+   already made the project; a C1 control is percent-encoded and sent). A lone surrogate in the address or the sha
+   made the graph's checkpointer raise `TypeError` before anything was printed. **Fixed:** `create_project` and
+   `commit_files` of both adapters leave through `scrubbed_values` (`_host_text.py`), the return-side twin of
+   `scrubbed_errors`: `scrub_host_text` over the four values with the adapter's own token (each control character a
+   space, one line, 1,000 characters and a notice, a lone surrogate U+FFFD), a new object each time, `files_committed`
+   (the caller's own paths) left alone, the secret read inside a guard (every field `<unprintable>` without one), a
+   `TypeError` for any other result type, and a registry-wide test that every registered host's adapter carries the
+   marker on every protocol method. `--resume` of a finished run scrubs the address it reads back, which no adapter can
+   reach, with room for the notice so an address the adapter cut prints as saved. **The review** (5 lenses, 2 skeptics
+   per finding, 37 agents) found no host text reaching a terminal from the shipped adapters; it found that the
+   surrogate's first replacement, `?`, started a query in a request path (a GitHub id with one then named the real
+   repository and crashed with `KeyError`; the fixture router had matched the raw target, `?` included, and now routes
+   on the path), a false count on `--resume` for a cut address, an unguarded secret read, and docs that overstated what
+   becomes of an id; all fixed. **Why the adapters, and not the three prints or the nodes:** the prints do not reach the
+   id, the branch or the saved file; the nodes are where every `RepoClient` funnels but hold no token, and Session 275's
+   crash-resume test modelled a host that echoes it as the project id (that case now lives in
+   `test_host_success_end_to_end.py`). **What it does not do:** (a) a `RepoClient` that is not one of the two adapters is
+   not scrubbed (the limit `scrubbed_errors` has; a test states it); (b) nothing rewrites a checkpoint already on disk,
+   which `cat` can still show DEL and C1 controls from (whether a terminal acts on the UTF-8 form was not measured), and
+   `--resume` does not remove a token from one, since it scrubs without the token; (c) a cleaned id is a different
+   string: a control code at an end just disappears (`42` and a bell is `42`, the real project), one inside names no
+   project and the commit fails as any other does (retried three times), and one made of nothing but control codes
+   becomes empty and is sent empty (a branch so becomes `""`, where a missing branch becomes `main`); the project is
+   already made in every case; (d) the cut and its notice apply to an address and a sha as to any host text (pinned by
+   a test; no real value is 1,000 characters); (e) a run of whitespace, a non-breaking space or a Unicode line
+   separator inside a value becomes one space, so a branch whose name holds one would be changed (git allows it; none
+   was seen); (f) a GitHub commit sha that is not text now comes back as its text, where it was a pydantic error; (g) a
+   value an adapter reads and uses itself is not on what it returns: filed below as *An adapter puts a value the host
+   sent into its next request*. Held by `tests/agents/website/test_host_success_text.py` (every field, every kind of
+   hostile text, all three host sequences, the token, the registry), `test_host_success_end_to_end.py` (the real
+   command and script, the round trip through `--resume`, an id with a control code, a token echoed as the id),
+   `tests/scripts/test_run_pipeline_resume.py` (the resume print's own scrub, its fallback and its room) and
+   `test_host_text.py`, and by a mutation check of 21 mutants of the fix and the review's fixes, all caught.
 9. **`DataAgent.run` could still raise: the report was assembled outside its `try` — CLOSED in Session 280.** *Found by
    Session 279's review (a probe by one lens; two skeptics reproduced it, one calling it a nit and one low).* Only
    `self._app.invoke` was guarded. `_assemble_complete_report` builds `PrimaryQuery` objects whose
@@ -583,21 +595,24 @@ operator call; 1 and 4 are nits. (Routes 7, 5, 9 and 8 closed in Sessions 274, 2
 
 ### An adapter puts a value the host sent into its next request, and the request cannot be built
 
-**Found by Session 281's scouting while closing route 8; reproduced over a real socket in that session; not caused by
-it.** Route 8's scrub is on what `create_project` and `commit_files` RETURN, so it cannot reach a value an adapter
-reads and uses itself. The first two leave the adapter as an exception that is not a `RepoClientError`, so
-`scrubbed_errors` passes them: the website command ends in a traceback, the pipeline saves `FAILED`
-`unexpected_error: InvalidURL` (Session 275's net), and the project already exists on the host.
+**Found by Session 281's scouting and review while closing route 8; reproduced over a real socket in that session; not
+caused by it.** Route 8's scrub is on what `create_project` and `commit_files` RETURN, so it cannot reach a value an
+adapter reads from one reply and sends in its next request. Each case below leaves the adapter as an exception that is
+not a `RepoClientError`, so `scrubbed_errors` passes it: the website command ends in a traceback, the pipeline saves
+`FAILED` `unexpected_error: <Class>` (Session 275's net), and the project may already exist on the host.
 
-1. **GitHub's `parent_sha`** (`github_adapter.py:204`, used at `:208` in `/repos/{id}/git/commits/{parent_sha}`): an
-   ESC in the reference reply raises `httpx.InvalidURL`, a lone surrogate `UnicodeEncodeError` (both measured).
-2. **GitHub's commit sha** (`:253`, sent back at `:258` in a JSON body): a lone surrogate raises `UnicodeEncodeError`
-   before the scrub, which is on the return value, can see it. Held as an expected failure by four
-   `xfail(strict=True)` cases in `test_host_success_text.py` (`GITHUB_REUSES_THE_SHA`), which go red when this is fixed.
-3. **The id and the branch go into paths unquoted** (`gitlab_adapter.py:145,162`; `github_adapter.py:190,200,257`; the
-   namespace is quoted, at `gitlab_adapter.py:99`): `/`, `?`, `#` and `..` survive any scrub (an id of `1/../../x` is
-   normalised by `httpx` to `/api/v4/x`, measured at the `httpx` level by Session 281's scouting). The host already
-   holds the token, so this is no new capability: a nit.
+1. **A C0 control or DEL in GitHub's `parent_sha`** (`github_adapter.py:204`, read from the reference reply, used at
+   `:208` in `/repos/{id}/git/commits/{parent_sha}`): `httpx.InvalidURL`.
+2. **A lone surrogate in any value sent back** raises `UnicodeEncodeError` (`httpx` 0.28 writes a JSON body as UTF-8;
+   0.27, which `pyproject.toml` admits, escapes it): GitHub's `parent_sha` (in a path), its base-tree sha (`:213`), each
+   blob sha (`:226`), the new tree sha (`:239`) and the commit sha (`:253`, sent at `:258`), all in JSON bodies; and
+   GitLab's group id (`gitlab_adapter.py:105`, sent at `:113` as `namespace_id` in the create-project body). An ESC in those
+   bodies is escaped and harmless. Only the commit sha is held by a test: four `xfail(strict=True)` cases in
+   `test_host_success_text.py` (`GITHUB_REUSES_THE_SHA`), which go red when this is fixed.
+3. **The id and the branch go into paths unquoted** (`gitlab_adapter.py:145,162`; `github_adapter.py:190,200,208,220,
+   233,243,257`; the namespace is quoted, at `gitlab_adapter.py:99`): `/`, `?`, `#` and `..` survive any scrub (an id of
+   `1/../../x` is normalised by `httpx` to `/api/v4/x`, measured at the `httpx` level by Session 281's scouting). The host
+   already holds the token, so this is no new capability: a nit.
 4. **A wiki sentence is now imprecise:** `docs/wiki/model_project_constructor/Extending-the-Pipeline.md:106` says the id
    is host-opaque and callers pass it back unchanged; the adapters hand back a scrubbed id (identical for every real
    one). **Not edited, because any commit that touches `docs/wiki/` publishes it.** An operator call, with the two

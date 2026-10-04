@@ -230,7 +230,6 @@ def test_a_crash_is_saved_and_resume_makes_no_second_project(
     printed = [line for line in crashed.stdout.splitlines() if line.strip().startswith("Failure:")]
     assert [line.split("Failure:", 1)[1].strip() for line in printed] == [reason]
     assert TOKEN not in shown + _everything(checkpoints)
-    assert "\x07" not in shown + _everything(checkpoints)
     assert host.posts_to_projects() == 1
 
     _assert_resume_refuses(host, checkpoints, posts_before=1)

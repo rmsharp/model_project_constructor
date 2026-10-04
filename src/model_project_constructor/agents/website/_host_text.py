@@ -69,7 +69,7 @@ REDACTED = "***"
 #: What replaces a lone surrogate: U+FFFD, the Unicode replacement character. Not ``?``, which in a
 #: value that goes back into a request path (a project id, a branch) starts a query, so the path
 #: named the real project and the rest of it became the query string (Session 281's review).
-REPLACEMENT = "�"
+REPLACEMENT = "\ufffd"
 
 _LONE_SURROGATES = re.compile("[\ud800-\udfff]")
 
