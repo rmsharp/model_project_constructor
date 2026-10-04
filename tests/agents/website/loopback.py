@@ -178,3 +178,24 @@ def echo_the_api_key_in_a_400(request: bytes) -> bytes:
         f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
     )
     return reply.encode() + body
+
+
+def message(text: str) -> bytes:
+    """A valid Messages API reply whose one text block is ``text``. For ``serving_raw``."""
+    body = json.dumps(
+        {
+            "id": "msg_test",
+            "type": "message",
+            "role": "assistant",
+            "model": "test-model",
+            "content": [{"type": "text", "text": text}],
+            "stop_reason": "end_turn",
+            "stop_sequence": None,
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        }
+    ).encode()
+    head = (
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+        f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
+    )
+    return head.encode() + body

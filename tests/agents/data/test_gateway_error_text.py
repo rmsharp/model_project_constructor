@@ -29,30 +29,9 @@ from model_project_constructor.agents.data.llm import (
     SummaryResult,
 )
 from model_project_constructor.schemas.v1.data import DataRequest, Datasheet
-from tests.agents.website.loopback import echo_the_api_key_in_a_400, serving_raw
+from tests.agents.website.loopback import echo_the_api_key_in_a_400, message, serving_raw
 
 KEY = "sk-ant-BASELINELEAK0123456789abcdef"
-
-
-def _message(text: str) -> bytes:
-    """A valid Messages API reply whose one text block is ``text``."""
-    body = json.dumps(
-        {
-            "id": "msg_test",
-            "type": "message",
-            "role": "assistant",
-            "model": "test-model",
-            "content": [{"type": "text", "text": text}],
-            "stop_reason": "end_turn",
-            "stop_sequence": None,
-            "usage": {"input_tokens": 1, "output_tokens": 1},
-        }
-    ).encode()
-    head = (
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
-        f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n"
-    )
-    return head.encode() + body
 
 
 @pytest.fixture
@@ -97,7 +76,7 @@ def gateway_reply(
             return echo_the_api_key_in_a_400(request)
         for marker, answer in answers:
             if marker in prompt:
-                return _message(json.dumps(answer))
+                return message(json.dumps(answer))
         raise AssertionError(f"the gateway has no answer for this question: {prompt[-200:]}")
 
     return reply
