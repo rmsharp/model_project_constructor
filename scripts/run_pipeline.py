@@ -94,6 +94,7 @@ from model_project_constructor.orchestrator.config import (  # noqa: E402
     REPO_PLATFORMS,
     validate_namespace,
 )
+from model_project_constructor.orchestrator.logging import _class_name  # noqa: E402
 from model_project_constructor.schemas.v1.data import DataReport  # noqa: E402
 from model_project_constructor.schemas.v1.intake import IntakeReport  # noqa: E402
 from model_project_constructor.schemas.v1.repo import RepoTarget  # noqa: E402
@@ -190,7 +191,15 @@ def _draft_incomplete_from_exception(
     ``IntakeAgent.run_scripted`` (exhausted script, max-turn overflow,
     Anthropic SDK error, pydantic validation failure) into a typed report
     that the orchestrator can halt on with FAILED_AT_INTAKE instead of
-    crashing the script. Reason code is the exception's class name.
+    crashing the script. Reason code is the exception's class name and
+    nothing the exception said: a model client or a gateway can quote the
+    request headers, and so the API key, in its message, and this string is
+    copied into ``failure_reason``, printed as ``Failure: ...`` and saved in
+    ``IntakeReport.json``. ``_class_name`` is the run log's fail-closed rule: a
+    name that is not a short ASCII identifier is replaced, and reading it cannot
+    raise, which matters here because this runs inside an ``except`` block. (The
+    website stage keeps a looser copy that reads the name unguarded; the
+    ``BACKLOG.md`` item on ``_website_failure`` files it.)
     """
     from datetime import UTC, datetime
 
@@ -200,10 +209,10 @@ def _draft_incomplete_from_exception(
         ModelSolution,
     )
 
-    reason = type(exc).__name__
+    reason = _class_name(exc)
     return IntakeReport(
         status="DRAFT_INCOMPLETE",
-        missing_fields=[f"interview_aborted: {reason}: {exc}"],
+        missing_fields=[f"interview_aborted: {reason}"],
         business_problem="(unavailable — interview aborted before draft)",
         proposed_solution="(unavailable — interview aborted before draft)",
         model_solution=ModelSolution(

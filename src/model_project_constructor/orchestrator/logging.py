@@ -64,6 +64,10 @@ def _class_name(error: BaseException) -> str:
     ``orchestrator.pipeline._website_failure`` applies to the reason it saves; a test holds the
     two in step for every ordinary class.
 
+    It has a second caller, ``scripts/run_pipeline.py::_draft_incomplete_from_exception``, which
+    names the scripted intake's failure in the report it saves and the line it prints; moving or
+    renaming this function breaks that import.
+
     It fails closed, and is stricter than that copy in one respect. The wrapper reads the name for
     an exception it is about to re-raise, so reading it must not be a raise site: a metaclass whose
     ``__name__`` raises would otherwise replace the runner's exception. And the name must be an

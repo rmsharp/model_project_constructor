@@ -48,19 +48,126 @@ def test_draft_incomplete_from_runtime_error_is_valid_report(run_pipeline_module
     assert report.estimated_value.confidence == "low"
 
 
-def test_draft_incomplete_from_arbitrary_exception(run_pipeline_module):
-    class _FakeRateLimit(Exception):
-        pass
+SECRET = "sk-ant-NOTFORTHESCREEN0123456789"
 
-    exc = _FakeRateLimit("429 too many requests")
-    report = run_pipeline_module._draft_incomplete_from_exception(
+
+def _draft(run_pipeline_module, exc: BaseException):
+    return run_pipeline_module._draft_incomplete_from_exception(
         exc=exc,
         stakeholder_id="sh",
         session_id="s",
     )
+
+
+def test_draft_incomplete_names_the_class_and_not_what_the_exception_said(
+    run_pipeline_module,
+):
+    """The reason is copied into ``failure_reason``, printed as ``Failure: ...`` and saved in
+    ``IntakeReport.json``; a gateway's error can quote the request headers, so the message stays
+    out of it (``test_run_pipeline_intake_error_text.py`` drives the same thing through the real
+    script)."""
+
+    class _FakeRateLimit(Exception):
+        pass
+
+    report = _draft(
+        run_pipeline_module,
+        _FakeRateLimit(f"429 too many requests (x-api-key: {SECRET})"),
+    )
     assert report.status == "DRAFT_INCOMPLETE"
-    assert "_FakeRateLimit" in report.missing_fields[0]
-    assert "429 too many requests" in report.missing_fields[0]
+    assert report.missing_fields == ["interview_aborted: _FakeRateLimit"]
+    dumped = report.model_dump_json()
+    assert SECRET not in dumped
+    # Words, not digits: the dump carries ``created_at`` to the microsecond, and six digits of
+    # time contain "429" about once in 300 runs.
+    assert "too many requests" not in dumped
+
+
+class _CannotBePrinted(Exception):
+    """An exception that fails when anything asks it for its text."""
+
+    def __str__(self) -> str:
+        raise AssertionError("the adapter read the exception's message")
+
+    def __repr__(self) -> str:
+        raise AssertionError("the adapter read the exception's repr")
+
+
+def test_draft_incomplete_never_asks_the_exception_for_its_text(run_pipeline_module):
+    report = _draft(run_pipeline_module, _CannotBePrinted(SECRET))
+    assert report.missing_fields == ["interview_aborted: _CannotBePrinted"]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("has a space", id="space"),
+        pytest.param("bell\x07", id="control-character"),
+        pytest.param(f"\x1b[2J{SECRET}", id="escape-sequence-and-secret"),
+        pytest.param("café", id="non-ascii"),
+        pytest.param("1leading_digit", id="not-an-identifier"),
+        pytest.param("E" * 101, id="one-hundred-and-one-characters"),
+    ],
+)
+def test_draft_incomplete_replaces_a_class_name_that_is_not_a_short_identifier(
+    run_pipeline_module, name
+):
+    """A class built at run time can be named anything; the name is code's to choose, not the
+    host's, but a name that is not a plain identifier is replaced rather than carried."""
+    report = _draft(run_pipeline_module, type(name, (Exception,), {})(SECRET))
+    assert report.missing_fields == ["interview_aborted: <unprintable>"]
+    assert SECRET not in report.model_dump_json()
+
+
+def test_draft_incomplete_carries_the_longest_name_it_allows(run_pipeline_module):
+    report = _draft(run_pipeline_module, type("E" * 100, (Exception,), {})())
+    assert report.missing_fields == [f"interview_aborted: {'E' * 100}"]
+
+
+class _NameThatRaises(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        raise RuntimeError("the class name cannot be read")
+
+
+class _HostileText(str):
+    """A ``str`` that answers the class-name guard's questions as a plain identifier would."""
+
+    def isascii(self) -> bool:
+        return True
+
+    def isidentifier(self) -> bool:
+        return True
+
+    def __len__(self) -> int:
+        return 5
+
+
+class _NameThatIsAHostileStr(type):
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        return _HostileText(f"\x1b[2J{SECRET}")
+
+
+def test_draft_incomplete_survives_a_class_whose_name_cannot_be_read(run_pipeline_module):
+    """Building the report is the ``except`` block's work, so reading the name must not raise:
+    a raise here would replace the intake failure with a crash and save nothing."""
+
+    class Odd(Exception, metaclass=_NameThatRaises):
+        pass
+
+    report = _draft(run_pipeline_module, Odd(SECRET))
+    assert report.missing_fields == ["interview_aborted: <unprintable>"]
+
+
+def test_draft_incomplete_replaces_a_name_that_is_a_str_subclass(run_pipeline_module):
+    class Odd(Exception, metaclass=_NameThatIsAHostileStr):
+        pass
+
+    report = _draft(run_pipeline_module, Odd(SECRET))
+    assert report.missing_fields == ["interview_aborted: <unprintable>"]
+    assert SECRET not in report.model_dump_json()
 
 
 def test_build_intake_runner_catches_runtime_error(run_pipeline_module, monkeypatch):
@@ -104,7 +211,7 @@ def test_build_intake_runner_catches_runtime_error(run_pipeline_module, monkeypa
     assert report.status == "DRAFT_INCOMPLETE"
     assert report.stakeholder_id == "b2_failmode_sh"
     assert report.session_id == "b2_failmode_session"
-    assert "RuntimeError" in report.missing_fields[0]
+    assert report.missing_fields == ["interview_aborted: RuntimeError"]
 
 
 def test_build_intake_runner_none_mode_uses_fixture(run_pipeline_module):
