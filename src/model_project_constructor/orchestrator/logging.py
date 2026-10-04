@@ -68,6 +68,10 @@ def _class_name(error: BaseException) -> str:
     names the scripted intake's failure in the report it saves and the line it prints; moving or
     renaming this function breaks that import.
 
+    The standalone data agent keeps a copy of the rule, ``db.safe_class_name``, because it cannot
+    import this module; ``tests/data_agent_package/test_db.py`` holds the two in step, so a change
+    to the rule here changes it there.
+
     It fails closed, and is stricter than that copy in one respect. The wrapper reads the name for
     an exception it is about to re-raise, so reading it must not be a raise site: a metaclass whose
     ``__name__`` raises would otherwise replace the runner's exception. And the name must be an

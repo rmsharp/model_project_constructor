@@ -98,7 +98,7 @@ def gateway_reply(
         for marker, answer in answers:
             if marker in prompt:
                 return _message(json.dumps(answer))
-        raise AssertionError(f"the gateway has no answer for this question: {prompt[:200]}")
+        raise AssertionError(f"the gateway has no answer for this question: {prompt[-200:]}")
 
     return reply
 

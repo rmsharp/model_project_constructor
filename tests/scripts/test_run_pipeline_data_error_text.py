@@ -13,7 +13,8 @@ seen it.
 
 The test drives the real script as a subprocess with the SDK pointed at a loopback gateway, and
 looks for the key on the screen and in every file the run wrote, wherever it wrote them (the
-subprocess runs in an empty directory and the checkpoint directory is inside it).
+subprocess runs in an empty directory, the checkpoint directory is its sibling, and the search
+covers everything under the test's temporary directory).
 ``tests/agents/data/test_data_agent.py`` holds the agent's own contract without the socket, and
 ``test_run_pipeline_intake_error_text.py`` pins that the SDK quotes the reply in its exception,
 which is the premise of this one.
