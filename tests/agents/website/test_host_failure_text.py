@@ -410,3 +410,32 @@ def test_the_adapters_read_a_response_body_only_through_response_text(module: ob
         if isinstance(node, ast.Attribute) and node.attr in {"text", "content"}
     ]
     assert direct == []
+
+
+@pytest.mark.parametrize(
+    "module", [gitlab_adapter_module, github_adapter], ids=["gitlab", "github"]
+)
+def test_the_adapters_parse_a_response_body_only_through_reply_json(module: object) -> None:
+    """``response.json()`` raises ``RecursionError`` for a body nested about 10,000 levels deep
+    (CPython 3.11 to 3.13), which an ``except ValueError`` does not catch, and a body that parses
+    can still be too deep to write into the next request; ``reply_json`` turns both into the
+    ``ValueError`` the adapters already handle. A direct ``.json()`` added later would reopen the
+    crash (the name conflict check, which reads a 4xx body, had its own copy of the call). The
+    ``json=`` keyword of a request is not an attribute access and is not matched."""
+    tree = ast.parse(inspect.getsource(module))  # type: ignore[arg-type]
+    direct = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Attribute) and node.attr == "json"
+    ]
+    assert direct == []
+    calls = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "reply_json"
+    ]
+    # The two readers in each adapter (``_parse_json`` and ``_is_name_conflict``): a count, so that
+    # deleting one reader outright is not what makes this pass.
+    assert len(calls) == 2, calls
