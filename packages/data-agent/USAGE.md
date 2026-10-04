@@ -70,7 +70,12 @@ Options:
 
 The CLI exits 0 on success and writes the `DataReport` as indented JSON to the
 path given by `--output`. The terminal prints a single confirmation line with
-the report's `status`.
+the report's `status`. **It exits 0 whatever that status is**, `EXECUTION_FAILED`
+included (a crash of the graph and, since Session 280, a failure to build the
+report both write a report and exit 0; the second used to end in a traceback and
+exit 1), so a script that chains on the CLI's exit code must read `status` from the
+file. Whether `run` should exit non-zero for a failed report is the open question in
+`BACKLOG.md`'s item on a bad `--db-url`.
 
 ### Writing a password in the address
 
@@ -512,11 +517,12 @@ curated-producer example.
   `summary` reads `Data Agent run failed: graph crashed: <ExceptionClass>` and
   that is the only `data_quality_concerns` entry; a reply the report could not be
   built from reads `Data Agent run failed: report assembly failed:
-  <ExceptionClass>` the same way (`ValidationError` for an
+  <ExceptionClass>` the same way (with the shipped clients, `ValidationError` for an
   `expected_row_count_order` outside `tens`, `hundreds`, `thousands` and `millions`
-  or a field of the wrong type, `ValueError` for fewer quality-check groups than
-  queries), and its message quotes the model's reply, which is why it is not
-  carried; a baseline query the LLM
+  and `ValueError` for a number of quality-check groups different from the number of
+  queries; a custom `LLMClient` can also give a `ValidationError` for a field of the
+  wrong type, a `TypeError` or a `KeyError`). A pydantic message quotes the model's
+  reply, which is why none is carried; a baseline query the LLM
   client fails to generate is the baseline's `caveats` entry
   `LLM baseline-query generation failed: <ExceptionClass>` (the report stays
   `COMPLETE`). An exception raised by the LLM client carries a gateway's reply or
@@ -531,7 +537,11 @@ curated-producer example.
   handler: the exception reaches them with its traceback. For a `report assembly
   failed:` the graph itself succeeds: call the private
   `agent._assemble_complete_report(request, final_state)` on its result, and the
-  exception reaches them there, naming the field.
+  exception reaches them there (a `ValidationError` names the field; a `ValueError`
+  names the `zip` that found the counts different). That invokes the graph again, so
+  the model is called again and may answer differently, and a call that returns a
+  report did not reproduce the failure; assign the result, because a bare call in a
+  REPL echoes the state, which holds the model's reply.
 - `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
   error text — with any URL password masked (best-effort), on one line and with

@@ -117,8 +117,9 @@ chained to its own failure, and `logging` prints that chain).
 
 The wrapper re-raises the exception unchanged, so for an intake or data
 crash that escapes its agent the code that called the pipeline can print or
-scrub it with what that code knows. (A crash inside the Data Agent's graph does
-not escape: `DataAgent.run` saves it as a report that names the class,
+scrub it with what that code knows. (A crash inside the Data Agent's graph, or while it builds its report, does
+not escape: `DataAgent.run` saves it as a report that names the class, so the
+runner logs `agent.end` at `INFO` with `status=EXECUTION_FAILED` and no `agent.error`,
 `TROUBLESHOOTING.md` §FAILED_AT_DATA.) **A website-stage crash is different:** `run_pipeline`
 catches it and saves a FAILED result that names the class and nothing it
 said (`TROUBLESHOOTING.md`, `unexpected_error:`), so that text is recorded
@@ -328,7 +329,7 @@ from before this change can still hold it (`TROUBLESHOOTING.md`
 The data stage follows the same rule. An exception that escapes the Data
 Agent's graph is saved in `DataReport.json` as `graph crashed:
 <ExceptionClass>`, one raised while the report is built from the model's replies
-(a value outside the row-count vocabulary, too few quality-check groups) as
+(a value outside the row-count vocabulary, a different number of quality-check groups) as
 `report assembly failed: <ExceptionClass>`, and a baseline query the model client
 could not generate as `LLM baseline-query generation failed: <ExceptionClass>` in
 the baseline's `caveats`; none carries the message (`TROUBLESHOOTING.md` §FAILED_AT_DATA

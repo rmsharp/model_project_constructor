@@ -66,10 +66,11 @@ class DataAgent:
             return _assemble_complete_report(request, final_state)
         except Exception as e:
             # The report is built from the model's replies, so a value outside the
-            # vocabulary (``PrimaryQuery``'s ``Literal``), fewer quality-check groups than
-            # queries (``zip(strict=True)``) or a field of the wrong type (``DataReport``)
-            # raises here, after the graph has finished. Same rule as above: the class and
-            # never the text, because pydantic's message quotes the reply it refused.
+            # vocabulary (``PrimaryQuery``'s ``Literal``) or a different number of
+            # quality-check groups than queries (``zip(strict=True)``) raises here, after the
+            # graph has finished, and a custom ``LLMClient`` can add a field of the wrong type
+            # (``DataReport``). Same rule as above: the class and never the text, because
+            # pydantic's message quotes the reply it refused.
             return _execution_failed_report(
                 request, f"report assembly failed: {safe_class_name(e)}"
             )

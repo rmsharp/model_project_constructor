@@ -31,7 +31,10 @@ Regardless of which stage failed, start here:
    `context` dict includes `error_type` (the exception's class name) and
    `duration_ms`. It does not include what the exception said: that text
    can carry a host's reply or a token, so it is never logged (see
-   `OPERATIONS.md` §3.1). For the text, see the traceback the caller's
+   `OPERATIONS.md` §3.1). A failed data stage is not an `agent.error`: the
+   Data Agent returns a report, so the runner logs `agent.end` at `INFO` with
+   `status=EXECUTION_FAILED`, and the class is in `DataReport.json`'s `summary`
+   (§FAILED_AT_DATA). For the text, see the traceback the caller's
    own error handler prints (an intake or data crash that escapes its
    agent reaches it), or, for a failure an agent reported itself (a
    `FAILED_AT_*` status), the `failure_reason` it saved. A website-stage
@@ -164,12 +167,14 @@ for q in report.primary_queries:
 - `EXECUTION_FAILED` with `Data Agent run failed: report assembly failed:
   <ExceptionClass>` in `report.summary` (and as the only `data_quality_concerns`
   entry): the graph ran to its end and the report could not be built from what the
-  model returned. `ValidationError` is a reply whose `expected_row_count_order` is
-  not one of `tens`, `hundreds`, `thousands` or `millions`, or a field of the wrong
-  type; `ValueError` is fewer quality-check groups than queries. A pydantic message
-  quotes the reply it refused, so the report names the class only, and so the cause
-  is not in the report: read it as shown under **Reading a `report assembly failed:`
-  message** below. Before Session 280 this raised out of `DataAgent.run` instead (measured
+  model returned. With the shipped clients `ValidationError` is a reply whose
+  `expected_row_count_order` is not one of `tens`, `hundreds`, `thousands` or
+  `millions`, and `ValueError` is a number of quality-check groups different from the
+  number of queries (they coerce every other field to text). A custom `LLMClient` can
+  also give a `ValidationError` (a field of the wrong type), a `TypeError` or a
+  `KeyError`. A pydantic message quotes the reply it refused, so the report names the
+  class only, and so the cause is not in the report: read it as shown under **Reading
+  a `report assembly failed:` message** below. Before Session 280 this raised out of `DataAgent.run` instead (measured
   through the script): exit 1 with a traceback on stderr that quoted the reply, no status
   line, and no `DataReport.json` in the checkpoint directory; a library caller got the
   same exception. The report does not say which step of the build failed, and neither
@@ -195,11 +200,14 @@ build_graph(llm, None).invoke({"request": request, "sql_retry_count": 0, "db_exe
 ```
 
 **Reading a `report assembly failed:` message.** The graph succeeds in this case, so the
-recipe above prints nothing. Keep its result and build the report from it yourself; the
-exception reaches you with its traceback, which names the field. `_assemble_complete_report`
-is a private function and may be renamed. The message quotes the model's reply: do not paste
-it. (Run with a stand-in client in Session 280: `ValidationError ... expected_row_count_order
-... Input should be 'tens', 'hundreds', 'thousands' or 'millions'`.)
+recipe above returns a state instead of raising. Keep it, assigned (a bare call in a REPL or
+notebook echoes the state, which holds the model's reply), and build the report from it
+yourself; the exception reaches you with its traceback. A `ValidationError` names the field
+and quotes the model's reply, so do not paste it; a `ValueError` names the `zip` that found
+the counts different. This calls the model again and it may answer differently: a call that
+returns a report did not reproduce the failure. `_assemble_complete_report` is a private
+function and may be renamed. (Run with a stand-in client in Session 280: `ValidationError ...
+expected_row_count_order ... Input should be 'tens', 'hundreds', 'thousands' or 'millions'`.)
 
 ```python
 from model_project_constructor_data_agent.agent import _assemble_complete_report
