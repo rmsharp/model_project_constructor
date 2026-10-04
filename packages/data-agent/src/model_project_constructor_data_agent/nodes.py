@@ -32,7 +32,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Literal
 
-from model_project_constructor_data_agent.db import DBConnectionError, ReadOnlyDB, safe_message
+from model_project_constructor_data_agent.db import (
+    DBConnectionError,
+    ReadOnlyDB,
+    safe_class_name,
+    safe_message,
+)
 from model_project_constructor_data_agent.llm import LLMClient
 from model_project_constructor_data_agent.schemas import BaselineSnapshot, QualityCheck
 from model_project_constructor_data_agent.sql_validation import validate_sql
@@ -201,6 +206,8 @@ def make_baseline_collection(
                 measurement_window=measurement_window,
             )
         except Exception as e:
+            # The class, never the text (see ``DataAgent.run``): this caveat is written
+            # into the report and into the generated project's markdown.
             return {
                 "baseline_snapshot": BaselineSnapshot(
                     metric_name=metric_name,
@@ -208,7 +215,7 @@ def make_baseline_collection(
                     measurement_unit="unknown",
                     query_sql="",
                     query_execution_status="FAILED",
-                    caveats=[f"LLM baseline-query generation failed: {e}"],
+                    caveats=[f"LLM baseline-query generation failed: {safe_class_name(e)}"],
                 )
             }
 

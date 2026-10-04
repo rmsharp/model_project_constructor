@@ -23,6 +23,7 @@ from model_project_constructor.agents.data.llm import (
     SummaryResult,
 )
 from model_project_constructor.schemas.v1.data import (
+    DataReport,
     DataRequest,
     Datasheet,
     DataSourceInventory,
@@ -387,8 +388,11 @@ def test_unexpected_exception_surfaces_as_execution_failed(
 
     report = agent.run(sample_request)
 
+    # The class and not the message: see "Session 279" at the end of this file.
     assert report.status == "EXECUTION_FAILED"
-    assert "simulated internal crash" in report.summary
+    assert report.summary == "Data Agent run failed: graph crashed: RuntimeError"
+    assert report.data_quality_concerns == ["graph crashed: RuntimeError"]
+    assert "simulated internal crash" not in report.model_dump_json()
 
 
 def test_inventory_entries_used_plumbed_end_to_end(
@@ -685,10 +689,11 @@ def test_baseline_collection_failed_on_llm_error(
     assert report.baseline_snapshot.query_execution_status == "FAILED"
     assert report.baseline_snapshot.value is None
     assert report.baseline_snapshot.query_sql == ""
-    assert any(
-        "simulated baseline LLM crash" in c
-        for c in report.baseline_snapshot.caveats
-    )
+    # The class and not the message: see "Session 279" at the end of this file.
+    assert report.baseline_snapshot.caveats == [
+        "LLM baseline-query generation failed: RuntimeError"
+    ]
+    assert "simulated baseline LLM crash" not in report.model_dump_json()
 
 
 # ---------------------------------------------------------------------------
@@ -1200,3 +1205,236 @@ def test_the_unreachable_database_concern_carries_no_part_of_a_password_in_the_a
     assert "127.0.0.1" in concern
     assert leaked_run(password, concern) is None
     assert leaked_run(password, report.model_dump_json()) is None
+
+
+# ---------------------------------------------------------------------------
+# Session 279 — a crash's text never reaches the report; its class does.
+#
+# ``BACKLOG.md``, *Exception text that is not the database's*: ``agent.py`` wrote
+# ``f"graph crashed: {e}"`` into ``summary`` and ``data_quality_concerns``, and ``nodes.py``
+# wrote ``f"LLM baseline-query generation failed: {e}"`` into the baseline's ``caveats``.
+# Both are the text of whatever the LLM client raised: an SDK ``APIError`` carries the
+# gateway's reply, which a proxy that echoes request headers fills with the API key, and
+# opencode's error events carry upstream text. The report is written to ``DataReport.json``
+# and into a committed project's markdown, so the key was published. ``safe_message`` masks
+# the ``x-api-key: <key>`` shape and leaves a bare ``sk-ant-`` token, so the fix is the class
+# name, as the scripted intake runner's was in Session 278 (``db.safe_class_name``).
+#
+# Each site is its own call, so each has its own tests: a site that goes back to ``{e}`` (or to
+# a bare ``type(e).__name__``) leaves the other site's tests green.
+# ---------------------------------------------------------------------------
+
+GATEWAY_KEY = "sk-ant-DATALEAK0123456789abcdef"
+
+
+def _hostile_text() -> str:
+    """What a gateway or a driver can put in an exception: the key twice (as a header echo and
+    bare), a password, every control character, a newline and a markdown fence."""
+    return (
+        f"Error code: 400 - rejected the request (x-api-key: {GATEWAY_KEY}) "
+        f"bare {GATEWAY_KEY} password={SECRET}{EVERY_CONTROL}\nline two ```"
+    )
+
+
+class _CannotBePrinted(Exception):
+    """An exception that fails when anything asks it for its text."""
+
+    def __str__(self) -> str:
+        raise AssertionError("the agent read the exception's message")
+
+    def __repr__(self) -> str:
+        raise AssertionError("the agent read the exception's repr")
+
+
+@dataclass
+class _RaisesWhileGeneratingQueries(FakeLLMClient):
+    error: BaseException = field(default_factory=lambda: RuntimeError("unset"))
+
+    def generate_primary_queries(
+        self,
+        request: DataRequest,
+        previous_error: str | None = None,
+        *,
+        data_source_inventory: DataSourceInventory | None = None,
+    ) -> list[PrimaryQuerySpec]:
+        raise self.error
+
+
+@dataclass
+class _RaisesWhileGeneratingTheBaseline(FakeLLMClient):
+    error: BaseException = field(default_factory=lambda: RuntimeError("unset"))
+
+    def generate_baseline_query(
+        self,
+        request: DataRequest,
+        metric_name: str,
+        metric_definition: str,
+        measurement_window: str,
+    ) -> BaselineQuerySpec:
+        raise self.error
+
+
+def _crash_report(
+    site: str,
+    error: BaseException,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> DataReport:
+    """The report of an agent whose LLM raises ``error`` at ``site`` ("graph" or "baseline")."""
+    common = {
+        "primary_queries_sequence": [[primary_query_spec_valid]],
+        "qc_response": [qc_specs_valid],
+        "summary_response": summary_response,
+        "datasheet_response": datasheet_response,
+    }
+    if site == "graph":
+        return DataAgent(
+            llm=_RaisesWhileGeneratingQueries(**common, error=error), db=None
+        ).run(sample_request)
+    return DataAgent(
+        llm=_RaisesWhileGeneratingTheBaseline(**common, error=error), db=None
+    ).run(_request_with_baseline(sample_request))
+
+
+def _every_string(report: DataReport) -> list[str]:
+    """Every string the report holds, once decoded (JSON escapes a control as ``\\u001b``)."""
+    import json
+
+    strings: list[str] = []
+
+    def _collect(value: object) -> None:
+        if isinstance(value, str):
+            strings.append(value)
+        elif isinstance(value, dict):
+            for item in value.values():
+                _collect(item)
+        elif isinstance(value, list):
+            for item in value:
+                _collect(item)
+
+    _collect(json.loads(report.model_dump_json()))
+    return strings
+
+
+def _own_text(site: str, report: DataReport) -> str:
+    """The text this site wrote: the failure's reason, or the baseline's caveat."""
+    if site == "graph":
+        assert report.status == "EXECUTION_FAILED"
+        (concern,) = report.data_quality_concerns
+        assert report.summary == f"Data Agent run failed: {concern}"
+        return concern
+    assert report.status == "COMPLETE"
+    assert report.baseline_snapshot is not None
+    assert report.baseline_snapshot.query_execution_status == "FAILED"
+    (caveat,) = report.baseline_snapshot.caveats
+    return caveat
+
+
+SITES = pytest.mark.parametrize(
+    ("site", "prefix"),
+    [
+        pytest.param("graph", "graph crashed: ", id="agent.py-graph-crashed"),
+        pytest.param(
+            "baseline", "LLM baseline-query generation failed: ", id="nodes.py-baseline"
+        ),
+    ],
+)
+
+
+@SITES
+def test_a_crash_names_its_class_and_none_of_what_it_said(
+    site: str,
+    prefix: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    class GatewayRejected(Exception):
+        pass
+
+    report = _crash_report(
+        site,
+        GatewayRejected(_hostile_text()),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert _own_text(site, report) == f"{prefix}GatewayRejected"
+    everything = "\n".join(_every_string(report))
+    assert GATEWAY_KEY not in everything
+    assert "x-api-key" not in everything
+    assert SECRET not in everything
+    assert "line two" not in everything
+    assert [s for s in _every_string(report) if unsafe(s.replace("\n", " "))] == []
+    # The file the pipeline saves is this same dump.
+    assert GATEWAY_KEY not in report.model_dump_json()
+
+
+@SITES
+def test_a_crash_that_cannot_be_printed_still_returns_a_report(
+    site: str,
+    prefix: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """``DataAgent.run`` is documented never to raise. Formatting ``{e}`` inside the ``except``
+    block was a raise site: an exception whose ``__str__`` raises replaced the report with a
+    crash. Reading the class name asks the exception for nothing."""
+    report = _crash_report(
+        site,
+        _CannotBePrinted(GATEWAY_KEY),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert _own_text(site, report) == f"{prefix}_CannotBePrinted"
+
+
+@SITES
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("has a space", id="space"),
+        pytest.param(f"\x1b[2J{GATEWAY_KEY}", id="escape-sequence-and-key"),
+        pytest.param("café", id="non-ascii"),
+        pytest.param("E" * 101, id="one-hundred-and-one-characters"),
+    ],
+)
+def test_a_crash_whose_class_name_is_not_a_short_identifier_is_not_carried(
+    site: str,
+    prefix: str,
+    name: str,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """A class built at run time can be named anything. Each site goes through
+    ``safe_class_name``, not a bare ``type(e).__name__``."""
+    report = _crash_report(
+        site,
+        type(name, (Exception,), {})(GATEWAY_KEY),
+        sample_request,
+        primary_query_spec_valid,
+        qc_specs_valid,
+        summary_response,
+        datasheet_response,
+    )
+
+    assert _own_text(site, report) == f"{prefix}<unprintable>"
+    assert GATEWAY_KEY not in report.model_dump_json()

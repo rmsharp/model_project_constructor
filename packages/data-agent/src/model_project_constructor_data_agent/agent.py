@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from model_project_constructor_data_agent.db import ReadOnlyDB, safe_message
+from model_project_constructor_data_agent.db import ReadOnlyDB, safe_class_name, safe_message
 from model_project_constructor_data_agent.graph import build_graph
 from model_project_constructor_data_agent.llm import (
     LLMClient,
@@ -51,7 +51,10 @@ class DataAgent:
         try:
             final_state = self._app.invoke(initial_state)
         except Exception as e:
-            return _execution_failed_report(request, f"graph crashed: {e}")
+            # The class, never the text: it is the LLM client's exception, whose text is a
+            # gateway's reply or an upstream error event and can hold the API key. The
+            # report is saved and written into a committed project.
+            return _execution_failed_report(request, f"graph crashed: {safe_class_name(e)}")
 
         status = final_state.get("status", "EXECUTION_FAILED")
         if status == "EXECUTION_FAILED":
