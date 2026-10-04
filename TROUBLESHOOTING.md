@@ -274,10 +274,10 @@ print(result["project_url"])       # may be set even on FAILED if the project wa
 
 **`failure_reason: unexpected_error: <ClassName> (the website stage may already have created a project ...)`**
 (since Session 275). The website stage raised something that is not a
-repository-host error: a reply the adapter could not read (no `id`, a body that
-is not a JSON object; `BACKLOG.md`, *A reply of the wrong shape*), or a bug. (A
-project id or branch with a control character was on this list until Session
-281, and so were a control character in the commit reference GitHub hands back
+repository-host error: a bug. (A reply that was not a JSON object, or lacked a
+field the adapter reads, was the commonest cause until Session 285; it is now
+the next entry. A project id or branch with a control character was on this list
+until Session 281, and so were a control character in the commit reference GitHub hands back
 and a lone surrogate in any id or commit reference an adapter sends back to the
 host until Session 282, and JSON nested very deeply and a redirect the HTTP
 library could not build until Session 283, and a GitHub `422` whose `errors`
@@ -305,6 +305,22 @@ exception is recorded nowhere. To see it, run the website stage by itself
 (`OPERATIONS.md` §4.1–§4.3) against a scratch namespace: that command does
 not go through the pipeline and lets an unexpected exception reach the
 command line as a traceback.
+
+**`failure_reason: repo_error: create_project failed for '<name>': the reply has no usable "<field>" (the host answered with a success status, so a project may already exist on it)`**
+(since Session 285; also `the reply is not a JSON object`, and `invalid JSON body: ...` for a reply that is not JSON or
+is nested more than 64 levels deep, which said nothing about the project until the same session). The host answered
+the request that creates a project with a success status, so it probably made one, and what it sent back cannot be
+used. **Treat the project as possibly existing**, as for `unexpected_error` above: the project address and id are empty,
+and `--resume` refuses. The adapter checks every value it reads from a success reply where it reads it: an address, a
+sha and GitHub's `owner/name` must be a non-empty string, and an identifier a non-empty string or an integer that is not
+`true` or `false`, so `null`, a number where text belongs, an empty string, an array and `NaN` are refused. The
+message names the field (`id`, `web_url`, `full_name`, `html_url`, `object.sha`, `tree.sha`, `sha`) and holds nothing
+the host wrote. A reply that cannot be read at a step that creates nothing says the same without the parenthesis:
+GitLab's group lookup fails before anything exists on the host (GitHub's owner lookup reads no field, so it cannot
+fail this way); the steps of a commit fail as `repo_error_retry_exhausted: commit_files failed ...: the reply has no usable "sha"` after
+three attempts, **with the project already created** (a wrong shape is retried like any failed commit, though a host
+that sent it once will probably send it again; `BACKLOG.md`, *Smaller follow-ups from the wrong-shape fix*, point 5,
+says what a retry of GitLab's commit may do).
 
 **`failure_reason: interrupted: KeyboardInterrupt (...)`** (or `SystemExit`).
 The run was stopped (Ctrl-C, or a `sys.exit`) while the website stage ran. The
@@ -388,7 +404,10 @@ in GitHub's parent commit reference; a broken half of a character, a `NaN` or an
 of them; a cookie the host set that is not ASCII) ended the run in a traceback (`InvalidURL`,
 `UnicodeEncodeError`, `ValueError`), and for GitHub's commit that was possibly after the project
 already existed. Now the call fails like any failed call, the `failure_reason` says `the request
-could not be built` and the HTTP library's own words are not shown. Which failure you get depends
+could not be built` and the HTTP library's own words are not shown. (A `NaN` or an infinity is no longer
+among them: since Session 285 the adapter reads each of these values as text or an identifier, so it refuses a float
+where it reads it, with `the reply has no usable "sha"` in place of `the request could not be built`, before any
+request is built and on every version of the HTTP library; 0.27 used to send it.) Which failure you get depends
 on the step. For GitHub's commit references the commit is attempted three times
 (`repo_error_retry_exhausted`) **with the project already created**; retrying cannot help,
 because the value is the host's, so look at what the host answered at that step. For GitLab's
@@ -402,8 +421,9 @@ about 65,500 characters, or malformed in a few other ways) also ended the run in
 now fails the call like any other, with text of this repository's own: "the reply nests more than
 64 levels deep" (a successful reply; **any** reply nested that deep is refused, including one whose
 deep part nothing reads) and "the host's reply redirected the request, and the HTTP library could
-not build the redirected request". A successful reply that is not usable as JSON does not say that
-a project may exist, although one may (`BACKLOG.md`, *A reply of the wrong shape*). A broken half
+not build the redirected request". A successful reply to the request that creates a project that is
+not usable (not JSON, nested too deeply, or not the shape the adapter reads) says that a project may
+exist, since Session 285; a reply to any other request does not, because none of them makes one. A broken half
 of a character in the GitLab group name is refused by the adapter ("the namespace holds a
 character that cannot be written into an address") **only when the adapter is called directly**:
 the website command and the pipeline script, given such a name (a command-line argument that is
