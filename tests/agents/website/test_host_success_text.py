@@ -5,7 +5,8 @@
 project id, the default branch and the commit id. They are the host's words, they become
 ``RepoProjectResult`` fields, the website command and the pipeline script print them, and two of
 them (the id and the branch) go back to the host inside a request path, where a control character
-makes ``httpx`` raise ``InvalidURL`` out of the adapter.
+used to make ``httpx`` raise ``InvalidURL`` out of the adapter (cleaned first, it no longer does;
+``test_host_reuse_text.py`` holds a value the adapters do not clean).
 
 Three levels, each against a real socket. The adapters are called directly, which is where the
 scrub lives; the agent is run over each adapter, which is what an operator sees; and a registry-wide

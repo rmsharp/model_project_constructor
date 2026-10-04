@@ -1,16 +1,18 @@
 """A value a repository host sent, which an adapter writes into its next request, fails cleanly.
 
-``BACKLOG.md``'s item *An adapter puts a value the host sent into its next request* (found by
-Session 281's review, closed by Session 282). Route 8 scrubs what ``create_project`` and
-``commit_files`` RETURN; it cannot reach a value an adapter reads from one reply and writes into
-the next request: GitHub's ``parent_sha`` (in a path), its base-tree, blob, tree and commit shas (in
-JSON bodies) and GitLab's group id (in a JSON body). ``httpx`` refuses to build some of those
-requests: ``InvalidURL`` for a C0 control or DEL in a path, ``UnicodeEncodeError`` for a lone
-surrogate in a path or, from 0.28, in a body. Neither is an ``httpx.HTTPError``, so no ``except`` in
-an adapter caught either, neither is a ``RepoClientError``, and the website command ended in a
-traceback and the pipeline in ``unexpected_error``, possibly after the host had made the project.
+Session 281's review filed *An adapter puts a value the host sent into its next request*; Session
+282 closed it, and ``BACKLOG.md`` keeps the two points that were never part of the fix under the
+title *The id and the branch go into request paths unquoted, and one wiki sentence is now
+imprecise*. Route 8 scrubs what ``create_project`` and ``commit_files`` RETURN; it cannot reach a
+value an adapter reads from one reply and writes into the next request: GitHub's ``parent_sha`` (in
+a path), its base-tree, blob, tree and commit shas (in JSON bodies) and GitLab's group id (in a JSON
+body). ``httpx`` refuses to build some of those requests: ``InvalidURL`` for a C0 control or DEL in
+a path, and ``ValueError`` for a lone surrogate (``UnicodeEncodeError``) in a path or, from 0.28, in
+a body, and from 0.28 for a ``NaN`` or an infinity in a body. None is an ``httpx.HTTPError``, so no
+``except`` in an adapter caught any, none is a ``RepoClientError``, and the website command ended in
+a traceback and the pipeline in ``unexpected_error``, possibly after the host had made the project.
 
-``RepoHttpClient.build_request`` now turns both into the error the adapters already catch. Three
+``RepoHttpClient.build_request`` now turns them into the error the adapters already catch. Three
 levels, each against a real socket that RECORDS what reached it, because a refused request must be
 absent from that list: a request sent with something cleaned out of it would also have "failed
 cleanly", and only the list tells the two apart. ``test_repo_http_client.py`` holds the client.
@@ -52,15 +54,21 @@ REFUSED_AT = {
     "tree_sha": ("POST", "/repos/g/n/git/commits"),
     "commit_sha": ("PATCH", "/repos/g/n/git/refs/heads/main"),
 }
-#: The values GitHub's git-data calls hand back, which go into a JSON body next. A lone surrogate
-#: in one is refused from ``httpx`` 0.28 only.
+#: The values GitHub's git-data calls hand back, which go into a JSON body next.
 BODY_SHAS = ["base_tree_sha", "blob_sha", "tree_sha", "commit_sha"]
+#: What ``httpx`` 0.28 cannot write into a JSON body: a lone surrogate, ``NaN``, an infinity (a
+#: reply of ``{"sha": NaN}`` parses to a float; the routers write one with ``json.dumps``).
+UNENCODABLE = {
+    "lone-surrogate": f"abc{HOSTILE['lone-surrogate']}def",
+    "nan": float("nan"),
+    "infinity": float("inf"),
+}
 #: Every kind of text but the C1 control, which ``httpx`` percent-encodes in a path instead of
 #: refusing (``test_repo_http_client.py`` holds that), so the request is sent and the host answers.
 REFUSED_IN_A_PATH = sorted(kind for kind in HOSTILE if kind != "c1-csi")
 skip_before_0_28 = pytest.mark.skipif(
     not HTTPX_WRITES_JSON_AS_UTF8,
-    reason="httpx < 0.28 escapes a lone surrogate in a JSON body to ASCII and sends it",
+    reason="httpx < 0.28 escapes a lone surrogate in a JSON body and sends a NaN or an infinity",
 )
 
 
@@ -105,9 +113,14 @@ def _assert_refused_cleanly(outcome: object, *, said: str | None = None) -> None
     assert is_clean(str(outcome)), str(outcome)
     assert "PWNED-TITLE" not in str(outcome) and "Status:  COMPLETE" not in str(outcome)
     # ``scrubbed_errors`` raises a new error after its handler: nothing is chained behind it, so
-    # ``httpx``'s own message (which quotes the value it refused) is not reachable from it.
+    # ``httpx``'s own message (which repeats part of what it refused) is not reachable from it.
     assert outcome.__cause__ is None and outcome.__context__ is None
-    for httpx_words in ("non-printable", "surrogates not allowed", "codec can't encode"):
+    for httpx_words in (
+        "non-printable",
+        "surrogates not allowed",
+        "codec can't encode",
+        "not JSON compliant",
+    ):
         assert httpx_words not in str(outcome)
     if said is not None:
         assert said in str(outcome)
@@ -140,8 +153,8 @@ def test_gitlab_create_project_with_an_ordinary_group_id_completes() -> None:
 def test_a_parent_sha_httpx_cannot_put_in_a_path_is_a_clean_error_and_is_never_sent(
     kind: str,
 ) -> None:
-    """Item 1 and the path half of item 2: ``InvalidURL`` for a control code, ``UnicodeEncodeError``
-    for a lone surrogate. Both from every ``httpx`` this project admits."""
+    """``InvalidURL`` for a control code, ``UnicodeEncodeError`` for a lone surrogate. Both from
+    every ``httpx`` this project admits."""
     outcome, seen = _commit_files({"parent_sha": f"abc{HOSTILE[kind]}def"})
     _assert_refused_cleanly(outcome, said="commit_files failed (project='g/n', branch='main')")
     assert not _reached(seen, REFUSED_AT["parent_sha"]), seen
@@ -158,15 +171,18 @@ def test_a_parent_sha_httpx_can_encode_still_names_the_parent_and_the_commit_com
 
 
 @skip_before_0_28
+@pytest.mark.parametrize("kind", sorted(UNENCODABLE))
 @pytest.mark.parametrize("site", BODY_SHAS)
-def test_a_sha_httpx_cannot_encode_in_a_body_is_a_clean_error_and_is_never_sent(site: str) -> None:
-    """The body half of item 2. The commit sha comes back from the host's ``POST``, and the others
-    from the ``GET`` and ``POST`` before it; each is written into a later body."""
-    surrogate = f"abc{HOSTILE['lone-surrogate']}def"
+def test_a_sha_httpx_cannot_encode_in_a_body_is_a_clean_error_and_is_never_sent(
+    site: str, kind: str
+) -> None:
+    """The commit sha comes back from the host's ``POST``, and the others from the ``GET`` and
+    ``POST`` before it; each is written into a later body."""
+    value = UNENCODABLE[kind]
     if site == "commit_sha":
-        outcome, seen = _commit_files({}, commit_sha=surrogate)
+        outcome, seen = _commit_files({}, commit_sha=value)
     else:
-        outcome, seen = _commit_files({site: surrogate})
+        outcome, seen = _commit_files({site: value})
     _assert_refused_cleanly(outcome, said="commit_files failed (project='g/n', branch='main')")
     assert not _reached(seen, REFUSED_AT[site]), seen
 
@@ -176,8 +192,9 @@ def test_a_sha_httpx_cannot_encode_in_a_body_is_a_clean_error_and_is_never_sent(
 def test_a_control_code_in_a_body_sha_is_escaped_by_json_and_the_commit_completes(
     site: str, kind: str
 ) -> None:
-    """Not refused, because nothing is wrong with the request: JSON writes a control as
-    ``\\u001b``. Held so the fix is not widened to refuse what ``httpx`` builds."""
+    """Not refused, because nothing is wrong with the request: JSON writes a C0 control as
+    ``\\u001b`` and ``httpx`` 0.28 writes DEL and a C1 control as they are. Held so the fix is not
+    widened to refuse what ``httpx`` builds."""
     value = f"abc{HOSTILE[kind]}def"
     outcome, _ = (
         _commit_files({}, commit_sha=value)
@@ -188,11 +205,12 @@ def test_a_control_code_in_a_body_sha_is_escaped_by_json_and_the_commit_complete
 
 
 @skip_before_0_28
-def test_a_group_id_httpx_cannot_encode_is_a_clean_error_and_the_project_is_never_asked_for() -> (
-    None
-):
+@pytest.mark.parametrize("kind", sorted(UNENCODABLE))
+def test_a_group_id_httpx_cannot_encode_is_a_clean_error_and_the_project_is_never_asked_for(
+    kind: str,
+) -> None:
     """GitLab's group id goes into the create-project body as ``namespace_id``."""
-    outcome, seen = _create_project(HOSTILE["lone-surrogate"])
+    outcome, seen = _create_project(UNENCODABLE[kind])
     _assert_refused_cleanly(outcome, said="create_project failed for 'n'")
     assert ("POST", "/api/v4/projects") not in seen, seen
     assert any(p.startswith("/api/v4/groups/") for _, p in seen)
@@ -216,7 +234,7 @@ def _run(
     with serving_raw(serve(recorded)) as server:
         client = shipped.make(server.url)
         agent = WebsiteAgent(client, ci_platform=shipped.host)  # type: ignore[arg-type]
-        # A failed commit is retried with a 1 s, 2 s, 4 s backoff; nothing here waits for it.
+        # A failed commit is attempted three times with a 1 s and a 2 s wait; nothing waits here.
         agent.graph = build_website_graph(client, sleep=lambda _seconds: None)
         return agent.run(intake, data, target), seen
 
@@ -247,29 +265,36 @@ def test_a_run_whose_host_sent_an_unsendable_parent_sha_is_a_failed_result_not_a
 
 
 @skip_before_0_28
+@pytest.mark.parametrize("kind", sorted(UNENCODABLE))
 @pytest.mark.parametrize(
     "shipped", [s for s in SHIPPED if s.host == "github"], ids=lambda s: s.name
 )
 def test_a_run_whose_host_sent_an_unencodable_commit_sha_is_a_failed_result_not_a_crash(
-    shipped: Shipped, intake_report: IntakeReport, data_report: DataReport
+    shipped: Shipped, kind: str, intake_report: IntakeReport, data_report: DataReport
 ) -> None:
-    """This is the case ``GITHUB_REUSES_THE_SHA`` held as a strict expected failure."""
+    """The lone-surrogate case is the one ``GITHUB_REUSES_THE_SHA`` held as a strict expected
+    failure. The commit is attempted three times: the project and the blobs are made each time."""
     project = shipped.project_reply(id_text="", url=URL, branch="main")
-    router = shipped.router(project, f"abc{HOSTILE['lone-surrogate']}def")
+    router = shipped.router(project, UNENCODABLE[kind])
     result, seen = _run(shipped, router, intake_report, data_report)
     _assert_a_failed_result(result, reason="repo_error_retry_exhausted")
     assert not _reached(seen, REFUSED_AT["commit_sha"]), seen
 
 
 @skip_before_0_28
+@pytest.mark.parametrize("kind", sorted(UNENCODABLE))
 def test_a_run_whose_host_sent_an_unencodable_group_id_is_a_failed_result_not_a_crash(
-    intake_report: IntakeReport, data_report: DataReport
+    kind: str, intake_report: IntakeReport, data_report: DataReport
 ) -> None:
+    """This fails at ``create_project``, before the host has made anything, and is not retried:
+    only a failed COMMIT is. What the host saw is the one group lookup."""
     project = GITLAB.project_reply(id_text="", url=URL, branch="main")
-    router = GITLAB.router(project, "abc", group_id=HOSTILE["lone-surrogate"])
+    router = GITLAB.router(project, "abc", group_id=UNENCODABLE[kind])
     result, seen = _run(GITLAB, router, intake_report, data_report)
     assert result.status == "FAILED", result
     assert result.failure_reason is not None
     assert is_clean(result.failure_reason)
+    assert result.failure_reason.startswith("repo_error: create_project failed"), result
+    assert "repo_error_retry_exhausted" not in result.failure_reason
     assert UNBUILDABLE_REQUEST_TEXT in result.failure_reason, result.failure_reason
-    assert ("POST", "/api/v4/projects") not in seen, seen
+    assert [method for method, _ in seen] == ["GET"], seen
