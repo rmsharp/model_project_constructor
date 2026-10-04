@@ -23,8 +23,12 @@ adapter, past :func:`scrubbed_errors`, because it is not a ``RepoClientError``.
 A host's replies arrive as JSON too, and its shape is the host's to choose: :func:`reply_json` is
 the one way the adapters parse one, and turns a body nested too deeply for ``json`` (a
 ``RecursionError``) or too deeply to write into the next request into the ``ValueError`` they
-already handle (``BACKLOG.md`` holds what it does not cover: a reply that parses and has the wrong
-fields).
+already handle. A reply that parses and is not the object the adapter reads from (an array,
+``null``, a number) or lacks a field, or holds it as the wrong kind of value, is the next layer:
+:func:`reply_object`, :func:`reply_string` and :func:`reply_id` are the one way the adapters read
+a field of one, and fail as a ``RepoClientError`` that names the field (and never quotes the
+reply). :func:`reading_a_creation_reply` adds, to a failure to read the reply to a request that
+creates a project, that the host answered ``2xx`` and so one may exist.
 
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
@@ -48,7 +52,7 @@ import functools
 import html
 import json
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from typing import Any, Concatenate, ParamSpec, Protocol, TypeVar, cast
 from urllib.parse import quote, quote_plus
 
@@ -245,6 +249,93 @@ def reply_json(response: httpx.Response) -> Any:
         if not _nests_deeper_than(body, MAX_REPLY_NESTING):
             return body
     raise ValueError(f"the reply nests more than {MAX_REPLY_NESTING} levels deep")
+
+
+def reply_object(body: object, *, context: str) -> dict[str, Any]:
+    """``body`` if it is a JSON object, else a ``RepoClientError`` saying it is not.
+
+    :func:`reply_json` returns whatever the host sent, and a reply of any other kind (an array,
+    ``null``, a string, a number) used to be subscripted by the adapters and end the call as a
+    ``TypeError``. ``context`` is the adapter's own words for the call (``create_project failed
+    for 'x'``); nothing the host wrote is in the message.
+    """
+    if not isinstance(body, dict):
+        raise RepoClientError(f"{context}: the reply is not a JSON object")
+    return body
+
+
+def _read_field(body: object, path: tuple[str, ...], context: str) -> object:
+    value: object = reply_object(body, context=context)
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            raise _unusable_field(path, context)
+        value = value[key]
+    return value
+
+
+def _unusable_field(path: tuple[str, ...], context: str) -> RepoClientError:
+    # The field's name is the adapter's own literal, so naming it quotes nothing the host sent.
+    return RepoClientError(f'{context}: the reply has no usable "{".".join(path)}"')
+
+
+def reply_string(body: object, *path: str, context: str) -> str:
+    """The text at ``path`` in a reply, or a ``RepoClientError`` naming it.
+
+    ``path`` is the keys to follow (``"object", "sha"``). The field must be there, in an object at
+    every step, and a non-empty string: a number, ``null``, an array, an object, ``true`` or an
+    empty string is not an address, a sha or an ``owner/name``, and used to be written into the
+    result (``str(None)`` is ``"None"``) or into the next request's path.
+    """
+    value = _read_field(body, path, context)
+    if isinstance(value, str) and value:
+        return value
+    raise _unusable_field(path, context)
+
+
+def reply_id(body: object, *path: str, context: str) -> str | int:
+    """:func:`reply_string`, for an identifier: GitLab sends its ids as integers.
+
+    A non-empty string or an integer is usable; ``true`` and ``false`` are not (``bool`` is an
+    ``int`` in Python, and ``True`` would have been written as ``"True"``), nor is a float. What is
+    returned is what the host sent, so an integer that goes back in a request body goes back as one.
+    """
+    value = _read_field(body, path, context)
+    if isinstance(value, str) and value:
+        return value
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise _unusable_field(path, context)
+
+
+#: What a failure to read a creation reply ends with. The host answered ``2xx``, which it sends
+#: when it made the project, so the failure must not read as if none exists: ``--resume`` refuses
+#: either way, and the operator reads this before deleting the result file to retry. The pipeline's
+#: net says the same for a crash (``unexpected_error``); a clean ``RepoClientError`` said nothing.
+PROJECT_MAY_EXIST = (
+    "(the host answered with a success status, so a project may already exist on it)"
+)
+
+
+@contextlib.contextmanager
+def reading_a_creation_reply() -> Iterator[None]:
+    """Say that a project may exist in any ``RepoClientError`` raised while reading the reply to
+    the request that creates one: a body that is not JSON, one nested too deeply, or one of the
+    wrong shape.
+
+    The adapters wrap the read of that one reply and of no other: a lookup or a commit makes no
+    project, and a reply refused with a ``4xx`` or ``5xx`` made none. The new error is raised from
+    the old, which the adapters' ``scrubbed_errors`` replaces with a plain one at the boundary.
+    A ``RepoNameConflictError`` passes through, as it does there: the node catches it by class and
+    it is no failure to read a reply. Assign the result inside the block and return after it: a
+    type checker treats a ``return`` in a ``with`` that may swallow an exception as a path that
+    can fall off the end.
+    """
+    try:
+        yield
+    except RepoNameConflictError:
+        raise
+    except RepoClientError as error:
+        raise RepoClientError(f"{error} {PROJECT_MAY_EXIST}") from error
 
 
 class _HoldsSecret(Protocol):

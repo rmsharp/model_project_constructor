@@ -45,7 +45,10 @@ from typing import Any
 import httpx
 
 from model_project_constructor.agents.website._host_text import (
+    reading_a_creation_reply,
     reply_json,
+    reply_object,
+    reply_string,
     response_text,
     scrubbed_errors,
     scrubbed_values,
@@ -134,13 +137,16 @@ class GitHubAdapter(RepoClient):
                 f"create_project failed for {name!r}: "
                 f"{response.status_code} {response_text(response)}"
             )
-        repo = _parse_json(response, f"create_project failed for {name!r}")
-
-        return ProjectInfo(
-            id=str(repo["full_name"]),
-            url=str(repo["html_url"]),
-            default_branch=str(repo.get("default_branch") or "main"),
-        )
+        # The host answered 2xx: a project may exist, so a failure to read the reply says so.
+        created = f"create_project failed for {name!r}"
+        with reading_a_creation_reply():
+            repo = reply_object(_parse_json(response, created), context=created)
+            info = ProjectInfo(
+                id=reply_string(repo, "full_name", context=created),
+                url=reply_string(repo, "html_url", context=created),
+                default_branch=str(repo.get("default_branch") or "main"),
+            )
+        return info
 
     def _resolve_owner_create_path(self, namespace: str) -> str:
         """Return the repo-creation path for ``namespace``.
@@ -202,7 +208,7 @@ class GitHubAdapter(RepoClient):
         except httpx.HTTPError as exc:
             raise RepoClientError(f"{context}: {exc}") from exc
         _ok_or_raise(response, context)
-        parent_sha = _parse_json(response, context)["object"]["sha"]
+        parent_sha = reply_string(_parse_json(response, context), "object", "sha", context=context)
 
         try:
             response = self._client.get(
@@ -211,7 +217,7 @@ class GitHubAdapter(RepoClient):
         except httpx.HTTPError as exc:
             raise RepoClientError(f"{context}: {exc}") from exc
         _ok_or_raise(response, context)
-        base_tree_sha = _parse_json(response, context)["tree"]["sha"]
+        base_tree_sha = reply_string(_parse_json(response, context), "tree", "sha", context=context)
 
         sorted_items = sorted(files.items())
         tree_elements: list[dict[str, str]] = []
@@ -224,7 +230,7 @@ class GitHubAdapter(RepoClient):
             except httpx.HTTPError as exc:
                 raise RepoClientError(f"{context}: {exc}") from exc
             _ok_or_raise(response, context)
-            blob_sha = _parse_json(response, context)["sha"]
+            blob_sha = reply_string(_parse_json(response, context), "sha", context=context)
             tree_elements.append(
                 {"path": path, "mode": "100644", "type": "blob", "sha": blob_sha}
             )
@@ -237,7 +243,7 @@ class GitHubAdapter(RepoClient):
         except httpx.HTTPError as exc:
             raise RepoClientError(f"{context}: {exc}") from exc
         _ok_or_raise(response, context)
-        new_tree_sha = _parse_json(response, context)["sha"]
+        new_tree_sha = reply_string(_parse_json(response, context), "sha", context=context)
 
         try:
             response = self._client.post(
@@ -251,7 +257,7 @@ class GitHubAdapter(RepoClient):
         except httpx.HTTPError as exc:
             raise RepoClientError(f"{context}: {exc}") from exc
         _ok_or_raise(response, context)
-        commit_sha = _parse_json(response, context)["sha"]
+        commit_sha = reply_string(_parse_json(response, context), "sha", context=context)
 
         try:
             response = self._client.patch(
@@ -285,16 +291,19 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
         raise RepoClientError(f"{context}: {response.status_code} {response_text(response)}")
 
 
-def _parse_json(response: httpx.Response, context: str) -> dict[str, Any]:
+def _parse_json(response: httpx.Response, context: str) -> Any:
     """Parse a 2xx response body, raising :class:`RepoClientError` on
     malformed JSON, or JSON nested too deeply to use (:func:`reply_json`), instead of letting a
-    raw ``ValueError`` or ``RecursionError`` escape."""
+    raw ``ValueError`` or ``RecursionError`` escape.
+
+    Returns whatever JSON the host sent, which is not necessarily an object: what is read from it
+    goes through :func:`reply_object`, :func:`reply_string` or :func:`reply_id`, never a subscript.
+    """
 
     try:
-        body: dict[str, Any] = reply_json(response)
+        return reply_json(response)
     except ValueError as exc:
         raise RepoClientError(f"{context}: invalid JSON body: {exc}") from exc
-    return body
 
 
 def _is_name_conflict(response: httpx.Response) -> bool:

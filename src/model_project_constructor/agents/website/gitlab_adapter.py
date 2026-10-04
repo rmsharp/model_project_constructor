@@ -33,7 +33,11 @@ from urllib.parse import quote
 import httpx
 
 from model_project_constructor.agents.website._host_text import (
+    reading_a_creation_reply,
+    reply_id,
     reply_json,
+    reply_object,
+    reply_string,
     response_text,
     scrubbed_errors,
     scrubbed_values,
@@ -114,8 +118,11 @@ class GitLabAdapter(RepoClient):
             raise RepoClientError(
                 f"group lookup failed for {namespace!r}: {exc}"
             ) from exc
-        _ok_or_raise(response, f"group lookup failed for {namespace!r}")
-        group = _parse_json(response, f"group lookup failed for {namespace!r}")
+        lookup = f"group lookup failed for {namespace!r}"
+        _ok_or_raise(response, lookup)
+        # What the group's id is goes back in the next request as the host sent it (an integer
+        # stays one), so a reply without a usable one is refused here and the request never made.
+        namespace_id = reply_id(_parse_json(response, lookup), "id", context=lookup)
 
         try:
             response = self._client.post(
@@ -123,7 +130,7 @@ class GitLabAdapter(RepoClient):
                 json={
                     "name": name,
                     "path": name,
-                    "namespace_id": group["id"],
+                    "namespace_id": namespace_id,
                     "visibility": visibility,
                 },
             )
@@ -136,13 +143,16 @@ class GitLabAdapter(RepoClient):
                 f"create_project failed for {name!r}: "
                 f"{response.status_code} {response_text(response)}"
             )
-        project = _parse_json(response, f"create_project failed for {name!r}")
-
-        return ProjectInfo(
-            id=str(project["id"]),
-            url=str(project["web_url"]),
-            default_branch=str(project.get("default_branch") or "main"),
-        )
+        # The host answered 2xx: a project may exist, so a failure to read the reply says so.
+        created = f"create_project failed for {name!r}"
+        with reading_a_creation_reply():
+            project = reply_object(_parse_json(response, created), context=created)
+            info = ProjectInfo(
+                id=str(reply_id(project, "id", context=created)),
+                url=reply_string(project, "web_url", context=created),
+                default_branch=str(project.get("default_branch") or "main"),
+            )
+        return info
 
     @scrubbed_errors
     @scrubbed_values
@@ -183,15 +193,12 @@ class GitLabAdapter(RepoClient):
             raise RepoClientError(
                 f"commit_files failed (project={project_id}, branch={branch}): {exc}"
             ) from exc
-        _ok_or_raise(
-            response, f"commit_files failed (project={project_id}, branch={branch})"
-        )
-        commit = _parse_json(
-            response, f"commit_files failed (project={project_id}, branch={branch})"
-        )
+        context = f"commit_files failed (project={project_id}, branch={branch})"
+        _ok_or_raise(response, context)
+        commit = _parse_json(response, context)
 
         return CommitInfo(
-            sha=str(commit["id"]),
+            sha=reply_string(commit, "id", context=context),
             files_committed=sorted(files),
         )
 
@@ -213,16 +220,19 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
         raise RepoClientError(f"{context}: {response.status_code} {response_text(response)}")
 
 
-def _parse_json(response: httpx.Response, context: str) -> dict[str, Any]:
+def _parse_json(response: httpx.Response, context: str) -> Any:
     """Parse a 2xx response body, raising :class:`RepoClientError` on
     malformed JSON, or JSON nested too deeply to use (:func:`reply_json`), instead of letting a
-    raw ``ValueError`` or ``RecursionError`` escape."""
+    raw ``ValueError`` or ``RecursionError`` escape.
+
+    Returns whatever JSON the host sent, which is not necessarily an object: what is read from it
+    goes through :func:`reply_object`, :func:`reply_string` or :func:`reply_id`, never a subscript.
+    """
 
     try:
-        body: dict[str, Any] = reply_json(response)
+        return reply_json(response)
     except ValueError as exc:
         raise RepoClientError(f"{context}: invalid JSON body: {exc}") from exc
-    return body
 
 
 def _is_name_conflict(response: httpx.Response) -> bool:
