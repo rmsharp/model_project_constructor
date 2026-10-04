@@ -47,6 +47,7 @@ import httpx
 from model_project_constructor.agents.website._host_text import (
     response_text,
     scrubbed_errors,
+    scrubbed_values,
 )
 from model_project_constructor.agents.website._http import RepoHttpClient
 from model_project_constructor.agents.website.protocol import (
@@ -102,6 +103,7 @@ class GitHubAdapter(RepoClient):
     # ------------------------------------------------------------------
 
     @scrubbed_errors
+    @scrubbed_values
     def create_project(
         self,
         *,
@@ -175,6 +177,7 @@ class GitHubAdapter(RepoClient):
         return "/user/repos"
 
     @scrubbed_errors
+    @scrubbed_values
     def commit_files(
         self,
         *,

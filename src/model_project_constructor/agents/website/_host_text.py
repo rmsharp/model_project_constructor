@@ -1,4 +1,4 @@
-"""What a repository host's failure text may carry out of an adapter.
+"""What a repository host's words may carry out of an adapter.
 
 A ``RepoClientError`` message is built from words the host chose: an error body, or the HTTP
 library's account of a reply it could not parse (``h11`` quotes the bytes the server sent). The
@@ -12,12 +12,20 @@ the text one line free of control characters, and bounds its length. :func:`scru
 it where an error LEAVES an adapter, not at the many places a message is built, so a site added
 later cannot bypass it.
 
+A host's SUCCESS replies are its words too (``BACKLOG.md`` route 8): the project address, the
+project id, the default branch and the commit id in a ``2xx`` become the fields of ``ProjectInfo``
+and ``CommitInfo``, then of ``RepoProjectResult``, which the website command and the pipeline
+script print and the pipeline saves; and the id and the branch go back to the host inside a request
+path, where a control character makes ``httpx`` raise ``InvalidURL`` out of the adapter, past
+:func:`scrubbed_errors`, because it is not a ``RepoClientError``. :func:`scrubbed_values` applies
+the same scrub to what a protocol method RETURNS.
+
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
 not listed in :func:`_rewrites` (base64, a hash, or a different escaping of some of its characters
 only); one with characters inserted in it, or cut short, or split across lines by the host; a second
 credential (userinfo in the host URL travels as ``Authorization: Basic base64(user:password)``); and
-a message built by a ``RepoClient`` other than the two adapters.
+a message built, or a value returned, by a ``RepoClient`` other than the two adapters.
 """
 
 from __future__ import annotations
@@ -27,12 +35,14 @@ import html
 import json
 import re
 from collections.abc import Callable
-from typing import Concatenate, ParamSpec, Protocol, TypeVar
+from typing import Concatenate, ParamSpec, Protocol, TypeVar, cast
 from urllib.parse import quote, quote_plus
 
 import httpx
 
 from model_project_constructor.agents.website.protocol import (
+    CommitInfo,
+    ProjectInfo,
     RepoClientError,
     RepoNameConflictError,
 )
@@ -105,9 +115,10 @@ def scrub_host_text(text: object, secret: str = "", *, limit: int = MAX_HOST_TEX
     how many were left out. The secret is removed BEFORE the cut, so one straddling the limit cannot
     survive as a prefix, and again after the line is joined, for a secret that only matches then.
 
-    Runs inside the ``except`` blocks that deliver a ``failure_reason``, so it must not be a raise
-    site itself: any failure returns :data:`UNPRINTABLE`. A lone surrogate is replaced first,
-    because text holding one makes a file write or ``model_dump_json`` raise.
+    Runs inside the ``except`` blocks that deliver a ``failure_reason``, and over the values a
+    success reply returns, so it must not be a raise site itself: any failure returns
+    :data:`UNPRINTABLE`. A lone surrogate is replaced first, because text holding one makes a file
+    write or ``model_dump_json`` raise.
     """
     try:
         limit = max(limit, 0)
@@ -191,3 +202,73 @@ def _scrubbed_message(error: RepoClientError, holder: _HoldsSecret) -> str:
         return scrub_host_text(error, holder._secret)
     except Exception:
         return UNPRINTABLE
+
+
+def scrub_project_info(info: ProjectInfo, secret: str = "") -> ProjectInfo:
+    """A new ``ProjectInfo`` whose three fields went through :func:`scrub_host_text`.
+
+    ``id``, ``url`` and ``default_branch`` are all the host's words. Text with nothing to remove (an
+    address with a port, a query and non-ASCII letters, a GitHub ``owner/name``, a branch with a
+    slash) comes out as it went in. An id or a branch that held a control character comes out with
+    a space where it was, so it names nothing the host has and the next request fails the way a
+    request for any unknown project does, instead of ``httpx`` refusing the path.
+    """
+    return ProjectInfo(
+        id=scrub_host_text(info.id, secret),
+        url=scrub_host_text(info.url, secret),
+        default_branch=scrub_host_text(info.default_branch, secret),
+    )
+
+
+def scrub_commit_info(commit: CommitInfo, secret: str = "") -> CommitInfo:
+    """A new ``CommitInfo`` whose ``sha`` went through :func:`scrub_host_text`.
+
+    ``files_committed`` is the caller's own list of paths, not anything the host said, and is copied
+    as it is: a scrub would collapse the spaces in a path the project really holds.
+    """
+    return CommitInfo(
+        sha=scrub_host_text(commit.sha, secret),
+        files_committed=list(commit.files_committed),
+    )
+
+
+_V = TypeVar("_V", ProjectInfo, CommitInfo)
+
+
+def scrubbed_values(
+    method: Callable[Concatenate[_S, _P], _V],
+) -> Callable[Concatenate[_S, _P], _V]:
+    """Scrub the host's words out of the ``ProjectInfo`` or ``CommitInfo`` a method returns.
+
+    Applied where a value LEAVES an adapter, for the reason :func:`scrubbed_errors` is: the many
+    places a reply is read cannot each be remembered. ``self._secret`` is removed by value, the one
+    :func:`scrubbed_errors` removes, because a host that echoes the request headers can put the
+    token in a ``2xx`` as easily as in an error page. The result is a new object, so what a test
+    double returned is not changed. An exception is not touched: stack this UNDER
+    :func:`scrubbed_errors`, which owns it.
+
+    Fails closed on a result of any other type, which no method of the protocol returns: a method
+    added to ``RepoClient`` would otherwise carry this marker and scrub nothing.
+    """
+
+    @functools.wraps(method)
+    def wrapper(self: _S, /, *args: _P.args, **kwargs: _P.kwargs) -> _V:
+        # ``_scrubbed_result`` returns the kind it was given, which a type checker cannot see.
+        return cast("_V", _scrubbed_result(method(self, *args, **kwargs), self._secret))
+
+    # What a registry-wide test looks for, set by this decorator alone (see ``scrubbed_errors``).
+    wrapper.__scrubs_host_values__ = True  # type: ignore[attr-defined]
+    return wrapper
+
+
+def _scrubbed_result(
+    result: ProjectInfo | CommitInfo, secret: str
+) -> ProjectInfo | CommitInfo:
+    if isinstance(result, ProjectInfo):
+        return scrub_project_info(result, secret)
+    if isinstance(result, CommitInfo):
+        return scrub_commit_info(result, secret)
+    raise TypeError(
+        f"scrubbed_values wraps a method that returns ProjectInfo or CommitInfo, "
+        f"not {type(result).__name__}"
+    )

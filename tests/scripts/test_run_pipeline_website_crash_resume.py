@@ -88,20 +88,12 @@ class Host:
             return _http(201, "Created", b"{}")
         if self.how == "deep-json":
             return _http(400, "Bad Request", b"[" * 100_000)
-        if self.how == "echoed-id":
-            # A host that echoes the token it was sent as the project's id. The next request puts
-            # the id in a URL and ``httpx`` refuses the control code. (Session 275 wrote that it
-            # "quotes the URL in its message", an exception whose MESSAGE carries the token. It does
-            # not: the message names the control character and its position, measured by Session 276
-            # on httpx 0.28.1 and 0.27.0. So the token is not in this exception's text, and this
-            # case holds that nothing prints the id; ``test_logging_error_text.py`` holds the
-            # message-carrying cases with exceptions that really quote.)
-            created = {
-                "id": f"{TOKEN}\x07 x",
-                "web_url": f"{self.base}/p/x",
-                "default_branch": "main",
-            }
-            return _http(201, "Created", json.dumps(created).encode())
+        if self.how == "not-an-object":
+            # A ``201`` whose body is valid JSON but not an object: the adapter subscripts it and
+            # gets a ``TypeError``, which is not a ``RepoClientError``. (This stood in for a project
+            # id with a control code, whose ``InvalidURL`` was the crash here until BACKLOG route 8
+            # scrubbed the id; ``test_host_success_end_to_end.py`` holds what that id does now.)
+            return _http(201, "Created", b"[]")
         # ``hold``: the commit never gets an answer until the test lets go of it.
         self.commit_seen.set()
         self.release.wait(60)
@@ -212,7 +204,9 @@ def _assert_resume_refuses(host: Host, checkpoints: Path, *, posts_before: int) 
                 reason="this Python parses 100,000 nested brackets; unit tests raise it directly",
             ),
         ),
-        pytest.param("project", "echoed-id", "InvalidURL", id="project-id-echoing-the-token"),
+        pytest.param(
+            "project", "not-an-object", "TypeError", id="project-created-but-reply-not-an-object"
+        ),
     ],
 )
 def test_a_crash_is_saved_and_resume_makes_no_second_project(

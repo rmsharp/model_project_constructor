@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] S281 — fix: both adapters scrub the host's words out of the `ProjectInfo` and `CommitInfo` they return
+- **Change:** `_host_text.py` gains `scrub_project_info`, `scrub_commit_info` and the `scrubbed_values` decorator (marker `__scrubs_host_values__`), the return-side twin of `scrubbed_errors`: each control character becomes a space, the text is one line, cut to 1,000 characters, the adapter's token removed by value, a lone surrogate replaced; it fails closed on any other result type. `gitlab_adapter.py` and `github_adapter.py` stack it under `@scrubbed_errors` on `create_project` and `commit_files`. **Where, and why not the nodes:** at the adapters, because the token is theirs (Session 275's own fixture models a host that echoes it as the project id), and a scrub of the id turns `httpx.InvalidURL` out of `commit_files` into a failed commit. Reproduced first through the real command and script against a socket (`Project:`, `Commit:`, the script's `Project:` and `--resume`'s `Result:` all carried ESC/BEL raw). `tests/scripts/test_run_pipeline_website_crash_resume.py`: its `echoed-id` case relied on that `InvalidURL` and now completes, so it is replaced by a 201 whose body is a JSON array (a `TypeError`, still not a `RepoClientError`).
+- **Commit/PR:** this commit
+- **Session:** S281 · **Verified:** `ruff check` and `mypy` clean; `tests/agents/website`, `tests/orchestrator` and the two script test files (resume, crash-resume): 901 passed, 4 expected failures, on the working tree that also holds the tests the next commits add.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-03 · [ad hoc] S281 — claim: the repository host's success values scrubbed where `ProjectInfo` and `CommitInfo` are built (in progress)
 - **Change:** `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no code. The deliverable is route 8 of `BACKLOG.md`'s "Seven more routes" item (`:524`): the project address, commit id, `ProjectInfo.id` and `default_branch` come from the host's 2xx reply and are printed raw by `cli.py` and `scripts/run_pipeline.py`, so a host that puts ESC or BEL in them reaches the operator's terminal. Phase 3F records the rest.
 - **Non-commit actions:** the operator answered the Phase 0 task picker (route 8, the recommended option).
