@@ -220,13 +220,14 @@ def _ok_or_raise(response: httpx.Response, context: str) -> None:
         raise RepoClientError(f"{context}: {response.status_code} {response_text(response)}")
 
 
-def _parse_json(response: httpx.Response, context: str) -> Any:
+def _parse_json(response: httpx.Response, context: str) -> object:
     """Parse a 2xx response body, raising :class:`RepoClientError` on
     malformed JSON, or JSON nested too deeply to use (:func:`reply_json`), instead of letting a
     raw ``ValueError`` or ``RecursionError`` escape.
 
-    Returns whatever JSON the host sent, which is not necessarily an object: what is read from it
-    goes through :func:`reply_object`, :func:`reply_string` or :func:`reply_id`, never a subscript.
+    Returns whatever JSON the host sent, which is not necessarily an object, so it is typed
+    ``object``: what is read from it goes through :func:`reply_object`, :func:`reply_string` or
+    :func:`reply_id`, and a subscript is a type error (``test_host_reply_shape.py`` also holds it).
     """
 
     try:

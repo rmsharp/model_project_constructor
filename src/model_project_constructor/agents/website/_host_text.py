@@ -26,9 +26,10 @@ the one way the adapters parse one, and turns a body nested too deeply for ``jso
 already handle. A reply that parses and is not the object the adapter reads from (an array,
 ``null``, a number) or lacks a field, or holds it as the wrong kind of value, is the next layer:
 :func:`reply_object`, :func:`reply_string` and :func:`reply_id` are the one way the adapters read
-a field of one, and fail as a ``RepoClientError`` that names the field (and never quotes the
-reply). :func:`reading_a_creation_reply` adds, to a failure to read the reply to a request that
-creates a project, that the host answered ``2xx`` and so one may exist.
+a field they cannot do without, and fail as a ``RepoClientError`` that names the field (and never
+quotes the reply). The default branch is read, not checked (``BACKLOG.md``).
+:func:`reading_a_creation_reply` adds, to a failure to read the reply to a request that creates a
+project, that the host answered ``2xx`` and so one may exist.
 
 What this does not cover. The party that echoes the headers already holds the token, so these are
 the limits of an INNOCENT echo, not defences against a hostile host: a token transformed in a way
@@ -198,6 +199,14 @@ def response_text(response: httpx.Response) -> str:
 #: 64 is far above that and far below the lowest failing depth, 995 (a test writes a value nested
 #: this deep into a body, a path and a message). It also refuses a reply whose deep part nothing
 #: reads, which an unlimited read accepted below those depths.
+#:
+#: Since Session 285 the write-back window is closed another way: every value an adapter writes into
+#: a request is a string or an integer (:func:`reply_string`, :func:`reply_id`), so no nested value
+#: can be written back. The limit keeps a second job that a catch of ``RecursionError`` at the read
+#: would not do: on 3.14 a reply nested 100,000 levels parses and ``str()`` of it raises
+#: ``RecursionError`` (measured), and both adapters' name-conflict checks run ``str(body)`` on the
+#: parsed body of a ``4xx`` and both read the default branch with ``str()`` on a ``2xx``. Dropping
+#: the limit needs a guard at those places too (``BACKLOG.md``).
 MAX_REPLY_NESTING = 64
 
 
@@ -235,8 +244,9 @@ def reply_json(response: httpx.Response) -> Any:
     ``RecursionError`` for one nested deeply enough (see :data:`MAX_REPLY_NESTING` for where), which
     that ``except`` does not catch, so a host's reply ended the run in a traceback; and one that
     parses but nests past :data:`MAX_REPLY_NESTING` could not always be written into the next
-    request. Both become the ``ValueError`` a body that is not JSON already is, with text of this
-    module's own, which holds no word the host wrote. It is raised after the handler, so the
+    request (it cannot be now: see :data:`MAX_REPLY_NESTING`). Both become the ``ValueError`` a
+    body that is not JSON already is, with text of this module's own, which holds no word the host
+    wrote. It is raised after the handler, so the
     ``RecursionError`` (whose traceback holds thousands of frames) is not kept reachable behind it.
     A body that is not JSON keeps the library's own error. The adapters parse a body in no other
     way (a test holds that).
@@ -278,27 +288,30 @@ def _unusable_field(path: tuple[str, ...], context: str) -> RepoClientError:
     return RepoClientError(f'{context}: the reply has no usable "{".".join(path)}"')
 
 
-def reply_string(body: object, *path: str, context: str) -> str:
-    """The text at ``path`` in a reply, or a ``RepoClientError`` naming it.
+def reply_string(body: object, first: str, *rest: str, context: str) -> str:
+    """The text at ``first``, ``*rest`` in a reply, or a ``RepoClientError`` naming it.
 
-    ``path`` is the keys to follow (``"object", "sha"``). The field must be there, in an object at
+    The path is the keys to follow (``"object", "sha"``), and has at least one. The field must be
+    there, in an object at
     every step, and a non-empty string: a number, ``null``, an array, an object, ``true`` or an
     empty string is not an address, a sha or an ``owner/name``, and used to be written into the
     result (``str(None)`` is ``"None"``) or into the next request's path.
     """
+    path = (first, *rest)
     value = _read_field(body, path, context)
     if isinstance(value, str) and value:
         return value
     raise _unusable_field(path, context)
 
 
-def reply_id(body: object, *path: str, context: str) -> str | int:
+def reply_id(body: object, first: str, *rest: str, context: str) -> str | int:
     """:func:`reply_string`, for an identifier: GitLab sends its ids as integers.
 
     A non-empty string or an integer is usable; ``true`` and ``false`` are not (``bool`` is an
     ``int`` in Python, and ``True`` would have been written as ``"True"``), nor is a float. What is
     returned is what the host sent, so an integer that goes back in a request body goes back as one.
     """
+    path = (first, *rest)
     value = _read_field(body, path, context)
     if isinstance(value, str) and value:
         return value
@@ -322,13 +335,19 @@ def reading_a_creation_reply() -> Iterator[None]:
     the request that creates one: a body that is not JSON, one nested too deeply, or one of the
     wrong shape.
 
-    The adapters wrap the read of that one reply and of no other: a lookup or a commit makes no
-    project, and a reply refused with a ``4xx`` or ``5xx`` made none. The new error is raised from
-    the old, which the adapters' ``scrubbed_errors`` replaces with a plain one at the boundary.
-    A ``RepoNameConflictError`` passes through, as it does there: the node catches it by class and
-    it is no failure to read a reply. Assign the result inside the block and return after it: a
-    type checker treats a ``return`` in a ``with`` that may swallow an exception as a path that
-    can fall off the end.
+    The adapters wrap the read of that one reply and of no other: a lookup or a commit step makes
+    no project. It covers an UNREADABLE ``2xx`` only. A ``4xx`` names a refusal, but a ``5xx`` (a
+    gateway's ``502`` or ``504``, or a ``500`` after the host committed), a connection that failed
+    after the request was sent, and a ``2xx`` whose body is cut off on the wire (an ``httpx`` error
+    raised inside ``post``) do not say whether a project was made, and carry no note
+    (``BACKLOG.md``, *Smaller follow-ups from the wrong-shape fix*, point 8). The note is the LAST
+    words of the message and ``scrubbed_errors`` cuts a message at :data:`MAX_HOST_TEXT`
+    characters, so a project name of about 850 characters or more (``derive_project_name`` does not
+    bound one) loses it. The new error is raised from the old, which the adapters'
+    ``scrubbed_errors`` replaces with a plain one at the boundary. A ``RepoNameConflictError``
+    passes through, as it does there: the node catches it by class and it is no failure to read a
+    reply. The adapters assign the result inside the block and return after it; that is a choice
+    of shape, not something a type checker needs.
     """
     try:
         yield
