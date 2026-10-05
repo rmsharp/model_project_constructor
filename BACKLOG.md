@@ -55,7 +55,7 @@ rows below it are the smaller residue that closing it exposed.
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed. Session 282 made a request the HTTP library cannot build (a control character, a broken half of a character or a number such as `NaN` in a value the host sent) fail cleanly like any other call. Session 283 did the same for three more: a reply nested more than 64 levels (a limit it chose; it also refuses a reply whose deep part nothing reads, and real ones nest at most 5), a redirect the library cannot build (an address such as `mailto:x`, or about 65,500 characters, or malformed in a few other ways), and a broken half of a character in the GitLab group name, **when the adapter is called directly: the website command and the pipeline script still end in a traceback for such a name, from another layer** (see the item on channels that write a file that will not reload). What is left here is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran its touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
-| Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed | **The main part closed in Sessions 284 and 285.** A repository host used to be able to crash the adapter by answering a successful call with valid JSON of the wrong shape (an empty object, an array, `null`, a number, a missing field): the website command ended in a traceback and the pipeline saved "unexpected error: KeyError". Now every value is checked where it is read and a clean error names the field; a wrong shape on the commit path is retried like any failed commit, and a failure to read the reply to the request that creates a project says that a project may exist. What stands: (4) a loop in GitHub's name-taken check that never changes its answer (an operator call to delete it); (5) a GitLab commit whose reply cannot be used is retried and the retry would be refused for creating files that now exist, hiding that the first commit landed (an inference, not measured); (6) the default branch is read, not checked, and goes back to the host unquoted; (7) a text of only spaces or control characters counts as non-empty. | **Small, each an operator call:** (4) delete it or not; (5) check the head commit after an unreadable commit reply, or send an action that tolerates an existing file; (6) refuse a non-text branch or fall back to `main`; (7) tighten or leave. |
+| Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed | **The main part closed in Sessions 284 and 285.** A repository host used to be able to crash the adapter by answering a successful call with valid JSON of the wrong shape (an empty object, an array, `null`, a number, a missing field): the website command ended in a traceback and the pipeline saved "unexpected error: KeyError". Now every value is checked where it is read and a clean error names the field; a wrong shape on the commit path is retried like any failed commit, and a failure to read the reply to the request that creates a project says that a project may exist. What stands: (4) a loop in GitHub's name-taken check that never changes its answer (an operator call to delete it); (5) a GitLab commit whose reply cannot be used is retried and the retry would be refused for creating files that now exist, hiding that the first commit landed (an inference, not measured); (6) the default branch is read, not checked, and goes back to the host (in GitHub's path unquoted); (7) a text of only spaces or control characters counts as non-empty; (8) the "a project may exist" note covers an unreadable success reply only, not a gateway timeout, a lost connection or a cut-off body; (9) the standalone website command exits 0 for a failed result, with a project that may exist. | **Small, each an operator call:** (4) delete it or not; (5) check the head commit after an unreadable commit reply, or send an action that tolerates an existing file; (6) refuse a non-text branch or fall back to `main`; (7) tighten or leave; (8) widen the note or read the reply as a stream; (9) exit non-zero and/or print the reason. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
 | One more place puts a model's error text in a log | Found by Session 276's review, older than it. The data agent's schema probe logs a model failure through a masker that cannot see a bare token or a `Bearer` header. Its twin, the scripted intake runner copying a raw exception into the report it saves and the `Failure:` line it prints, was closed in Session 278: both now name the exception's class only. | **Low, a choice** for the log line. |
@@ -617,8 +617,10 @@ adapter `except` caught it and the run ended in a traceback, possibly after the 
 made `RepoHttpClient.build_request` (`_http.py`) turn `InvalidURL` and `ValueError` (which holds `UnicodeEncodeError`)
 into an `httpx.LocalProtocolError` with a fixed text and nothing chained behind it. The adapters catch that as any failed
 call, so these now fail as a `RepoClientError`: a C0 control or DEL, or a lone surrogate, in GitHub's `parent_sha` (a
-path; any `httpx`); a lone surrogate, a `NaN` or an infinity in GitHub's base-tree, blob, tree or commit sha or GitLab's
-group id (a JSON body; `httpx` 0.28 only, since 0.27 escapes the surrogate and sends the others); and a non-ASCII cookie
+path; any `httpx`); a lone surrogate in GitHub's base-tree, blob, tree or commit sha or GitLab's group id (a JSON
+body; `httpx` 0.28 only, since 0.27 escapes it and sends it), **and a `NaN` or an infinity there until Session 285,
+which refuses them by field name before any request is built, on every `httpx`** (`the reply has no usable "sha"`; a
+GitLab group id then fails at the group lookup and not at `create_project`); and a non-ASCII cookie
 a host set, after which the client refuses every later request (permanent for that adapter). What the operator sees
 differs by site: GitHub's commit sites are attempted three times, with a 1 s and a 2 s wait, and the run ends
 `repo_error_retry_exhausted` with the repository already made; GitLab's group id fails at `create_project` (`repo_error:
@@ -647,9 +649,12 @@ malformed JSON, which always did the same). The real replies measured nest at mo
 own, live, and GitHub's published examples), so 64 leaves a margin of more than ten; a narrower design (catch at the
 read, check the six values written back) would have changed no working reply and was not taken because those checks
 were the wrong-shape item. **Session 285 made them:** every value written back is now a non-empty string or, for
-GitLab's ids, an integer, so no nested value can reach a request through an adapter, and the narrower design is one
-catch at the read away. The limit's cost (a reply whose deep part nothing reads is refused) stands until the operator
-rules on it. (b) *A lone
+GitLab's ids, an integer, so no nested value can reach a request through an adapter. **That does not make the narrower
+design one catch away** (Session 285 first wrote that, and its review measured it false): on Python 3.14 a reply nested
+100,000 levels parses and `str()` of it raises `RecursionError`, and both adapters' name-conflict checks run `str(body)`
+on a `4xx` body while both read the default branch with `str()` on a `2xx`, so dropping the limit needs a guard at those
+three places as well as the catch. The limit's cost (a reply whose deep part nothing reads is refused) stands until the
+operator rules on it. (b) *A lone
 surrogate in the GitLab namespace* is a `RepoClientError` ("group lookup failed for ...: the namespace holds a
 character that cannot be written into an address") where `quote` raises it, **for a direct call of the adapter only:**
 the website command and the pipeline script end in a traceback for such a namespace before the adapter is reached
@@ -666,9 +671,9 @@ them) and the fallback if a release renames the method. Held by `test_host_reply
 found, on 3.14 and for a leaked message, since killed), and by the touched test files run by hand on Python 3.11, 3.12, 3.13 and 3.14 and on
 `httpx` 0.27.2.
 
-1. **The id, the branch and GitHub's `parent_sha` go into paths unquoted** (`gitlab_adapter.py:158,175`;
-   `github_adapter.py:191,201,209,221,234,244,258`, `:209` being the parent; the namespace is quoted, at
-   `gitlab_adapter.py:100`): `/`, `?`, `#` and `..` survive any scrub (an id of `1/../../x` is normalised by `httpx` to
+1. **The id, the branch and GitHub's `parent_sha` go into paths unquoted** (`gitlab_adapter.py:168,185`;
+   `github_adapter.py:197,207,215,227,240,250,264`, `:215` being the parent; the namespace is quoted, at
+   `gitlab_adapter.py:104`; numbers as of Session 285): `/`, `?`, `#` and `..` survive any scrub (an id of `1/../../x` is normalised by `httpx` to
    `/api/v4/x`, measured at the `httpx` level by Session 281's scouting). The host already holds the token, so this is no
    new capability: a nit. Quoting them is the fix, and it changes what is sent to the host: an operator call.
 2. **A wiki sentence is now imprecise:** `docs/wiki/model_project_constructor/Extending-the-Pipeline.md:106` says the id
@@ -676,7 +681,8 @@ found, on 3.14 and for a leaked message, since killed), and by the touched test 
    one). **Not edited, because any commit that touches `docs/wiki/` publishes it.** An operator call, with the two
    logging pages filed above.
 3. **CI runs `httpx` 0.28.1 only** (the lock); `pyproject.toml` admits `>=0.27`. The `httpx` 0.27 half of the new tests
-   (the body cases skip there, the path, cookie, nesting and redirect cases run) is run by hand with `uv run --with
+   (the lone-surrogate body cases skip there; the path, cookie, nesting, redirect and, since Session 285, `NaN` and
+   infinity cases run) is run by hand with `uv run --with
    httpx==0.27.2 pytest ...`, which Session 282 did (336 passed, 44 skipped) and Session 283 did for its four touched test
    files and the neighbouring `test_host_reuse_text.py` (251 passed, 44 skipped on the final tree). Session 283 also ran those five on Python
    3.11, 3.12 and 3.14 (295 passed on each, in separate
@@ -703,8 +709,8 @@ the operator's ruling); on the creation it ends the run at once. **(2) Closed by
 `_is_name_conflict` on a `422` whose `errors` is not a list). **(3) Closed by Session 285:** a failure to read the
 reply to the request that CREATES a project (a body that is not JSON, nested too deeply, or of the wrong shape) now ends
 with `(the host answered with a success status, so a project may already exist on it)` (`reading_a_creation_reply`;
-the group lookup and the commit steps do not say it, because they make no project). 331 new tests
-(`test_host_reply_shape.py`) and the older ones that pinned the old crash rewritten; Session 275's net is now held by
+the group lookup and the commit steps do not say it, because they make no project). `test_host_reply_shape.py`
+(396 tests, 191 of them wrong-shape cases) and the older ones that pinned the old crash rewritten; Session 275's net is now held by
 `BUGGY_BOOT` in `test_run_pipeline_website_crash_resume.py`, an adapter with an injected bug, because a host can no
 longer cause a bare exception.
 
@@ -734,13 +740,41 @@ send the commit with an action that does not refuse an existing file.
 
 **(6) The default branch is not checked.** Both adapters read it as `str(reply.get("default_branch") or "main")`: null,
 an empty string and a missing field become `main`, and any other truthy value is written as its `str()` (`7` is `"7"`,
-`["x"]` is `"['x']"`) and then goes back to the host in the commit's path unquoted (point 1 of *The id and the branch
-go into request paths unquoted*). It was left as it was because it never crashed and the ruling was about the fields
+`["x"]` is `"['x']"`) and then goes back to the host in the commit request: in GitHub's PATH, unquoted (point 1 of
+*The id and the branch go into request paths unquoted*), and in GitLab's JSON body as `"branch"`, which is not a path.
+It was left as it was because it never crashed and the ruling was about the fields
 the adapter cannot do without. **A decision:** refuse a non-text branch as the other fields are, or fall back to `main`.
 
-**(7) A text made only of spaces or control characters is a "non-empty string"** and is accepted: `_host_text.scrub_*`
-then empties it, as it did before. A tightening if wanted (`value.strip()`), at the cost of refusing a branch or an id
-that a scrub would have emptied anyway. Nothing known.
+**(7) A text made only of spaces or control characters is a "non-empty string"** and is accepted. What a method RETURNS
+(`ProjectInfo`, `CommitInfo`) is scrubbed, which empties such a text as it did before; what goes BACK to the host
+(GitLab's group id, GitHub's parent, base-tree, blob and tree shas) is never scrubbed (`_host_text.py` says so), so a
+group id of only spaces is sent as `namespace_id` as it came. A tightening if wanted (`value.strip()`). Nothing known
+sends one.
+
+**(8) The note that a project may exist covers an unreadable `2xx` and nothing else** (found by Session 285's review;
+an operator call on whether it should). A host that made a project and then failed to tell us says nothing in several
+ways the note does not reach, each reproduced: a `502`, `503` or `504` from a gateway and a `500` after the host
+committed (the reply is a `5xx`, so the adapter reports the refusal as it always did); a connection that broke or timed
+out AFTER the request left (`create_project failed for 'n': timed out`); and a `201` whose headers arrived and whose BODY
+was cut off, had bad gzip data or bad chunking (8 of 8 cases, both adapters: `httpx` reads the whole body inside `post`,
+so the error is a transport error raised before any reply exists to be read). In each the operator reads a plain
+creation failure; `--resume` refuses, but the standalone website command has no such guard (point 9), and the name-conflict
+loop of a re-run would make `n-v2`. Two smaller limits of the same note: it is the LAST words of the message and
+`scrubbed_errors` cuts a message at 1,000 characters, so a project name of about 850 characters or more (derived from
+`project_name_hint`, which nothing bounds) loses it; and a message could carry it FIRST instead, at the cost of every
+`repo_error: create_project failed` prefix this repository and its documents quote. The fix for the first group is a
+choice: say it for any creation failure that is not a plain `4xx` (a noisier note), or read the creation reply as a
+stream so the status is known when the body fails.
+
+**(9) The standalone website command exits 0 and prints `Status:  FAILED` for a wrong-shaped reply** (found by Session
+285's review; read from `cli.py`, which prints the status and returns for any result, and reproduced). Until Session 285
+such a reply ended the command in a traceback with exit 1 and wrote no file; it is now a `FAILED` result like any other
+`RepoClientError` (a `401`, a refused name), which this command has always reported with exit 0, an empty `Project:` line
+and, with `-o`, only `Wrote <file> (status=FAILED)`: the words that say a project may exist are in the JSON's
+`failure_reason`, on the screen only when `-o` is not given. The command has no `--resume` guard, so a re-run after
+reading `Status: FAILED` can make a second project. Not new for the other errors (it is the website command's
+counterpart of the owed ruling on what the data agent's `run` exits with for a failed report, the item *A bad `--db-url`
+still exits 0*); this change moved a class of replies into it. **Operator call:** exit non-zero on `FAILED`, and/or print `failure_reason`; an interface change either way.
 
 ### A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded
 

@@ -259,7 +259,7 @@ print(result["status"])
 print(result["failure_reason"])
 print(result["files_created"])     # partial list if PARTIAL
 print(result["project_url"])       # may be set even on FAILED if the project was created
-                                   # (always empty for the two reasons below)
+                                   # (always empty for the three reasons below)
 ```
 
 **Root causes:**
@@ -320,7 +320,13 @@ GitLab's group lookup fails before anything exists on the host (GitHub's owner l
 fail this way); the steps of a commit fail as `repo_error_retry_exhausted: commit_files failed ...: the reply has no usable "sha"` after
 three attempts, **with the project already created** (a wrong shape is retried like any failed commit, though a host
 that sent it once will probably send it again; `BACKLOG.md`, *Smaller follow-ups from the wrong-shape fix*, point 5,
-says what a retry of GitLab's commit may do).
+says what a retry of GitLab's commit may do). **Two limits.** The warning is for an unreadable *success* reply: a
+`502`, `503` or `504` from a gateway, a connection that broke after the request left, and a `201` whose body was cut
+off are plain creation failures that do not say a project may exist, although one may (`BACKLOG.md`, point 8). And
+**the standalone website command exits 0 and prints `Status:  FAILED`** for this result, as it does for any failed
+call (point 9): with `-o` the screen shows only `Wrote <file> (status=FAILED)`, and the words that say a project may
+exist are in the JSON's `failure_reason`. That command has no `--resume` guard, so look for the project before running
+it again.
 
 **`failure_reason: interrupted: KeyboardInterrupt (...)`** (or `SystemExit`).
 The run was stopped (Ctrl-C, or a `sys.exit`) while the website stage ran. The
