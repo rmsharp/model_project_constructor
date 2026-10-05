@@ -653,7 +653,7 @@ def _website_failure(
     built at run time) is replaced rather than carried. It also says a project
     may exist, because the operator reads it before deleting the result file to
     retry, and the stage cannot say whether it got as far as creating one (a
-    reply with no ``id`` leaves nothing to name). Project id, URL and commit are
+    bug after the host answered leaves nothing to name). Project id, URL and commit are
     therefore empty, as in the agent's precondition failure; the governance
     fields come from the intake report the stage was given.
     """

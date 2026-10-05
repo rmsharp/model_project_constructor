@@ -6,8 +6,9 @@ Phase 4A shipped three nodes (``CREATE_PROJECT`` → ``SCAFFOLD_BASE`` →
 - ``SCAFFOLD_GOVERNANCE`` — governance artifacts per §8.2 (tier-gated)
 - ``SCAFFOLD_ANALYSIS`` — governance-driven analysis scaffolds (fairness)
 - ``SCAFFOLD_TESTS`` — governance-driven test scaffolds (fairness)
-- A ``RETRY_BACKOFF`` self-loop off ``INITIAL_COMMITS`` for transient
-  ``RepoClientError`` (HTTP 401/429/5xx), 3 attempts max with
+- A ``RETRY_BACKOFF`` self-loop off ``INITIAL_COMMITS`` for any
+  ``RepoClientError`` (a transient HTTP 401/429/5xx, but also a reply of the
+  wrong shape, which will probably recur), 3 attempts max with
   exponential delay.
 
 All scaffold nodes merge into ``state["files_pending"]``; none replace it.

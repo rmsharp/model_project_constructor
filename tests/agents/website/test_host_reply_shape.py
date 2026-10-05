@@ -24,16 +24,21 @@ error), and the helpers themselves at the foot of the file.
 
 from __future__ import annotations
 
+import ast
 import copy
+import inspect
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import httpx
 import pytest
 
+from model_project_constructor.agents.website import github_adapter, gitlab_adapter
 from model_project_constructor.agents.website._host_text import (
     PROJECT_MAY_EXIST,
     reading_a_creation_reply,
@@ -60,6 +65,9 @@ URL = "https://h.example/g/p"
 FILES = {"README.md": "# r\n"}
 GITLAB = SHIPPED[0]
 GITHUB = SHIPPED[1]
+#: The same host answering for a personal account: ``GET /orgs/g`` is a 404, ``GET /users/g`` a
+#: 200, and the project is created with ``POST /user/repos``.
+GITHUB_USER = SHIPPED[2]
 
 #: A field that must be a non-empty string (an address, a sha, GitHub's ``owner/name``) or an
 #: identifier, which GitLab sends as an integer and which may also be a non-empty string.
@@ -119,6 +127,11 @@ SITES = [
         {("full_name",): TEXT, ("html_url",): TEXT}, None, creates=True,
     ),
     Site(
+        "github-user-create", GITHUB_USER, "create_project", "POST", "/user/repos", 201,
+        {"full_name": "g/n", "html_url": URL, "default_branch": "main"},
+        {("full_name",): TEXT, ("html_url",): TEXT}, None, creates=True,
+    ),
+    Site(
         "github-ref", GITHUB, "commit_files", "GET", "/repos/g/n/git/ref/heads/main", 200,
         {"object": {"sha": "p1"}}, {("object", "sha"): TEXT}, ("GET", "/repos/g/n/git/commits/"),
     ),
@@ -142,6 +155,18 @@ SITES = [
 
 COMMIT_SITES = [s for s in SITES if s.call == "commit_files"]
 CREATE_SITES = [s for s in SITES if s.creates]
+
+
+def context_of(site: Site) -> str:
+    """The adapter's own words for the call, which every message about its reply starts with."""
+    shipped = site.shipped
+    if site.name == "gitlab-group-lookup":
+        return f"group lookup failed for {shipped.namespace!r}"
+    if site.creates:
+        return "create_project failed for 'n'"
+    if shipped.host == "gitlab":
+        return "commit_files failed (project=42, branch=main)"
+    return "commit_files failed (project='g/n', branch='main')"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -245,7 +270,15 @@ def variants(site: Site) -> list[Variant]:
             for label, value in BAD_CONTAINER.items():
                 body = _json(_set(site.honest, path[:-1], value))
                 out.append(Variant(f"{path[0]}-{label}", body, _quoted(path)))
-    return out
+    # An empty object IS the field missing at a site with one flat field, and the object that
+    # should hold a nested field empty IS that field missing: the same body would run twice.
+    seen: set[bytes] = set()
+    unique = []
+    for variant in out:
+        if variant.body not in seen:
+            seen.add(variant.body)
+            unique.append(variant)
+    return unique
 
 
 CASES = [
@@ -348,6 +381,7 @@ def test_a_reply_of_the_wrong_shape_is_a_repo_client_error_naming_the_field(
     never reaches the host."""
     outcome, seen = _run(site, variant.body)
     error = _assert_a_repo_error(outcome)
+    assert str(error).startswith(f"{context_of(site)}: the reply "), str(error)
     assert variant.names in str(error), str(error)
     assert (MAY_EXIST in str(error)) is site.creates, str(error)
     if site.carries is not None:
@@ -365,7 +399,7 @@ def test_a_reply_that_is_not_usable_json_says_a_project_may_exist_where_one_may(
     there. The same text now follows it on the creation, and on no other request."""
     outcome, seen = _run(site, body)
     error = _assert_a_repo_error(outcome)
-    assert "invalid JSON body" in str(error), str(error)
+    assert str(error).startswith(f"{context_of(site)}: invalid JSON body: "), str(error)
     assert (MAY_EXIST in str(error)) is site.creates, str(error)
     if site.carries is not None:
         assert not _was_sent(seen, site.carries), seen
@@ -373,8 +407,9 @@ def test_a_reply_that_is_not_usable_json_says_a_project_may_exist_where_one_may(
 
 @pytest.mark.parametrize("site", CREATE_SITES, ids=lambda s: s.name)
 def test_a_creation_the_host_refused_does_not_say_a_project_may_exist(site: Site) -> None:
-    """The note is for a ``2xx``, which a host sends when it made the project. A ``500`` made
-    none, and says what it always said."""
+    """The note is for a ``2xx`` whose reply cannot be read. A ``500`` says what it always said:
+    whether one made a project is not known (``BACKLOG.md``, point 8), and this change does not
+    widen the note to it."""
     outcome, _ = _run(site, _json({"message": "boom"}), status=500)
     error = _assert_a_repo_error(outcome)
     assert "500" in str(error)
@@ -405,8 +440,8 @@ def test_the_message_holds_none_of_the_hosts_words(site: Site, where: str) -> No
 )
 @pytest.mark.parametrize("identifier", [7, "7", 0, "x/y"], ids=["int", "str", "zero", "path"])
 def test_an_identifier_may_be_an_integer_or_a_string(site: Site, identifier: object) -> None:
-    """GitLab sends its ids as integers; the field is read as either, and what it holds is passed
-    on as it was (``namespace_id``)."""
+    """GitLab sends its ids as integers; the field is read as either. (That what it holds goes back
+    to the host as it was is held on the wire, by the tests that record the request, below.)"""
     path = next(p for p, kind in site.fields.items() if kind == ID)
     outcome, _ = _run(site, _json(_set(site.honest, path, identifier)))
     assert not isinstance(outcome, Exception), repr(outcome)
@@ -418,7 +453,8 @@ def test_an_identifier_may_be_an_integer_or_a_string(site: Site, identifier: obj
 )
 def test_the_default_branch_is_not_a_required_field(site: Site, branch: object) -> None:
     """Read as before: absent or empty gives ``main``, and no value of it is a reason to refuse a
-    reply that names the project. (Checking it is not part of this item.)"""
+    reply that names the project. Checking it is not part of this item: ``BACKLOG.md`` point 6
+    puts it to the operator, and the ``number`` case is what changes if the answer is to refuse."""
     reply = _set(site.honest, ("default_branch",), branch)
     outcome, _ = _run(site, _json(reply))
     assert not isinstance(outcome, Exception), repr(outcome)
@@ -555,22 +591,43 @@ def test_reply_string_follows_the_path_and_returns_the_text_as_it_was() -> None:
         ({"object": {}}, ("object", "sha")),
         ({"object": None}, ("object", "sha")),
         ({"object": "x"}, ("object", "sha")),
+        ({"object": "sha"}, ("object", "sha")),
         ({"object": ["sha"]}, ("object", "sha")),
         ({"sha": "x"}, ("object", "sha")),
         ({"a": {"b": {}}}, ("a", "b", "c")),
         ([], ("sha",)),
+        ("sha", ("sha",)),
     ],
     ids=repr,
 )
 def test_reply_string_names_the_dotted_path_it_could_not_use(
     body: object, path: tuple[str, ...]
 ) -> None:
+    """A string that CONTAINS the key (``{"object": "sha"}``) is not an object that has it: ``in``
+    would say so and the subscript would raise the ``TypeError`` this change removes."""
+    expected = (
+        f'{CONTEXT}: the reply has no usable "{".".join(path)}"'
+        if isinstance(body, dict)
+        else f"{CONTEXT}: the reply is not a JSON object"
+    )
     with pytest.raises(RepoClientError) as caught:
         reply_string(body, *path, context=CONTEXT)
-    message = str(caught.value)
-    assert message.startswith(f"{CONTEXT}: the reply ")
-    assert message.endswith(f'has no usable "{".".join(path)}"') or "not a JSON object" in message
+    assert str(caught.value) == expected
     assert type(caught.value) is RepoClientError
+
+
+@pytest.mark.parametrize("text", ["a", " ", "x" * 5_000, "\u00e9\u4e2d", "\x1b[2J"], ids=len)
+def test_any_non_empty_text_is_a_usable_text(text: str) -> None:
+    """The rule is non-empty and nothing more (``BACKLOG.md``, point 7 puts a stricter one to the
+    operator): one character, a long text and a text of only spaces are returned whole."""
+    assert reply_string({"sha": text}, "sha", context=CONTEXT) == text
+
+
+def test_reply_id_accepts_an_integer_of_any_size_and_says_exactly_what_it_lacks() -> None:
+    assert reply_id({"id": 2**70}, "id", context=CONTEXT) == 2**70
+    with pytest.raises(RepoClientError) as caught:
+        reply_id({"id": None}, "id", context=CONTEXT)
+    assert str(caught.value) == f'{CONTEXT}: the reply has no usable "id"'
 
 
 def test_reply_id_keeps_what_the_host_sent() -> None:
@@ -627,8 +684,243 @@ def test_a_name_conflict_passes_through_unchanged() -> None:
     assert caught.value is conflict
 
 
-def test_the_note_is_the_one_the_pipeline_net_already_uses_in_spirit() -> None:
+def test_the_note_is_fixed_words_that_say_a_project_may_exist() -> None:
     """Fixed words, none of them the host's, and the phrase the site tests look for."""
     assert MAY_EXIST in PROJECT_MAY_EXIST
     assert PROJECT_MAY_EXIST.startswith("(") and PROJECT_MAY_EXIST.endswith(")")
     assert is_clean(PROJECT_MAY_EXIST)
+
+
+# ---------------------------------------------------------------------------------------------
+# Where the note is not said, and what goes back to the host
+# ---------------------------------------------------------------------------------------------
+
+
+def _mocked(shipped: Shipped, handler: Callable[[httpx.Request], httpx.Response]) -> RepoClient:
+    """The shipped adapter with its client swapped for one over a mock transport."""
+    adapter = shipped.make("https://h.example")
+    adapter._client = httpx.Client(  # type: ignore[assignment]
+        base_url=adapter._client.base_url,
+        headers=adapter._client.headers,
+        transport=httpx.MockTransport(handler),
+    )
+    return adapter
+
+
+def _answering(
+    statuses: dict[tuple[str, str], int],
+) -> Callable[[httpx.Request], httpx.Response]:
+    def handler(request: httpx.Request) -> httpx.Response:
+        status = statuses.get((request.method, request.url.path))
+        if status is None:
+            raise AssertionError(f"unexpected request: {request.method} {request.url.path}")
+        return httpx.Response(status, json={"message": "no"})
+
+    return handler
+
+
+REFUSED_BEFORE_ANYTHING_IS_MADE = [
+    pytest.param(
+        GITHUB, {("GET", "/orgs/g"): 500}, "owner lookup failed for 'g'", id="github-org-500"
+    ),
+    pytest.param(
+        GITHUB, {("GET", "/orgs/g"): 401}, "owner lookup failed for 'g'", id="github-org-401"
+    ),
+    *[
+        pytest.param(
+            GITHUB,
+            {("GET", "/orgs/g"): 404, ("GET", "/users/g"): status},
+            "owner lookup failed for 'g'",
+            id=f"github-user-{status}",
+        )
+        for status in (401, 404, 500)
+    ],
+    *[
+        pytest.param(
+            GITLAB,
+            {("GET", "/api/v4/groups/g"): status},
+            "group lookup failed for 'g'",
+            id=f"gitlab-group-{status}",
+        )
+        for status in (401, 404, 500)
+    ],
+]
+
+
+@pytest.mark.parametrize(("shipped", "statuses", "starts"), REFUSED_BEFORE_ANYTHING_IS_MADE)
+def test_a_refused_lookup_does_not_say_a_project_may_exist(
+    shipped: Shipped, statuses: dict[tuple[str, str], int], starts: str
+) -> None:
+    """The lookups before the creation make nothing, and a host that refuses one is not describing
+    a project. The note belongs to the creation's reply and to no step before it."""
+    adapter = _mocked(shipped, _answering(statuses))
+    with pytest.raises(RepoClientError) as caught:
+        adapter.create_project(namespace="g", name="n", visibility="private")
+    assert type(caught.value) is RepoClientError
+    assert str(caught.value).startswith(f"{starts}: "), str(caught.value)
+    assert "may already exist" not in str(caught.value)
+
+
+@pytest.mark.parametrize("shipped", [GITLAB, GITHUB], ids=lambda s: s.name)
+@pytest.mark.parametrize(
+    "failure",
+    [httpx.ConnectError("refused"), httpx.ReadTimeout("slow")],
+    ids=["connect", "timeout"],
+)
+def test_a_creation_request_that_failed_in_transit_does_not_get_the_note(
+    shipped: Shipped, failure: httpx.HTTPError
+) -> None:
+    """No reply was read, so nothing says the host answered ``2xx``; whether it made a project
+    when the connection broke after the request left is not known (``BACKLOG.md``, point 8)."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            raise failure
+        return httpx.Response(200, json={"id": 7})
+
+    adapter = _mocked(shipped, handler)
+    with pytest.raises(RepoClientError) as caught:
+        adapter.create_project(namespace="g", name="n", visibility="private")
+    assert type(caught.value) is RepoClientError
+    assert str(caught.value).startswith("create_project failed for 'n': "), str(caught.value)
+    assert "may already exist" not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    [7, "7", "007", 0, 2**40, "x/y"],
+    ids=["int", "str", "zeros", "zero", "big", "path"],
+)
+def test_a_group_id_goes_back_to_the_host_exactly_as_it_was_sent(identifier: object) -> None:
+    """An integer stays an integer and a string a string: the id is the host's, and ``"007"`` is not
+    ``7``. Recorded on the request, which is the only place it shows."""
+    bodies: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(200, json={"id": identifier})
+        bodies.append(json.loads(request.content))
+        return httpx.Response(201, json={"id": 42, "web_url": URL})
+
+    _mocked(GITLAB, handler).create_project(namespace="g", name="n", visibility="private")
+    assert len(bodies) == 1
+    sent = bodies[0]["namespace_id"]
+    assert sent == identifier and type(sent) is type(identifier)
+
+
+def test_the_shas_go_back_to_the_host_exactly_as_it_sent_them() -> None:
+    """Odd but usable text (spaces, an accent, a leading space) is passed on untouched: the check
+    refuses what is not text, and does not tidy what is."""
+    parent, base, blob, tree, commit = " p1 ", "  t1", "b\u00e9", "t2 ", " c1"
+    seen: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        route = (request.method, request.url.path)
+        if route == ("GET", "/repos/g/n"):
+            return httpx.Response(200, json={})
+        if route == ("GET", "/repos/g/n/git/ref/heads/main"):
+            return httpx.Response(200, json={"object": {"sha": parent}})
+        if request.method == "GET" and request.url.path.startswith("/repos/g/n/git/commits/"):
+            seen["parent_path"] = request.url.raw_path
+            return httpx.Response(200, json={"tree": {"sha": base}})
+        if route == ("POST", "/repos/g/n/git/blobs"):
+            return httpx.Response(201, json={"sha": blob})
+        if route == ("POST", "/repos/g/n/git/trees"):
+            seen["trees"] = json.loads(request.content)
+            return httpx.Response(201, json={"sha": tree})
+        if route == ("POST", "/repos/g/n/git/commits"):
+            seen["commits"] = json.loads(request.content)
+            return httpx.Response(201, json={"sha": commit})
+        if route == ("PATCH", "/repos/g/n/git/refs/heads/main"):
+            seen["ref"] = json.loads(request.content)
+            return httpx.Response(200, json={})
+        raise AssertionError(f"unexpected request: {route}")
+
+    result = _mocked(GITHUB, handler).commit_files(
+        project_id="g/n", branch="main", files={"README.md": "x"}, message="m"
+    )
+    # What the method RETURNS is scrubbed (a leading space goes); what goes BACK to the host is not.
+    assert result.sha == commit.strip()
+    parent_path = seen["parent_path"]
+    assert isinstance(parent_path, bytes) and parent_path.endswith(b"/git/commits/%20p1%20")
+    trees = seen["trees"]
+    assert isinstance(trees, dict)
+    assert trees["base_tree"] == base and trees["tree"][0]["sha"] == blob
+    assert seen["commits"] == {"message": "m", "tree": tree, "parents": [parent]}
+    assert seen["ref"] == {"sha": commit}
+
+
+# ---------------------------------------------------------------------------------------------
+# Nothing reads a reply except through the helpers
+# ---------------------------------------------------------------------------------------------
+
+READERS = {"reply_object", "reply_string", "reply_id"}
+
+
+def _parse_json_reads(module: object) -> list[tuple[int, bool]]:
+    """Each call of ``_parse_json`` in an adapter, as (line, whether its result goes only to a
+    ``reply_*`` helper): as an argument of one directly, or by way of a name that is used only as
+    the first argument of one."""
+    source = Path(inspect.getfile(module)).read_text()  # type: ignore[arg-type]
+    tree = ast.parse(source)
+    parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
+
+    def is_reader_argument(node: ast.AST) -> bool:
+        parent = parents.get(node)
+        return (
+            isinstance(parent, ast.Call)
+            and isinstance(parent.func, ast.Name)
+            and parent.func.id in READERS
+            and bool(parent.args)
+            and parent.args[0] is node
+        )
+
+    reads = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_parse_json"
+        ):
+            continue
+        parent = parents[node]
+        if is_reader_argument(node):
+            reads.append((node.lineno, True))
+        elif isinstance(parent, ast.Assign) and len(parent.targets) == 1:
+            target = parent.targets[0]
+            assert isinstance(target, ast.Name)
+            scope = parents[parent]
+            uses = [
+                n for n in ast.walk(scope)
+                if isinstance(n, ast.Name) and n.id == target.id and isinstance(n.ctx, ast.Load)
+            ]
+            reads.append((node.lineno, bool(uses) and all(is_reader_argument(n) for n in uses)))
+        else:
+            reads.append((node.lineno, False))
+    return reads
+
+
+@pytest.mark.parametrize(
+    ("module", "shipped"),
+    [(gitlab_adapter, GITLAB), (github_adapter, GITHUB)],
+    ids=["gitlab", "github"],
+)
+def test_every_reply_an_adapter_reads_goes_through_a_reply_helper(
+    module: object, shipped: Shipped
+) -> None:
+    """The nine sites above are listed by hand; this is what makes a tenth show up. A new
+    ``_parse_json`` read is counted here (so the list above must grow with it), and one whose
+    result is subscripted, or used in any way but as the first argument of ``reply_object``,
+    ``reply_string`` or ``reply_id``, is refused. The neighbouring failure classes have a guard of
+    this kind (``test_host_failure_text.py``); ``_parse_json`` returns ``object``, which mypy
+    holds for the subscript, and this holds the rest."""
+    reads = _parse_json_reads(module)
+    unchecked = [line for line, through_a_helper in reads if not through_a_helper]
+    assert not unchecked, f"read without a reply helper at line(s) {unchecked}"
+    # The personal-account creation is the same read as the organisation's: one site, two routes.
+    expected = sum(
+        1
+        for site in SITES
+        if site.shipped.host == shipped.host and site.shipped.name != "github-user"
+    )
+    assert len(reads) == expected, (len(reads), expected)

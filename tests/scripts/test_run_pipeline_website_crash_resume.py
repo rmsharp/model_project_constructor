@@ -54,6 +54,13 @@ BOOT = (
 #: this.
 BUGGY_BOOT = """
 import os, runpy, sys
+
+# The script puts its own tree first on the path (``scripts/run_pipeline.py``); so does this, BEFORE
+# the adapter is imported, or a copy of the repository sharing an environment with another
+# checkout would run the other checkout's adapter and pipeline.
+root = os.path.dirname(os.path.dirname(os.path.abspath(sys.argv[1])))
+sys.path.insert(0, os.path.join(root, "src"))
+sys.path.insert(0, os.path.join(root, "packages", "data-agent", "src"))
 import model_project_constructor.agents.website.gitlab_adapter as gitlab
 
 where, _, kind = os.environ["ADAPTER_BUG_FOR_TEST"].partition(":")
@@ -114,9 +121,10 @@ class Host:
             # The same body as a ``201``: the host made the project and the reply cannot be used.
             return _http(201, "Created", b"[" * 100_000 + b"]" * 100_000)
         if self.how == "not-an-object":
-            # A ``201`` whose body is valid JSON but not an object: the adapter subscripts it and
-            # gets a ``TypeError``, which is not a ``RepoClientError``. (This stood in for a project
-            # id with a control code, whose ``InvalidURL`` was the crash here until BACKLOG route 8
+            # A ``201`` whose body is valid JSON but not an object: the adapter refuses it as a
+            # ``RepoClientError`` ("the reply is not a JSON object"); until Session 285 it
+            # subscripted it and got a ``TypeError``. (This stood in, before that, for a project id
+            # with a control code, whose ``InvalidURL`` was the crash here until BACKLOG route 8
             # scrubbed the id; ``test_host_success_end_to_end.py`` holds what that id does now.)
             return _http(201, "Created", b"[]")
         # ``hold``: the commit never gets an answer until the test lets go of it.
@@ -325,12 +333,12 @@ def test_a_commit_reply_of_the_wrong_shape_is_retried_and_then_a_repository_erro
 def test_a_reply_nested_100000_deep_is_a_repository_error_and_not_a_crash(
     serve: Callable[[Host], Host], tmp_path: Path
 ) -> None:
-    """This was a ``RecursionError`` out of the adapter (``unexpected_error: RecursionError``, the
-    third case of the test above, ``error-body-100000-deep``) until Session 283: the adapters'
-    ``except ValueError`` did not catch it. It is an ordinary failed call now, ``repo_error``, so
-    the net above is not what holds it. The body is a ``400``, where no project exists; the next
-    test is the ``201``. ``test_host_reply_nesting.py`` holds every place an adapter reads a
-    reply."""
+    """This was a ``RecursionError`` out of the adapter (``unexpected_error: RecursionError``, a
+    case of ``test_a_crash_is_saved_and_resume_makes_no_second_project``,
+    ``error-body-100000-deep``) until Session 283: the adapters' ``except ValueError`` did not
+    catch it. It is an ordinary failed call now, ``repo_error``, so that net is not what holds it.
+    The body is a ``400``, where no project exists; the next test is the ``201``.
+    ``test_host_reply_nesting.py`` holds every place an adapter reads a reply."""
     host = serve(Host("project", "deep-json"))
     checkpoints = tmp_path / "checkpoints"
 
@@ -425,3 +433,72 @@ def test_an_interrupt_during_the_commit_is_saved_and_resume_makes_no_second_proj
 
     host.fails_at = ""  # the host recovered: an honest resume would have built a second project
     _assert_resume_refuses(host, checkpoints, posts_before=1)
+
+
+def _github_host(creation: bytes) -> Callable[[bytes], bytes]:
+    """A GitHub-shaped host: an organisation owner, and the creation answered with ``creation``;
+    nothing else it is asked for exists (this is about the creation only)."""
+
+    def reply(request: bytes) -> bytes:
+        method, path, _ = request.split(b"\r\n", 1)[0].decode().split(" ", 2)
+        if method == "GET" and path.startswith("/orgs/") and path.count("/") == 2:
+            return _http(200, "OK", b"{}")
+        if method == "POST" and path.startswith("/orgs/") and path.endswith("/repos"):
+            return _http(201, "Created", creation)
+        return _http(404, "Not Found", b"{}")
+
+    return reply
+
+
+@pytest.mark.parametrize(
+    ("creation", "names"),
+    [
+        pytest.param(b"{}", 'has no usable "full_name"', id="reply-without-a-full-name"),
+        pytest.param(b"[]", "is not a JSON object", id="reply-not-an-object"),
+        pytest.param(b"not json", "invalid JSON body", id="reply-not-json"),
+    ],
+)
+def test_a_github_creation_reply_of_the_wrong_shape_is_a_repository_error_and_resume_refuses(
+    tmp_path: Path, creation: bytes, names: str
+) -> None:
+    """Every other test here drives a GitLab-shaped host. This is the same property at a GitHub
+    one, through the real script's ``--host github`` path: one project ``POST``, an ordinary
+    ``repo_error`` that names the field and says a project may exist, and a ``--resume`` that
+    refuses (and so makes no second)."""
+    posts: list[tuple[str, str]] = []
+    handler = _github_host(creation)
+
+    def reply(request: bytes) -> bytes:
+        method, path, _ = request.split(b"\r\n", 1)[0].decode().split(" ", 2)
+        posts.append((method, path))
+        return handler(request)
+
+    checkpoints = tmp_path / "checkpoints"
+    with serving_raw(reply) as server:
+        env = {k: v for k, v in os.environ.items() if not k.startswith("MPC_")}
+        env.update(MPC_HOST="github", MPC_HOST_URL=server.url, GITHUB_TOKEN=TOKEN)
+        base = [sys.executable, str(SCRIPT), "--live", "--host", "github"]
+        base += ["--checkpoint-dir", str(checkpoints)]
+        failed = subprocess.run(
+            [*base, "--run-id", RUN_ID], cwd=REPO_ROOT, env=env, capture_output=True,
+            encoding="utf-8", errors="replace", check=False, stdin=subprocess.DEVNULL, timeout=180,
+        )
+        shown = failed.stdout + failed.stderr
+        assert failed.returncode == 1, shown
+        assert "Traceback" not in shown
+        saved = _saved(checkpoints)
+        reason = saved["failure_reason"]
+        assert saved["status"] == "FAILED" and isinstance(reason, str)
+        assert reason.startswith("repo_error: create_project failed"), reason
+        assert names in reason and "a project may already exist" in reason, reason
+        assert "unexpected_error" not in reason and TOKEN not in shown + _everything(checkpoints)
+        creations = [1 for m, p in posts if m == "POST" and p.endswith("/repos")]
+        assert len(creations) == 1
+
+        resumed = subprocess.run(
+            [*base, "--resume", RUN_ID], cwd=REPO_ROOT, env=env, capture_output=True,
+            encoding="utf-8", errors="replace", check=False, stdin=subprocess.DEVNULL, timeout=180,
+        )
+        assert resumed.returncode == 2, resumed.stdout + resumed.stderr
+        assert "RESUMED from" not in resumed.stdout + resumed.stderr
+        assert len([1 for m, p in posts if m == "POST" and p.endswith("/repos")]) == 1
