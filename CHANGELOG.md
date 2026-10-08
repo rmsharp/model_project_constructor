@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-08 · [ad hoc] BL-101 P11 — tests: `tests/test_read_budget.py` names the runner where it now sits (`methodology/SESSION_RUNNER.md`)
+- **Change:** one constant, `RUNNER = "methodology/SESSION_RUNNER.md"` (`tests/test_read_budget.py:67`). The move commit before this one (tier 1: the runner and the other ten framework files at the root, and the twelve under `docs/methodology/`, now sit under `methodology/`) left this test reading the runner at the project root; `test_live[stub]` failed ("`check_stub`"), and the 26 mutant tests that need a green `test_live` skipped, which took the suite from 9 skipped to 35. Nothing else in the suite named a file tier 1 moves. The project's own `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md` and the two configs stay at the root (tier 2): the move at tier all broke 2 of the 13 proofs in `docs/architecture-history/` (`SESSION_NOTES-pointer-collapse.verify.sh` and `-S254`, whose `LIVE` path is the root `SESSION_NOTES.md`) and 41 tests, so tier 2 waits for its own decision.
+- **Non-commit actions:** none. Nothing was pushed.
+- **Commit/PR:** this commit
+- **Session:** fork S285 (BL-101 P11, run from the methodology checkout; not a session of this project) · **Verified:** on this exact tree, before the commit, `.venv/bin/ruff check src/ tests/ packages/ scripts/` exit 0, `.venv/bin/mypy` exit 0, the 13 proofs in `docs/architecture-history/*.verify.sh` each exit 0 plain and exit 0 with `--self-test` printing `SELF-TEST OK`, and `.venv/bin/pytest -q` 3,942 passed, 9 skipped, 98.34% coverage: the same figures as before the sync and before the move. The suite on the tier-all tree (a scratch clone, then this repository's own, identical) was 32 failed, 9 errors, 3,875 passed, 35 skipped. Not run: the GitHub Actions workflow itself.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-08 · [ad hoc] Layout migration: the methodology files now live under `methodology/` (tier 1, 23 files)
 
 `bin/migrate-layout` (KJ5HST/methodology @ ea82c0c) moved them in one commit with `git mv`; paths were rewritten in `CLAUDE.md`, `.context-budget.json`. No older entry or shard was edited, so a link in an older entry is relative to the root, where the ledger sat when it was written.

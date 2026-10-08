@@ -64,7 +64,7 @@ CHANGELOG = "CHANGELOG.md"
 LEARNINGS = "PROJECT_LEARNINGS.md"
 CLAUDE = "CLAUDE.md"
 CONVENTIONS = "docs/methodology/PROJECT_CONVENTIONS.md"
-RUNNER = "SESSION_RUNNER.md"
+RUNNER = "methodology/SESSION_RUNNER.md"   # moved under methodology/ (BL-101 P11)
 
 MANDATED = (SESSION_NOTES, BACKLOG, LEARNINGS)   # ruling 2026-09-14: CHANGELOG.md is outside
 KNOWN_REFUSED: tuple[str, ...] = (LEARNINGS,)   # ruling 2026-09-10: declare, guard, file
