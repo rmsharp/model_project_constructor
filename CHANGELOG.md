@@ -16,6 +16,10 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-08 · [ad hoc] Layout migration: the methodology files now live under `methodology/` (tier 1, 23 files)
+
+`bin/migrate-layout` (KJ5HST/methodology @ ea82c0c) moved them in one commit with `git mv`; paths were rewritten in `CLAUDE.md`, `.context-budget.json`. No older entry or shard was edited, so a link in an older entry is relative to the root, where the ledger sat when it was written.
+
 ### 2026-10-08 · [ad hoc] BL-101 P11 — sync the framework files from the methodology fork `main` (`bin/sync`, 21 files rewritten, `.gitattributes` created), the step before the move to `methodology/`
 - **Change:** `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `FRAMEWORK_LEARNINGS.md`, `RECOMMENDED_SKILLS.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py` and eleven files under `docs/methodology/` (three framework documents and the eight workstream and campaign files that were behind; `DESIGN_WORKSTREAM.md` and `CONTEXT_TEMPLATE.md` were already current) are now byte-identical to the canonical starter kit at fork `main` `ea82c0c` (`v4.2-1652-gea82c0c`; the distributed files are those of `add55f1`, the sha P10 recorded). `.gitattributes` is new: the ledger merge-driver seed (`merge=union` for `CHANGELOG.md` and the two `.jsonl` histories). No `--force`: no file showed local modification. The six seeds (`SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json`) were left as they are. This is one `bin/sync` run as one commit, the step `docs/planning/methodology-subdirectory-plan.md` §5A.2 of the fork puts before `bin/migrate-layout`, which is the next commit.
 - **Non-commit actions:** none. Nothing was pushed.

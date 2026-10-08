@@ -60,12 +60,12 @@
 
   "synced": [
     {
-      "path": "SESSION_RUNNER.md",
+      "path": "methodology/SESSION_RUNNER.md",
       "canonical": "../methodology/starter-kit/SESSION_RUNNER.md",
       "_": "Drift-checked, never size-checked — an adopter may not edit this file, so a size finding would be unactionable. Adjust the canonical path to wherever your methodology checkout lives. Zero local edits means `git diff` in your project shows nothing, so drift is otherwise invisible: on the source project both synced files were 13 and 2 commits behind for 48 days without anyone noticing."
     },
     {
-      "path": "SAFEGUARDS.md",
+      "path": "methodology/SAFEGUARDS.md",
       "canonical": "../methodology/starter-kit/SAFEGUARDS.md"
     }
   ]
