@@ -55,6 +55,7 @@ rows below it are the smaller residue that closing it exposed.
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed. Session 282 made a request the HTTP library cannot build (a control character, a broken half of a character or a number such as `NaN` in a value the host sent) fail cleanly like any other call. Session 283 did the same for three more: a reply nested more than 64 levels (a limit it chose; it also refuses a reply whose deep part nothing reads, and real ones nest at most 5), a redirect the library cannot build (an address such as `mailto:x`, or about 65,500 characters, or malformed in a few other ways), and a broken half of a character in the GitLab group name, **when the adapter is called directly: the website command and the pipeline script still end in a traceback for such a name, from another layer** (see the item on channels that write a file that will not reload). What is left here is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran its touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
+| Running the pipeline on a made-up company found defects in the tool and in what it scaffolds | Session 286 ran the whole pipeline on an invented insurer with no API key (`examples/larkspur_mutual/`). It worked end to end, and showed: the class named read-only is not (a `DROP TABLE` through it stuck on SQLite); the project the tool writes fails its own tests, 8 of 8; a GitLab token can be sent to GitHub when `--host` and `MPC_HOST` disagree; the GitHub path probably fails on an empty repository; what the stakeholder says about the data never reaches the data stage; and there is no route from a finished interview into the pipeline script. None is fixed. | **Mixed.** The read-only one is the one to do first; the test and token ones are small; the GitHub one needs a live run on a throwaway account; several are operator calls. |
 | Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed | **The main part closed in Sessions 284 and 285.** A repository host used to be able to crash the adapter by answering a successful call with valid JSON of the wrong shape (an empty object, an array, `null`, a number, a missing field): the website command ended in a traceback and the pipeline saved "unexpected error: KeyError". Now every value is checked where it is read and a clean error names the field; a wrong shape on the commit path is retried like any failed commit, and a failure to read the reply to the request that creates a project says that a project may exist. What stands: (4) a loop in GitHub's name-taken check that never changes its answer (an operator call to delete it); (5) a GitLab commit whose reply cannot be used is retried and the retry would be refused for creating files that now exist, hiding that the first commit landed (an inference, not measured); (6) the default branch is read, not checked, and goes back to the host (in GitHub's path unquoted); (7) a text of only spaces or control characters counts as non-empty; (8) the "a project may exist" note covers an unreadable success reply only, not a gateway timeout, a lost connection or a cut-off body; (9) the standalone website command exits 0 for a failed result, with a project that may exist. | **Small, each an operator call:** (4) delete it or not; (5) check the head commit after an unreadable commit reply, or send an action that tolerates an existing file; (6) refuse a non-text branch or fall back to `main`; (7) tighten or leave; (8) widen the note or read the reply as a stream; (9) exit non-zero and/or print the reason. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
@@ -689,6 +690,66 @@ found, on 3.14 and for a leaked message, since killed), and by the touched test 
    environments: `UV_PROJECT_ENVIRONMENT=<dir> uv run --frozen --extra agents --extra ui --extra dev --python 3.12
    python -m pytest ...`, since a bare `pytest` there is whatever is first on the `PATH`); CI runs 3.12.3 only. Related
    to the item *CI tests one Python* below, which is about the interpreter.
+
+### Running the pipeline on a made-up company found defects in the tool and in the project it scaffolds
+
+**Found by Session 286, by running the whole pipeline keyless on a fictitious insurer (`examples/larkspur_mutual/`;
+its `README.md` carries the full list, each with how it was learned: *ran*, *read* or *review* — an independent reviewer
+ran or read it, a second could not refute it, and Session 286 has not re-run it).** The run itself worked end to end
+(`COMPLETE`, 55 files, 14 quality checks of which 11 pass). None of the points below was fixed. In the order Session 286
+would take them (an estimate, not a measurement):
+
+**(1) `ReadOnlyDB` is not read-only. The one to do first: it is a safety property, and it matters the day a real
+warehouse is connected (ran, on a scratch SQLite copy).** `ReadOnlyDB.execute` (`db.py:632`) runs whatever it is given
+through `sa.text`; the quality checks (`nodes.py:140`) and the baseline (`nodes.py:235`) execute the model's SQL
+without `validate_sql`, which (`sql_validation.py:16`) runs on the primary queries only and accepts any statement type
+it recognizes. `DROP TABLE` and `CREATE TABLE` persisted; `DELETE` and `UPDATE` ran and were rolled back only because
+nothing commits. A fix would refuse anything but one `SELECT` or `WITH` and open the connection read-only (SQLite
+`mode=ro`; `default_transaction_read_only` on PostgreSQL). **Operator call:** how strict, and whether to say in the
+docs that the account must be unable to write whatever the code does.
+
+**(2) The project the tool writes fails its own tests, 8 of 8 (ran).** `templates.py:668` writes the literal
+`<project_slug>` where `{project_slug}` was meant (also `:436,460,463,477,478` and `governance_templates.py:755,813`),
+and each `*_stub_raises` test puts `pass` inside `pytest.raises`. Its README says `uv run pytest` and its
+`.gitlab-ci.yml` runs `uv run pytest -q`. From the review: a bare `uv sync` skips the `dev` extra that holds `pytest`
+and `ruff`, so its CI fails at lint first; its `governance` job parses JSON only and sits behind the failing test job;
+`pre-commit`'s `ruff-format` would reformat four test files; notebooks 02 to 05 need Jupyter, which is not declared;
+"Phase 4B" text (`templates.py:135,136,627,687`) says things are still to come that are already there. **Operator
+call:** whether red stubs are intended; if so the README it writes should say so.
+
+**(3) `--host` and `MPC_HOST` can disagree about which token to send (read).** `scripts/run_pipeline.py:349` takes the
+token from the settings (which follow `MPC_HOST`, default `gitlab`) and `:356` builds the adapter from `--host`, so
+`--host github --live` with `GITLAB_TOKEN` set sends that token to `api.github.com`, and `.env.example` ships
+`MPC_HOST=gitlab` uncommented. A fix reads the host from one place or refuses a mismatch.
+
+**(4) The GitHub live path probably fails (read, inferred; it has never been run against a real host).**
+`github_adapter.py:128` creates the repository with no `auto_init`, and `:207` then reads
+`git/ref/heads/{branch}`, which an empty repository does not have, so the commit fails and the run can leave an empty
+private repository behind. **Operator call:** settling it needs a live run against a throwaway account.
+
+**(5) What the interview learns about the data is not passed on (read).** `adapters.py:130` sets
+`data_quality_concerns=[]` and `:33` fixes `time_range` at "last 5 calendar years of historical records", whatever
+the stakeholder said. The baseline reaches the scaffold as a bare float with no window and no caveat, and its SQL is
+saved only inside `data_report.json` (review).
+
+**(6) No route from a finished interview into `scripts/run_pipeline.py` (ran), and the web UI exports nothing as a
+file (ran).** None of its 12 flags takes an `IntakeReport`; the UI keeps the report in its session database and
+serves it at `/sessions/{id}/report.json`; `model-intake-agent --anthropic` exits 2 ("not shipped in Phase 3A"). The
+programmatic `run_pipeline` call, and a hand-placed checkpoint envelope with `--resume` (read), do work. **Operator
+call:** build the bridge, or document the API route.
+
+**(7) A failed quality check carries no count (ran).** It records `row_count: 0` and `sample_rows: []`, so a report
+that says a check failed cannot say how many rows violate it (the example's database holds 173, 1,226 and 9). The
+"returns a row means pass" convention in `execute_qc` is the cause.
+
+**(8) Smaller (review or read):** the target definition and the 12 candidate features appear in no human-readable file
+of the scaffold; at risk tier 3 no `regulatory_mapping.md` is emitted, so the NAIC mapping shows only in the
+checkpoint; the stakeholder's request for a review of who gets the fast track is reduced to booleans in the governance
+files; importing `model_project_constructor.ui.intake` opens `./intake_sessions.db` as a side effect (`app.py:277`).
+
+**(9) Nothing runs the example.** It is not in `tests/` or CI, so the figures in its README are observations that will
+go stale. `run_example.py` does stop if the database no longer matches the counts its datasheets quote. **Operator
+call:** a smoke test (about 2 seconds, needs the `ui` extra) or leave it as documentation.
 
 ### Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed
 

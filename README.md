@@ -8,6 +8,8 @@ The repository, the source tree (`src/model_project_constructor/`) and the impor
 
 **Tutorial (published):** https://rmsharp.github.io/model_project_constructor/tutorial/
 
+**Worked example (a made-up company, no API key needed):** [`examples/larkspur_mutual/`](examples/larkspur_mutual/README.md) runs the whole pipeline on a fictitious insurer and lists what it found wrong.
+
 ## Status
 
 Early implementation. Phases and session boundaries are tracked in `SESSION_NOTES.md`; the authoritative design document is `docs/architecture-history/architecture-plan.md` (archived concept-era plan — see `docs/methodology/PROJECT_CONVENTIONS.md` §3).
