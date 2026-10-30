@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S288 — claim: make `ReadOnlyDB` actually read-only (in progress)
+- **Change:** a `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is `BACKLOG.md` item 1 of the Larkspur-found defects: `ReadOnlyDB` runs whatever it is given, and `DROP TABLE` and `CREATE TABLE` persisted on a scratch SQLite copy (Session 286). The strictness is an operator call and is put to the operator before any code.
+- **Non-commit actions:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and Sessions 287 and 286 in `SESSION_NOTES.md`; the area-then-item picker, where the operator took the first (recommended) option twice.
+- **Commit/PR:** this commit
+- **Session:** S288 · **Verified:** working tree clean and in sync with `origin/master` at Phase 0; the `CHANGELOG.md` and `HANDOFFS.md` frontiers both `a7fbedf` (gap 0, no merges, no pending receipt); push CI `41132134289` for Session 287's close-out green. Dashboard 96/100, its one high risk the known size flags.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S287 — close out: the twelfth trim of `SESSION_NOTES.md` complete; learnings #367 to #369
 - **Change:** `SESSION_NOTES.md` (the claim stub replaced by Session 287's closed record, with its handoff evaluation of Session 286, self-assessment and handoff), `HANDOFFS.md` (the receipt `complete`, `predecessor_score: 9`, `self_score: 8`), `PROJECT_LEARNINGS.md` (#367 to #369; 413,600 B to 416,756 B) and `CLAUDE.md` (the learnings count, 369, and the file's size, 416.8 KB). The record was sized and wrapped from a rehearsal the review recommended: spliced into a scratch clone with and without a Session 288 claim stub above it, both ledger guards gave 82 passed (11,863 B in 43 lines, 276 B per line). It publishes the sweep the new proof's header promised: 37 files for the narrow form and 39 for the broad one, at `60e9901`. No source, test or proof file changed.
 - **Non-commit actions:** the push of this session's five commits to `origin/master` follows this commit, at the operator's instruction at the commit gate (a fast-forward, no force; none of the commits touches a path `publish-tutorial.yml` filters on, or `docs/wiki/`); its CI result is read after the push, so it is not recorded here. Session 286's push CI (`41111501708`) was read at close-out: success, 5 of 5 jobs.

@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S288
+date: 2026-10-30
+status: pending
+active_task: Make ReadOnlyDB actually read-only (BACKLOG.md item 1 of the Larkspur-found defects): refuse anything but a single SELECT or WITH and open the connection read-only. Chosen by the operator at Phase 0 from a two-step picker. The strictness is an operator call put to them before code.
+```
+
+```handoff
 session: S287
 date: 2026-10-30
 status: complete
