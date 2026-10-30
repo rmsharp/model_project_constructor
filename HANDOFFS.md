@@ -177,7 +177,7 @@ manifest existed are not re-judged.
 session: S286
 date: 2026-10-30
 status: pending
-active_task: The second tutorial (the one docs/tutorial.md:5 calls forthcoming): the live, LLM-backed interview (model-intake-agent CLI and the intake web UI) through to a real GitLab or GitHub project, as a page of the tutorial site (docs/tutorial-live.md, name provisional), built and committed, not pushed. Asked for by the operator after they declined the Phase 0 area picker; read as prepare, not publish.
+active_task: A worked example: a fictitious property and casualty insurer taken keyless through all three pipeline stages (intake interview in the web UI with the keyless test factory, data stage against a synthetic SQLite database, website stage onto the in-memory fake repo) into a local scaffolded model project, plus a write-up of what ran and what the tool got wrong. Re-scoped once by the operator from the second tutorial (docs/tutorial.md:5), whose planned scope a read-only audit found cannot be written truthfully; the tutorial may follow from the example. Not pushed.
 ```
 
 ```handoff

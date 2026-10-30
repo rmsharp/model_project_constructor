@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S286 — re-scope the claim: from the second tutorial to a keyless worked example for a fictitious insurer (in progress)
+- **Change:** `SESSION_NOTES.md` stub and the `HANDOFFS.md` pending receipt rewritten; no other file. A seven-agent read-only workflow found the second tutorial's planned scope ("live LLM-backed interviews and real GitLab/GitHub deployments", `docs/tutorial.md:5`) cannot be written truthfully today, and the findings re-checked against the code are in the stub's Status: the CLI cannot interview (`--anthropic` exits 2), no `run_pipeline.py` flag takes an `IntakeReport`, `--host` and `MPC_HOST` can disagree about which token goes where, the GitHub adapter reads a ref an empty repo lacks (inferred), the GitLab live path is unrun since the 2026-07-27 rewrite. The new deliverable is the operator's: run this tool on a made-up company, keyless, onto the fake repo.
+- **Non-commit actions:** one read-only workflow (7 agents, 0 errors, 18.6 min, 1.99M subagent tokens, 624 tool uses; the repository was read-only to it), whose full output is in the session scratchpad, not the repository. The operator declined two pickers to clarify and then answered in prose.
+- **Commit/PR:** this commit
+- **Session:** S286 · **Verified:** `model-intake-agent --anthropic` run: exit 2 and the message quoted in the stub; `run_pipeline.py --help` read: 12 flags, none for an `IntakeReport`; `scripts/run_pipeline.py:348-358` and `github_adapter.py:111-149,186-211` read; both ledger guards run before this commit.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S286 — claim: the second tutorial (live LLM-backed interview through to a real GitLab or GitHub project), as a page of the tutorial site (in progress)
 - **Change:** `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is the tutorial `docs/tutorial.md:5` calls forthcoming ("covers live LLM-backed interviews and real GitLab/GitHub deployments"), written as `docs/tutorial-live.md` (name provisional) and wired into the site (the `mkdocs.yml` allowlist and nav, a link from `docs/tutorial.md:5`). Built and committed locally; not pushed, because a push touching `docs/*.md` fires the public Pages deploy.
 - **Non-commit actions:** the operator declined the Phase 0 area picker to clarify, then asked for this task in their own words.
