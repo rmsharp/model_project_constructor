@@ -175,6 +175,21 @@ manifest existed are not re-judged.
 
 ```handoff
 session: S285
+date: 2026-10-08
+status: reconciled
+active_task: BL-101 P11, a session of the methodology fork's own S285 sequence, run from the methodology checkout and not a session of this project (so no SESSION_NOTES.md record exists for it): sync this repository's framework files to the fork main (v4.2-1652-gea82c0c), then move them under methodology/ (tier 1, 23 files). Reconstructed on 2026-10-30 by a Phase 0 reconcile from git log and the three CHANGELOG.md entries that session wrote. The reconciling session did not do this work, so it claims no self_score and no predecessor_score.
+what_was_done: Three commits (git log --no-merges 0dc3051..ec23bc7). 63cedc5 bin/sync, 21 framework files rewritten byte-identical to the canonical starter kit and .gitattributes created. 4399c60 bin/migrate-layout, tier 1, 23 files moved with git mv and paths rewritten in CLAUDE.md and .context-budget.json. ec23bc7 the RUNNER constant in tests/test_read_budget.py now names methodology/SESSION_RUNNER.md. Per the entries, on each tree before its commit: ruff and mypy exit 0, the 13 proofs in docs/architecture-history/ exit 0 plain and with --self-test, and pytest 3,942 passed and 9 skipped at 98.34% (the figures before the sync). Not run: the GitHub Actions workflow.
+next_steps: Per the entries, tier 2 (SESSION_NOTES.md, CHANGELOG.md, HANDOFFS.md, ROADMAP.md and the two configs stay at the root) waits for its own decision, because moving them broke 2 of the 13 proofs (the two pointer-collapse proofs, whose LIVE path is the root SESSION_NOTES.md) and 41 tests. The twelfth SESSION_NOTES.md trim, named in the S285 receipt below, is still due.
+key_files: tests/test_read_budget.py:67; docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh:251; docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh:174
+gotchas: Per the entries, no older entry or shard was edited, so a link in an older CHANGELOG.md entry is relative to the root, where the ledger sat when it was written. Observed at the reconciling Phase 0 (2026-10-30): the installed methodology/methodology_dashboard.py reports itself v2.22.0 against a canonical v2.23.0.
+runtime_smoke: n/a — reconstructed. The entries record ruff, mypy, the proofs and the full suite on each tree and none records launching the application. No quality gates are declared in this project.
+changelog_ref: CHANGELOG.md "### 2026-10-08 · [ad hoc] BL-101 P11 — tests: `tests/test_read_budget.py` names the runner where it now sits (`methodology/SESSION_RUNNER.md`)"
+commit: ec23bc7
+```
+Reconciled, not completed: the receipt is a best-effort reconstruction of a span that left three commits and no receipt here. Every figure above is the fork session's own, taken from its CHANGELOG.md entries; none was re-measured by the session that wrote this block.
+
+```handoff
+session: S285
 date: 2026-10-04
 status: complete
 self_score: 7
