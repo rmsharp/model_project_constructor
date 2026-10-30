@@ -94,6 +94,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 287 Did
+**Deliverable:** **the twelfth trim of `SESSION_NOTES.md`: retire the oldest records into a new write-once shard under the byte rule, with its proof, the prose copies and the front-matter row, as `CLAUDE.md`'s "`SESSION_NOTES.md` is trimmed" prescribes (IN PROGRESS)**
+**Started:** 2026-10-30 14:05
+**Status:** Session claimed. Work beginning. The file is over the byte rule's trigger, so the trim is due; the operator chose it at Phase 0 from a picker (first option, recommended), as the plan in Session 286's addendum had it. **Two commits follow this one, never bundled with it: the trim (no record edit), then the close-out.** The trim touches more files than `SAFEGUARDS.md`'s per-commit cap of five, as the eleventh did, so the operator is asked at the commit gate.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 286 Did
 **Deliverable:** **a worked example of the pipeline on a made-up company, run keyless onto the fake repository — COMPLETE** (`examples/larkspur_mutual/`, 8 tracked files). Asked for as "the 2nd planned tutorial" (`docs/tutorial.md:5`), then **re-scoped once by the operator**: after a read-only audit found that tutorial's planned scope unwritable, they asked "can we develop an actual model project for a hypothetical company?" and chose reading A (run this tool on a made-up company) and "keyless first with the fake repo". **The second tutorial is NOT delivered; `docs/tutorial.md:5` still says "forthcoming".** **Started:** 2026-10-30 10:30. **Completed:** 2026-10-30 (close-out 13:50). **Commits: ten** (`git rev-list --count ec23bc7..HEAD` after this one lands): `540b7a3` (Phase 0 reconcile: a `reconciled` `HANDOFFS.md` receipt for the fork's BL-101 P11 span, which left three commits and none), `afecbd0` (claim), `d7ed920` (re-scope), `24629e6`, `a9bb137`, `efca54b` (layers 1 to 3), `c46de69`, `e56f41e` (the review's fixes), `2dc1175` (`BACKLOG.md` item and a README line) and this close-out; each has its own `CHANGELOG.md` entry. **Nothing is pushed.**
 

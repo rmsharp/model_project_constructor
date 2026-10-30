@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S287
+date: 2026-10-30
+status: pending
+active_task: The twelfth trim of SESSION_NOTES.md (the file is over the byte rule's trigger): retire the oldest records into a new write-once shard with its proof, the prose copies and the front-matter row, per CLAUDE.md's "SESSION_NOTES.md is trimmed". Chosen by the operator at Phase 0 from a picker. Claim, trim and close-out are three separate commits.
+```
+
+```handoff
 session: S286
 date: 2026-10-30
 status: complete
