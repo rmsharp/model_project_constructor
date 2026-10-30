@@ -38,6 +38,34 @@ from model_project_constructor.schemas.v1.repo import RepoTarget
 
 OUT = make_synthetic_db.OUT
 RUN_ID = "larkspur_tl_fnol_keyless"
+# Figures the datasheets in scripted_data_llm.py quote, typed by hand. A database that no
+# longer matches them (a changed seed, or a platform whose floating point differs) would make
+# the generated datasheets state false numbers, so the run stops instead of writing them.
+DATASHEET_FIGURES = {
+    "claims": 40_000,
+    "training_rows": 37_600,
+    "closed_total_losses": 3_517,
+    "open_claims": 760,
+    "planted_acv_zero": 173,
+    "planted_drivable_null": 1_226,
+    "planted_decision_before_fnol": 9,
+}
+NOTICE = """\
+# This project is an example, not a real project
+
+* **Larkspur Mutual is fictional.** The company, the people, the interview and every
+  number in this project were invented. The data is generated, not real.
+* **The interview, the SQL, the quality checks and the datasheets were written in advance**
+  (drafted with an AI coding assistant working with the operator) and replayed by stand-ins
+  for the pipeline's language model. The pipeline's own model wrote none of it. The three
+  failed quality checks are the three data problems the author planted and wrote checks for.
+* **This project's own tests fail out of the box (8 of 8)** and its CI would fail with them:
+  four tests import a module literally named `<project_slug>` (a placeholder the
+  scaffold did not fill in), and four put `pass` inside `pytest.raises`. That is a defect in
+  the scaffold this tool wrote, recorded in the example's README, not something you did.
+* Produced by `examples/larkspur_mutual/run_example.py` in the Model Project Constructor
+  repository, with the in-memory repository client. Nothing was created on any host.
+"""
 TARGET = RepoTarget(
     host_url="https://fake.host.test",
     namespace="larkspur-claims-analytics",
@@ -53,6 +81,16 @@ def main() -> int:
 
     print("\n2. Claims database (fictitious, generated):")
     figures = make_synthetic_db.build(OUT / "larkspur_claims.db")
+    stale = {
+        name: (expected, figures[name])
+        for name, expected in DATASHEET_FIGURES.items()
+        if figures[name] != expected
+    }
+    if stale:
+        for name, (expected, actual) in stale.items():
+            print(f"  STALE: datasheets say {name} = {expected:,}; the database has {actual:,.0f}")
+        print("  Update scripted_data_llm.py and DATASHEET_FIGURES, then re-run.")
+        return 1
     print(
         f"  {int(figures['claims']):,} claims, "
         f"{figures['total_loss_rate_of_closed']:.2%} of closed claims are total losses, "
@@ -90,7 +128,11 @@ def main() -> int:
         destination = target / path
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(content)
-    print(f"\nThe scaffolded project ({len(project.files)} files) is in {target}")
+    (target / "EXAMPLE_NOTICE.md").write_text(NOTICE)  # on disk only; not in the repository client
+    print(
+        f"\nThe scaffolded project ({len(project.files)} files, plus EXAMPLE_NOTICE.md) "
+        f"is in {target}"
+    )
     print(f"Checkpoints: {checkpoints / RUN_ID}")
     return 0
 
