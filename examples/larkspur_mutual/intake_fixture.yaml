@@ -1,0 +1,238 @@
+# Larkspur Mutual Insurance Company is FICTIONAL. Every person, number and system
+# named here was invented for this worked example; any resemblance to a real
+# insurer is coincidental. It is not data from, or about, any real company.
+#
+# This is an `intake_fixture/v1` file: the intake agent's keyless stand-in for a
+# language model. In a live run Claude writes the questions, the draft and the
+# governance block; here they are written out in advance (by the author of this
+# example), and the stakeholder's answers below are what the driver types into
+# the web UI. Nothing in this file was produced by a model.
+
+schema: intake_fixture/v1
+stakeholder_id: dir_apd_claims_larkspur
+session_id: larkspur_tl_fnol_001
+domain: pc_claims
+initial_problem: >-
+  We find out a car is a total loss too late, and every extra day costs us
+  rental, storage and a customer who is still waiting to hear from us.
+
+qa_pairs:
+  - question: >-
+      In your own words, what happens today between a customer reporting
+      collision damage and the point where you know whether the car will be
+      repaired or written off, and where does it go wrong?
+    answer: >-
+      We do not know until a person has looked at the car. The customer reports
+      the loss, we assign an appraiser or ask a shop for an estimate, and only
+      then does anyone say "this is a total loss". For the cars that do end up
+      written off, that decision lands about five days after first notice of
+      loss at the median. In the meantime the customer is in a rental, the car
+      is sitting at a tow yard or a body shop, and in roughly one case in
+      sixteen the shop has already started teardown for a repair we then
+      reverse.
+  - question: >-
+      How big is that population, and what share of it ends as a total loss?
+    answer: >-
+      About 180,000 collision and comprehensive claims a year across our six
+      states. Roughly nine percent end as total losses, so around 16,000 a year.
+      The median is five days from first notice to the total-loss decision, and
+      the slowest quarter take eight days or more.
+  - question: >-
+      What does a day of delay cost you, and who bears it?
+    answer: >-
+      Rental averages about $42 a day. Storage averages about $38 a day but
+      only applies when the car is sitting at a yard or a shop, which is about
+      half of them, so call it $60 a day per total loss, all in. A reversed
+      teardown costs about $450. The customer bears the uncertainty: waiting
+      to hear is the biggest driver of complaints in this line.
+  - question: >-
+      If you knew on day one that a car was probably a total loss, what would
+      you do differently?
+    answer: >-
+      We would request the valuation and start salvage bidding immediately,
+      tell the customer the likely path, and route the claim to the total-loss
+      desk instead of the repair queue. We would tell shops to pause teardown.
+      What we would not do is move a car or tell a customer it is written off
+      on a score alone. An adjuster has to confirm from the photos before
+      anything irreversible happens.
+  - question: >-
+      What would a model predict, and from which pieces of information, known
+      at what moment?
+    answer: >-
+      The probability that the claim ends as a total loss. It has to use only
+      what we know at first notice of loss: vehicle year, class and estimated
+      value, whether it is drivable, whether airbags deployed, the impact area,
+      whether a tow was needed, the type of loss, the coverage, how long the
+      customer took to report, how many photos came in, and the state. It
+      cannot use the repair estimate, because that does not exist until day
+      three to five.
+  - question: >-
+      What data do you have, and what do you not trust about it?
+    answer: >-
+      The claims system holds the first-notice record and the outcome for every
+      claim since January 2023, including how it settled and when the
+      total-loss decision was made. The value comes from the vendor's decode of
+      the VIN. Three things I do not trust. The drivable flag is blank on some
+      claims reported through the web form. The estimated value comes back as
+      zero when the VIN decode fails. And we moved to a new claims platform in
+      2024 that stamps times in a different time zone, so a few decision times
+      come out earlier than the first-notice time.
+  - question: >-
+      What would success be worth, and how would you know the model was the
+      reason?
+    answer: >-
+      If we flag seven in ten of the total losses and save three days on each,
+      that is about $2.0 million in rental and storage, plus about $0.3 million
+      in avoided reversed teardowns: roughly $2.4 million a year, and I would
+      defend anything from $1.3 to $3.5 million. Build and rollout would cost
+      $350,000 to $600,000. To know it was the model, hold out a random fifth
+      of eligible claims for six months, compare the median days to decision
+      between the two groups every month, and report it to me and the head of
+      the total-loss desk.
+  - question: >-
+      Who could be affected unfairly, and are there protected attributes or
+      regulatory obligations I should record?
+    answer: >-
+      The score never reduces or denies a payment; it only changes how fast we
+      move, and the adjuster confirms. We do not use driver age, gender or
+      ZIP code. I would watch vehicle value, because it can stand in for
+      income, so I want the model reviewed for differences in who gets the fast
+      track. Timeliness rules under the state fair-claims-practices laws apply
+      to us, which this should help rather than hurt. Our model risk policy
+      treats it as moderate, and we follow the NAIC bulletin on AI systems.
+
+draft_after: 8
+
+draft:
+  business_problem: >-
+    Larkspur Mutual learns that a damaged vehicle is a total loss only after an
+    appraiser or shop has inspected it, a median of five days after first
+    notice of loss (a quarter of cases take eight days or more). About 9% of
+    roughly 180,000 collision and comprehensive claims a year, around 16,000,
+    end as total losses. During the wait the company pays rental (about $42 a
+    day) and, for about half of them, storage (about $38 a day), roughly $60 a
+    day per total loss, and in about one case in sixteen a shop has started
+    teardown for a repair that is then reversed (about $450 each). Customers
+    waiting for a decision are the main source of complaints in the line.
+  proposed_solution: >-
+    Score every physical-damage claim at first notice of loss for the
+    probability that it will end as a total loss, and use the score to sequence
+    work, never to decide it. A high score starts the valuation request and
+    salvage bidding at once, routes the claim to the total-loss desk, tells the
+    customer the likely path, and asks the shop to pause teardown. An adjuster
+    confirms from the photos before a vehicle is moved or a customer is told it
+    is written off. A low score leaves the claim on the repair track. Success
+    is measured as the median days from first notice to total-loss decision.
+  model_solution:
+    target_variable: is_total_loss
+    target_definition: >-
+      Binary outcome per physical-damage claim: 1 if the claim closes with a
+      total-loss settlement within 60 days of first notice of loss, 0 if it
+      closes as a repair or any other way. Claims still open at 60 days are
+      excluded from training.
+    candidate_features:
+      - vehicle_age_years
+      - vehicle_acv_usd
+      - vehicle_class
+      - drivable_flag
+      - airbags_deployed
+      - impact_zone
+      - tow_required
+      - peril
+      - coverage
+      - reported_lag_hours
+      - photo_count
+      - state
+    model_type: supervised_classification
+    evaluation_metrics:
+      - AUC
+      - recall_at_80pct_precision
+      - brier_score
+      - calibration_by_decile
+    is_supervised: true
+  estimated_value:
+    narrative: >-
+      Flagging about 70% of total losses at first notice and saving about three
+      days on each is worth about $2.0M a year in rental and storage, plus about
+      $0.3M in avoided reversed teardowns: roughly $2.4M a year. The range
+      brackets a weaker case (55% flagged, two days saved) and a stronger one
+      (80% flagged, four days saved).
+    annual_impact_usd_low: 1300000
+    annual_impact_usd_high: 3500000
+    confidence: medium
+    assumptions:
+      - "About 180,000 collision and comprehensive claims a year, about 9% of them total losses (about 16,200)."
+      - "Blended carrying cost of about $60 a day per total loss: rental about $42 plus storage about $38 for about half of them."
+      - "Reversed teardown costs about $450 and occurs in about 6% of total losses (about 970 a year)."
+      - "The adjuster confirms every flagged claim, so a false flag costs a few minutes of review and no payment."
+    cost_of_inaction_narrative: >-
+      Without an early flag the five-day median persists, and the same rental,
+      storage and reversed-teardown costs recur every year, along with the
+      complaints from customers who wait.
+    annual_cost_of_inaction_usd_low: 1300000
+    annual_cost_of_inaction_usd_high: 3500000
+    implementation_cost_band_usd_low: 350000
+    implementation_cost_band_usd_high: 600000
+    payback_months: 3
+    value_drivers:
+      - fewer_rental_days_on_total_losses
+      - fewer_storage_days_on_total_losses
+      - fewer_reversed_teardowns
+      - fewer_complaints_about_waiting
+  value_measurement_plan:
+    baseline_metric_name: median_days_fnol_to_total_loss_decision
+    baseline_metric_definition: >-
+      Median calendar days between first notice of loss and the total-loss
+      decision, over claims that closed as total losses, in the trailing 12
+      months.
+    baseline_measurement_window: trailing 12 months
+    counterfactual_design: ab_test
+    counterfactual_rationale: >-
+      A random 20% of eligible new claims is held out with no score shown, so
+      the comparison needs no adjustment for season, weather or the 2024
+      platform change.
+    attribution_method_narrative: >-
+      Compare the median days to total-loss decision for scored claims against
+      the held-out claims each month, with a bootstrap interval, over the
+      evaluation horizon.
+    evaluation_horizon_months: 6
+    logging_requirements:
+      - claim_id
+      - score
+      - score_band
+      - treated_or_holdout
+      - fnol_ts
+      - tl_decision_ts
+      - adjuster_override
+      - vehicle_moved_ts
+    review_cadence: monthly
+    success_criteria:
+      - "Median days from first notice to total-loss decision falls from 5 to 3 or fewer for scored claims against holdout."
+      - "No rise in complaints about waiting among scored claims against holdout."
+      - "No vehicle moved and no customer told of a total loss before adjuster confirmation."
+    decision_rights: >-
+      The Director of Auto Physical Damage Claims and the head of the
+      total-loss desk review monthly; they stop the rollout if the median does
+      not improve by two days after three consecutive months.
+
+governance:
+  cycle_time: tactical
+  cycle_time_rationale: >-
+    The score is consumed within minutes to hours of first notice of loss to
+    sequence the handling of one claim, paced by the claims workflow rather
+    than by a periodic close. Operational would imply a scheduled portfolio
+    process; continuous would imply real-time streaming per event.
+  risk_tier: tier_3_moderate
+  risk_tier_rationale: >-
+    Advisory only: it changes the order and speed of work and never a payment,
+    and an adjuster confirms before any irreversible step. It does touch the
+    customer's experience and timeline, and vehicle value may act as a proxy
+    for income, so it is moderate rather than low.
+  regulatory_frameworks:
+    - SR_26_2
+    - NAIC_AIS
+  affects_consumers: true
+  uses_protected_attributes: false
+
+review_sequence:
+  - ACCEPT

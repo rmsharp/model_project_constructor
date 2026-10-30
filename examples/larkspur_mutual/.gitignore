@@ -1,0 +1,3 @@
+# Everything the example generates: the databases, the saved reports and the
+# scaffolded project (about 40 files). Re-create it with the commands in README.md.
+out/
