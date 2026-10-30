@@ -6,9 +6,12 @@ repository root::
 
     uv run python examples/larkspur_mutual/make_synthetic_db.py
 
-writes ``out/larkspur_claims.db``. The same seed gives the same database, and only
-``random.random()`` is used (the other ``random`` methods may change between Python
-versions; ``random()`` is guaranteed not to).
+writes ``out/larkspur_claims.db``. The same seed gives the same database on the same
+machine, and only ``random.random()`` is used (the other ``random`` methods may change
+between Python versions; ``random()`` is guaranteed not to). ``math.exp``, ``log`` and
+``cos`` can differ in the last bit between platforms, so a different platform may
+produce a slightly different database; ``run_example.py`` checks the counts the
+datasheets quote and says so if they move.
 
 How the data is made, so a reader can judge what it can and cannot show:
 
@@ -203,6 +206,7 @@ def _claim_row(claim_id: str, c: dict[str, Any], cost: float) -> tuple[Any, ...]
     log_cost = math.log(cost / 1000.0)
     not_drivable_p = PERIL_NOT_DRIVABLE.get(c["peril"], _sigmoid(2.2 * (log_cost - math.log(4.5))))
     not_drivable = u[0] < not_drivable_p
+    c["not_drivable"] = not_drivable  # the truth; the recorded flag below may be blanked
     tow = u[1] < (0.88 if not_drivable else 0.03)
     airbags = (not c["comprehensive"]) and u[2] < _sigmoid(3.0 * (log_cost - math.log(6.0)))
     if c["peril"] == "THEFT":
@@ -245,7 +249,7 @@ def _outcome_row(
     u, z = c["u"], c["z"]
     fnol: datetime = c["fnol"]
     deductible = 500 if u[7] < 0.6 else 1000
-    not_drivable_and_towed = claim_row[9] == 0 and claim_row[12] == 1
+    not_drivable_and_towed = c["not_drivable"] and claim_row[12] == 1
     decision: datetime | None = None
     teardown: int | None = None
     if cost >= c["threshold"]:
@@ -268,7 +272,7 @@ def _outcome_row(
         paid = max(0.0, round(cost - deductible, 2))
         if u[12] < 0.45:
             rental = 0  # no rental coverage
-        elif claim_row[9] == 0:
+        elif c["not_drivable"]:
             rental = 3 + int(9 * u[15])  # not drivable: a longer rental
         else:
             rental = 2 + int(5 * u[15])
@@ -342,6 +346,13 @@ def _headline_figures(connection: sqlite3.Connection) -> dict[str, float]:
     ]
     return {
         "claims": one("SELECT COUNT(*) FROM claim"),
+        "training_rows": one(
+            "SELECT COUNT(*) FROM claim "
+            "WHERE fnol_ts <= date((SELECT as_of_date FROM data_snapshot), '-60 days')"
+        ),
+        "closed_total_losses": one(
+            "SELECT COUNT(*) FROM claim_outcome WHERE settlement_type = 'TOTAL_LOSS'"
+        ),
         "open_claims": one("SELECT COUNT(*) FROM claim_outcome WHERE settlement_type IS NULL"),
         "total_loss_rate_of_closed": round(
             one(
