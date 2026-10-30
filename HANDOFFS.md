@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S286
+date: 2026-10-30
+status: pending
+active_task: The second tutorial (the one docs/tutorial.md:5 calls forthcoming): the live, LLM-backed interview (model-intake-agent CLI and the intake web UI) through to a real GitLab or GitHub project, as a page of the tutorial site (docs/tutorial-live.md, name provisional), built and committed, not pushed. Asked for by the operator after they declined the Phase 0 area picker; read as prepare, not publish.
+```
+
+```handoff
 session: S285
 date: 2026-10-08
 status: reconciled

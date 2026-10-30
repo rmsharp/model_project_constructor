@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S286 — claim: the second tutorial (live LLM-backed interview through to a real GitLab or GitHub project), as a page of the tutorial site (in progress)
+- **Change:** `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is the tutorial `docs/tutorial.md:5` calls forthcoming ("covers live LLM-backed interviews and real GitLab/GitHub deployments"), written as `docs/tutorial-live.md` (name provisional) and wired into the site (the `mkdocs.yml` allowlist and nav, a link from `docs/tutorial.md:5`). Built and committed locally; not pushed, because a push touching `docs/*.md` fires the public Pages deploy.
+- **Non-commit actions:** the operator declined the Phase 0 area picker to clarify, then asked for this task in their own words.
+- **Commit/PR:** this commit
+- **Session:** S286 · **Verified:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and newest records of `SESSION_NOTES.md`, the plain-language index of `BACKLOG.md` (`:7-17`, `:34-94`), `docs/tutorial.md:1-60` and `:355-693` (the fixture steps, `:61-354`, not yet read), `DEVELOPMENT_WORKSTREAM.md:66-274`; working tree clean and level with `origin/master`; ledger and receipt frontiers at `HEAD` after the reconcile commit `540b7a3`; both ledger guards 82 passed; no GitHub issues open.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] Backfilled (reconcile-on-read): `HANDOFFS.md` receipt for the undocumented span `0dc3051..ec23bc7` (the methodology fork's BL-101 P11, three commits)
 - **Change:** one `status: reconciled` receipt (`session: S285`, `date: 2026-10-08`) prepended to `HANDOFFS.md`, above this project's own S285 receipt. The span left three commits and no receipt there: `63cedc5` (sync), `4399c60` (tier 1 move), `ec23bc7` (the runner path in `tests/test_read_budget.py`). Their three `CHANGELOG.md` entries (2026-10-08) already existed, so this ledger had no gap; only the receipt was missing. Reconstructed from `git log` and those entries alone; no figure in it was re-measured, and it claims no `self_score` or `predecessor_score`. `SESSION_NOTES.md` is not touched: those entries say the span is not a session of this project.
 - **Non-commit actions:** none. Nothing was pushed.
