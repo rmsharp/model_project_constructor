@@ -627,13 +627,17 @@ def _m03_front_matter_bloat_behind_a_short_record(root: pathlib.Path) -> None:
 def _m04_the_newest_records_outgrow_the_page(root: pathlib.Path) -> None:
     """The newest records outgrow the page in BYTES, and in bytes only. Each of the K newest
     non-stub records has its body joined onto as few lines as its heading and fence lines allow --
-    the same bytes -- and the K-th is then grown past PAGE_BYTES by one long line. Two hazards are
-    handled rather than hoped away. Growing alone raised the mean line width until, in a ledger a
-    trim had just cut, the page ended before the K prefix and check_k_lines co-fired (Session 256,
-    found by after-a-trim-then-its-close-out). And the growth shifts every later record, so the
-    overshoot past the stop is given back from the (K+1)-th record's tail -- else
+    the same bytes -- and the K-th is then grown past PAGE_BYTES by one long line. Three hazards
+    are handled rather than hoped away. Growing alone raised the mean line width until, in a
+    ledger a trim had just cut, the page ended before the K prefix and check_k_lines co-fired
+    (Session 256, found by after-a-trim-then-its-close-out). The growth shifts every later record,
+    so the overshoot past the stop is given back from the (K+1)-th record's tail -- else
     check_satisfiable co-fires once the records between the K-th and the FLOOR-th are large
-    (Session 256's review)."""
+    (Session 256's review). And the predicted page's length in lines scales with the file's line
+    count, so behind records as dense as Sessions 283 to 286 it fell short of the K prefix and
+    check_k_lines co-fired again (Session 287, at the claim of the twelfth trim: 93 lines against
+    a prefix of 102, where the three earlier claims had 24 to 90 to spare); blank lines at the
+    tail lengthen the page without moving the K prefix."""
     data, _front, records = _ledger(root)
     kth = _must(nth_non_stub(records, K))
     for record in records[:records.index(kth) + 1]:
@@ -655,7 +659,13 @@ def _m04_the_newest_records_outgrow_the_page(root: pathlib.Path) -> None:
         while nxt.end_byte - cut < excess and cut > body:
             cut = data.rfind(b"\n", body - 1, cut - 1) + 1
         data = data[:cut] + data[nxt.end_byte:]
-    _write(root, SESSION_NOTES, _cap(data))
+    data = _cap(data)
+    while ((estimate := page_estimate(data)) is not None
+           and estimate[0] < _must(nth_non_stub(parse_ledger(data)[1], K)).end_line):
+        data += b"\n" * 16
+    assert len(data) <= READ_REFUSE_BYTES, \
+        "M04's tail padding crossed the ceiling, so check_ceiling would co-fire"
+    _write(root, SESSION_NOTES, data)
 
 
 def _m05_a_dense_ledger_tail_shrinks_the_page(root: pathlib.Path) -> None:
