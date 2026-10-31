@@ -13,23 +13,29 @@ process: the three things its README, its CI and its pre-commit hook run.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
 import sys
 import tomllib
-from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import pytest
+import yaml
 
 from model_project_constructor.agents.website.agent import WebsiteAgent
 from model_project_constructor.agents.website.fake_client import FakeRepoClient
+from model_project_constructor.agents.website.governance_templates import (
+    render_fairness_test_stub,
+)
 from model_project_constructor.agents.website.templates import (
+    _STUB_CALLS,
     derive_project_name,
     derive_project_slug,
+    render_test_stub,
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -37,8 +43,7 @@ from model_project_constructor.schemas.v1.repo import RepoTarget
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
 
-# A project name is a free-form hint and nothing caps its length, so the slug can be long. The
-# generated tests must stay ``ruff format``-stable whatever its length is.
+# A project name is a free-form hint and nothing caps its length, so the slug can be long.
 LONG_NAME_HINT = (
     "Subrogation recovery model for the total loss first notice of loss pilot programme "
     "in the southeast region"
@@ -54,13 +59,24 @@ class Variant:
     ci_platform: Literal["gitlab", "github"]
     name_hint: str
     protected_attributes: bool
+    # A report may validly list no evaluation metrics and no primary queries.
+    empty_lists: bool = False
 
 
 VARIANTS = [
     Variant("tier3-gitlab", "subrogation_intake.json", "gitlab", "Subrogation Model", False),
     Variant("tier1-github", "tier1_intake.json", "github", "Renewal Pricing Model", True),
     Variant("tier1-long-slug", "tier1_intake.json", "gitlab", LONG_NAME_HINT, True),
+    Variant(
+        "tier3-empty-lists",
+        "subrogation_intake.json",
+        "gitlab",
+        "Segment Discovery",
+        False,
+        empty_lists=True,
+    ),
 ]
+TIER1_GITHUB = VARIANTS[1]
 
 
 @dataclass(frozen=True)
@@ -72,8 +88,11 @@ class Scaffold:
 
 
 def _generate(variant: Variant) -> tuple[str, dict[str, str]]:
-    intake = IntakeReport.model_validate_json((FIXTURES_DIR / variant.intake_fixture).read_text())
-    data = DataReport.model_validate_json((FIXTURES_DIR / "sample_datareport.json").read_text())
+    intake_json = json.loads((FIXTURES_DIR / variant.intake_fixture).read_text())
+    data_json = json.loads((FIXTURES_DIR / "sample_datareport.json").read_text())
+    if variant.empty_lists:
+        intake_json["model_solution"]["evaluation_metrics"] = []
+        data_json["primary_queries"] = []
     target = RepoTarget(
         host_url="https://gitlab.example.com",
         namespace="data-science/model-drafts",
@@ -81,7 +100,9 @@ def _generate(variant: Variant) -> tuple[str, dict[str, str]]:
         visibility="private",
     )
     client = FakeRepoClient()
-    result = WebsiteAgent(client, ci_platform=variant.ci_platform).run(intake, data, target)
+    result = WebsiteAgent(client, ci_platform=variant.ci_platform).run(
+        IntakeReport.model_validate(intake_json), DataReport.model_validate(data_json), target
+    )
     assert result.status == "COMPLETE", result.failure_reason
     files = client.get_files(result.project_id)
     slug = derive_project_slug(derive_project_name(variant.name_hint))
@@ -104,14 +125,17 @@ def scaffold(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFa
 def _child_env() -> dict[str, str]:
     """The environment a developer's shell would give the generated project's tools.
 
-    The suite itself runs under ``pytest-cov``, whose ``COV_CORE_*`` variables would start
-    coverage inside the child, and ``PYTEST_ADDOPTS`` or ``PYTHONPATH`` would leak this
-    repository's settings and source into a project that must stand on its own.
+    ``PYTEST_ADDOPTS`` or ``PYTHONPATH`` would leak this repository's settings and source into a
+    project that must stand on its own; ``pytest-cov`` before version 7 exports ``COV_CORE_*``,
+    which would start coverage inside the child; ``RUFF_*`` would configure the child's ruff;
+    and ``FORCE_COLOR`` or ``PY_COLORS`` put escape codes into the output that is read below.
     """
     env = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith(("PYTEST_", "COV_CORE", "COVERAGE", "PYTHON"))
+        if not key.startswith(
+            ("PYTEST_", "COV_CORE", "COVERAGE", "PYTHON", "RUFF_", "FORCE_COLOR", "PY_COLORS")
+        )
     }
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
@@ -129,13 +153,19 @@ def _run(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _ruff(project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    # ``--isolated`` ignores every ruff config file: the generated project declares none, so a
+    # config in the developer's home or in a parent of the temporary directory must not apply.
+    return _run(project, "-m", "ruff", *args, "--isolated", "--no-cache", ".")
+
+
 def _report(done: subprocess.CompletedProcess[str]) -> str:
     return f"exit {done.returncode}\n--- stdout ---\n{done.stdout}\n--- stderr ---\n{done.stderr}"
 
 
 class TestTheGeneratedProjectChecksItself:
     def test_its_own_tests_pass(self, scaffold: Scaffold) -> None:
-        done = _run(scaffold.root, "-m", "pytest", "-q", "-p", "no:cacheprovider")
+        done = _run(scaffold.root, "-m", "pytest", "-q", "--color=no", "-p", "no:cacheprovider")
         assert done.returncode == 0, _report(done)
         # Four stub modules, two tests each; the fairness test is a ninth.
         expected = 8 + (1 if scaffold.variant.protected_attributes else 0)
@@ -143,13 +173,29 @@ class TestTheGeneratedProjectChecksItself:
         assert "skipped" not in done.stdout and "xfail" not in done.stdout, _report(done)
 
     def test_ruff_check_passes(self, scaffold: Scaffold) -> None:
-        done = _run(scaffold.root, "-m", "ruff", "check", "--no-cache", ".")
+        done = _ruff(scaffold.root, "check")
         assert done.returncode == 0, _report(done)
 
     def test_ruff_format_would_change_nothing(self, scaffold: Scaffold) -> None:
         # The generated pre-commit config runs ``ruff-format``; a file it rewrites makes the
         # first commit fail.
-        done = _run(scaffold.root, "-m", "ruff", "format", "--check", "--no-cache", ".")
+        done = _ruff(scaffold.root, "format", "--check")
+        assert done.returncode == 0, _report(done)
+
+
+class TestFormatStabilityAtEverySlugLength:
+    def test_the_generated_tests_are_formatted_for_slugs_of_1_to_130_characters(
+        self, tmp_path: Path
+    ) -> None:
+        # A string constant holding the slug was wrapped by ``ruff format`` for slugs of 77 to
+        # 82 characters only, a window no hand-picked slug lands in, so sweep every length.
+        for length in range(1, 131):
+            slug = "m" * length
+            texts = {module: render_test_stub(module, slug) for module in _STUB_CALLS}
+            texts["fairness"] = render_fairness_test_stub(project_slug=slug)
+            for name, text in texts.items():
+                (tmp_path / f"test_{name}_{length}.py").write_text(text, encoding="utf-8")
+        done = _ruff(tmp_path, "format", "--check")
         assert done.returncode == 0, _report(done)
 
 
@@ -161,10 +207,11 @@ class TestTheCommandsInstallWhatTheyRun:
     machine without a global ``pytest`` (it appeared to work on the Mac where Session 286 ran it
     only because a ``pytest`` from another environment was on ``PATH``). Installing needs the
     network, so what is checked here is the link between the three: every ``uv sync`` asks for
-    the extra, and the extra declares every tool a ``uv run`` names.
+    the extra, every job installs before it runs a tool, and the extra declares every tool a
+    ``uv run`` names.
     """
 
-    TOOLS = ("pytest", "ruff")
+    SYNC = "uv sync --extra dev"
 
     @staticmethod
     def _ci_file(scaffold: Scaffold) -> str:
@@ -180,21 +227,32 @@ class TestTheCommandsInstallWhatTheyRun:
         for name, text in self._documents(scaffold).items():
             syncs = [line.strip() for line in text.splitlines() if "uv sync" in line]
             assert syncs, f"{name} never installs the project"
-            assert all(line.endswith("uv sync --extra dev") for line in syncs), (name, syncs)
+            assert all(line.endswith(self.SYNC) for line in syncs), (name, syncs)
 
-    def test_a_ci_job_installs_before_it_runs_a_tool(self, scaffold: Scaffold) -> None:
-        # GitLab installs once in ``default.before_script``; GitHub repeats the install in
-        # every job. Either way an install line has to come before the first ``uv run``.
-        lines = scaffold.files[self._ci_file(scaffold)].splitlines()
-        runs = [i for i, line in enumerate(lines) if "uv run" in line]
-        syncs = [i for i, line in enumerate(lines) if "uv sync" in line]
-        assert runs
-        assert syncs
-        assert min(syncs) < min(runs)
-        if scaffold.variant.ci_platform == "github":
-            after_jobs = lines[lines.index("jobs:") + 1 :]
-            jobs = [line for line in after_jobs if re.fullmatch(r"  [\w-]+:", line)]
-            assert len(jobs) == len(syncs) == 3, (jobs, syncs)
+    def test_the_readme_installs_before_it_runs_pytest(self, scaffold: Scaffold) -> None:
+        readme = scaffold.files["README.md"]
+        assert readme.index(self.SYNC) < readme.index("uv run pytest")
+
+    def test_every_ci_job_installs_before_it_runs_a_tool(self, scaffold: Scaffold) -> None:
+        document: dict[str, Any] = yaml.safe_load(scaffold.files[self._ci_file(scaffold)])
+        if scaffold.variant.ci_platform == "gitlab":
+            # One install in ``default.before_script`` serves every job, unless a job sets a
+            # ``before_script`` of its own, which replaces it.
+            before = document["default"]["before_script"]
+            assert before.index(self.SYNC) > before.index("pip install uv")
+            jobs = {k: v for k, v in document.items() if isinstance(v, dict) and "script" in v}
+            assert set(jobs) == {"lint", "unit-tests", "model-registry-schema"}
+            for name, job in jobs.items():
+                assert "before_script" not in job, name
+                assert any("uv run" in command for command in job["script"]), name
+        else:
+            jobs = document["jobs"]
+            assert set(jobs) == {"lint", "test", "governance"}
+            for name, job in jobs.items():
+                commands = [step.get("run", "") for step in job["steps"]]
+                assert self.SYNC in commands, name
+                first_tool = next(i for i, c in enumerate(commands) if "uv run" in c)
+                assert commands.index(self.SYNC) < first_tool, name
 
     def test_the_dev_extra_declares_every_tool_the_commands_run(self, scaffold: Scaffold) -> None:
         declared = tomllib.loads(scaffold.files["pyproject.toml"])["project"][
@@ -206,8 +264,9 @@ class TestTheCommandsInstallWhatTheyRun:
             for text in self._documents(scaffold).values()
             for tool in re.findall(r"uv run (\w+)", text)
         }
-        assert set(self.TOOLS) <= used, used
-        assert used & set(self.TOOLS) <= names, (used, names)
+        # ``uv run python`` is the interpreter of the project's environment, not a package.
+        assert {"pytest", "ruff"} <= used, used
+        assert used - {"python"} <= names, (used, names)
 
 
 class TestNoPlaceholderSurvives:
@@ -220,16 +279,37 @@ class TestNoPlaceholderSurvives:
         offenders = sorted(path for path, text in scaffold.files.items() if placeholder in text)
         assert offenders == []
 
-    def test_the_package_name_reaches_the_commented_imports(self, scaffold: Scaffold) -> None:
-        text = scaffold.files["analysis/05_initial_models.qmd"]
-        assert f"# from {scaffold.slug}.models import train, predict" in text
-        assert f"# from {scaffold.slug}.evaluation import evaluate" in text
+    def test_the_package_name_reaches_the_narratives(self, scaffold: Scaffold) -> None:
+        slug = scaffold.slug
+        expected = {
+            "analysis/02_data.qmd": [f"# from {slug}.data_loading import load_primary"],
+            "analysis/04_feature_engineering.qmd": [
+                f"``src/{slug}/features.py``",
+                f"# from {slug}.features import build_feature_matrix",
+            ],
+            "analysis/05_initial_models.qmd": [
+                f"# from {slug}.models import train, predict",
+                f"# from {slug}.evaluation import evaluate",
+            ],
+        }
+        if scaffold.variant.protected_attributes:
+            expected["analysis/fairness_audit.qmd"] = [
+                f"`src/{slug}/fairness/`",
+                f"# from {slug}.fairness.audit import subgroup_metrics",
+            ]
+        for path, fragments in expected.items():
+            for fragment in fragments:
+                assert fragment in scaffold.files[path], (path, fragment)
+
+    def test_the_generated_tests_import_the_package_by_its_name(self, scaffold: Scaffold) -> None:
+        for module in _STUB_CALLS:
+            text = scaffold.files[f"tests/test_{module}.py"]
+            assert text.count(f"import {scaffold.slug}.{module} as module") == 2, module
 
 
 @pytest.fixture(scope="module")
-def tier1() -> Iterator[dict[str, str]]:
-    _, files = _generate(VARIANTS[1])
-    yield files
+def tier1() -> dict[str, str]:
+    return _generate(TIER1_GITHUB)[1]
 
 
 class TestTheFairnessPackage:
@@ -239,3 +319,11 @@ class TestTheFairnessPackage:
         # which made the generated lint job fail for every project using protected attributes.
         package = next(p for p in tier1 if p.endswith("/fairness/__init__.py"))
         assert "noqa" not in tier1[package]
+
+    def test_its_test_calls_the_stub_and_expects_it_to_raise(self, tier1: dict[str, str]) -> None:
+        text = tier1["tests/test_fairness.py"]
+        assert (
+            "    with pytest.raises(NotImplementedError):\n"
+            '        module.subgroup_metrics(None, protected_attribute="x", metric="accuracy")\n'
+        ) in text
+        assert "pass" not in text

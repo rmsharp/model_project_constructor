@@ -469,17 +469,35 @@ class TestScaffoldedStubTests:
 
     def test_the_test_imports_the_real_package_and_calls_each_stub(self) -> None:
         out = render_test_stub("models", "foo_bar")
-        assert 'PACKAGE = "foo_bar"' in out
+        assert out.count("    import foo_bar.models as module\n") == 2
         assert "<" not in out
         assert "pass" not in out
         assert out.count("pytest.raises(NotImplementedError)") == 2
         assert "module.train(None, None)" in out
         assert "module.predict(None, None)" in out
 
-    def test_the_package_name_is_the_only_slug_dependent_line(self) -> None:
-        # What lets the output stay ``ruff format``-stable for any slug length.
+    def test_the_package_name_appears_only_in_import_statements(self) -> None:
+        # An import statement cannot be wrapped by ``ruff format``, so the output stays
+        # format-stable whatever the slug's length; a string constant was not (slugs of 77 to
+        # 82 characters), which ``test_scaffold_runs`` measures over every length.
         short = render_test_stub("features", "a").splitlines()
         long = render_test_stub("features", "a_much_longer_slug").splitlines()
-        differing = [i for i, (x, y) in enumerate(zip(short, long, strict=True)) if x != y]
         assert len(short) == len(long)
-        assert [short[i] for i in differing] == ['PACKAGE = "a"']
+        differing = [i for i, (x, y) in enumerate(zip(short, long, strict=True)) if x != y]
+        assert [short[i] for i in differing] == ["    import a.features as module"] * 2
+
+
+class TestEmptyListsAreWrittenAsRuffFormatsThem:
+    """``[`` newline ``]`` is rewritten to ``[]`` by the ``ruff-format`` hook the scaffold ships."""
+
+    def test_no_primary_queries(self) -> None:
+        out = render_data_loading(project_slug="foo_bar", primary_query_names=[])
+        assert "PRIMARY_QUERY_NAMES: list[str] = []\n" in out
+
+    def test_no_evaluation_metrics(self) -> None:
+        out = render_evaluation(intake={"model_solution": {}})
+        assert "REQUESTED_METRICS: list[str] = []\n" in out
+
+    def test_a_non_empty_list_stays_one_item_per_line_with_a_trailing_comma(self) -> None:
+        out = render_data_loading(project_slug="foo_bar", primary_query_names=["a", "b"])
+        assert 'PRIMARY_QUERY_NAMES: list[str] = [\n    "a",\n    "b",\n]\n' in out

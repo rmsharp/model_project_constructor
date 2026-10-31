@@ -39,13 +39,13 @@ class CIHostConfig:
     """Enterprise-host overrides for a *generated project's* CI/pre-commit config.
 
     (docs/planning/enterprise-migration.md Phase C3b.) Every field defaults to
-    today's public value, so a project generated with no overrides emits
-    byte-identical CI/pre-commit content to pre-C3b — these are opt-in
-    redirects for pipeline-generated projects that need to target
-    enterprise-internal hosts instead of Docker Hub, the public GitHub Actions
-    marketplace, public PyPI, and the public ``astral-sh/ruff-pre-commit``
-    mirror. This governs the CI baked into *generated* repos, never this
-    repository's own CI.
+    today's public value, so a project generated with no overrides targets
+    the same public hosts as before C3b (the install command has changed since:
+    ``uv sync --extra dev``) — these are opt-in redirects for
+    pipeline-generated projects that need to target enterprise-internal hosts
+    instead of Docker Hub, the public GitHub Actions marketplace, public PyPI,
+    and the public ``astral-sh/ruff-pre-commit`` mirror. This governs the CI
+    baked into *generated* repos, never this repository's own CI.
     """
 
     base_image: str = "python:3.11"
@@ -806,15 +806,12 @@ def render_fairness_test_stub(*, project_slug: str) -> str:
         "\n"
         "from __future__ import annotations\n"
         "\n"
-        "import importlib\n"
-        "\n"
         "import pytest\n"
-        "\n"
-        f'PACKAGE = "{project_slug}"\n'
         "\n"
         "\n"
         "def test_subgroup_metrics_is_scaffolded() -> None:\n"
-        '    module = importlib.import_module(f"{PACKAGE}.fairness.audit")\n'
+        f"    import {project_slug}.fairness.audit as module\n"
+        "\n"
         '    assert hasattr(module, "subgroup_metrics")\n'
         "    with pytest.raises(NotImplementedError):\n"
         '        module.subgroup_metrics(None, protected_attribute="x", metric="accuracy")\n'

@@ -213,8 +213,21 @@ def render_src_init(*, project_name: str, project_slug: str) -> str:
     )
 
 
+def _str_list_literal(items: list[str]) -> str:
+    """A ``list[str]`` literal written the way ``ruff format`` writes it.
+
+    One item per line with a trailing comma, which ruff keeps; ``[]`` when there are none,
+    because ruff rewrites ``[`` newline ``]`` to that and the generated pre-commit config
+    runs ``ruff-format``. Both lists this renders can be empty in a valid report.
+    """
+
+    if not items:
+        return "[]"
+    return "[\n" + "".join(f'    "{item}",\n' for item in items) + "]"
+
+
 def render_data_loading(*, project_slug: str, primary_query_names: list[str]) -> str:
-    names_literal = "[\n" + "".join(f'    "{n}",\n' for n in primary_query_names) + "]"
+    names_literal = _str_list_literal(primary_query_names)
     return (
         '"""Data loading functions.\n'
         "\n"
@@ -295,7 +308,7 @@ def render_models(*, intake: dict[str, Any]) -> str:
 def render_evaluation(*, intake: dict[str, Any]) -> str:
     model_solution = intake.get("model_solution") or {}
     metrics = list(model_solution.get("evaluation_metrics") or [])
-    metrics_literal = "[\n" + "".join(f'    "{m}",\n' for m in metrics) + "]"
+    metrics_literal = _str_list_literal(metrics)
     return (
         '"""Evaluation functions — thin wrappers around sklearn metrics.\n'
         "\n"
@@ -671,8 +684,10 @@ def render_test_stub(module: str, project_slug: str) -> str:
     """Render ``tests/test_<module>.py`` for one scaffolded ``src/<slug>/<module>.py``.
 
     The output is already ``ruff format``-clean, because the generated pre-commit config runs
-    that hook and a file it rewrites fails the first commit. The package name sits in a
-    module constant so that no line holding it can be wrapped, whatever length the slug has.
+    that hook and a file it rewrites fails the first commit. The package name appears only in
+    ``import <slug>.<module> as module`` statements, which ``ruff format`` cannot wrap, so
+    that holds whatever length the slug has (a string constant could be wrapped, and was, for
+    slugs of 77 to 82 characters).
     """
 
     calls = "".join(
@@ -684,22 +699,20 @@ def render_test_stub(module: str, project_slug: str) -> str:
         "\n"
         "from __future__ import annotations\n"
         "\n"
-        "import importlib\n"
-        "\n"
         "import pytest\n"
-        "\n"
-        f'PACKAGE = "{project_slug}"\n'
         "\n"
         "\n"
         f"def test_{module}_importable() -> None:\n"
-        f'    module = importlib.import_module(f"{{PACKAGE}}.{module}")\n'
+        f"    import {project_slug}.{module} as module\n"
+        "\n"
         "    assert module is not None\n"
         "\n"
         "\n"
         f"def test_{module}_stub_raises() -> None:\n"
         "    # Replace with real assertions once the implementation lands: a stub that no\n"
         "    # longer raises makes this test fail, which is the prompt to do so.\n"
-        f'    module = importlib.import_module(f"{{PACKAGE}}.{module}")\n'
+        f"    import {project_slug}.{module} as module\n"
+        "\n"
         f"{calls}"
     )
 
