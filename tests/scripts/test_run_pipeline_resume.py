@@ -104,6 +104,7 @@ def test_argparse_accepts_resume_flag(run_pipeline_module, tmp_path, monkeypatch
     pre-flight rejection in one shot.
     """
     monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MPC_HOST", raising=False)  # main() now reads it when --host is absent
     monkeypatch.setattr(
         "sys.argv",
         ["run_pipeline.py", "--resume", "smoke_run_id"],
@@ -361,6 +362,7 @@ def test_main_threads_resume_from_into_pipeline_config(
         )
 
     monkeypatch.setattr(run_pipeline_module, "run_pipeline", _fake_run_pipeline)
+    monkeypatch.delenv("MPC_HOST", raising=False)  # main() now reads it when --host is absent
     monkeypatch.setattr(
         "sys.argv",
         [

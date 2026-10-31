@@ -15,7 +15,9 @@ Usage
 
 Options:
     --run-id ID        Unique run identifier (default: auto-generated)
-    --host HOST        "gitlab" or "github" (default: gitlab)
+    --host HOST        "gitlab" or "github" (default: MPC_HOST if set, else
+                       gitlab). A --live run refuses a --host that differs
+                       from MPC_HOST.
     --checkpoint-dir   Where to write checkpoint envelopes
                        (default: .orchestrator/checkpoints)
     --live             Use a real repo host instead of FakeRepoClient.
@@ -64,6 +66,7 @@ import json
 import os
 import sys
 import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -98,7 +101,9 @@ from model_project_constructor.orchestrator import (  # noqa: E402
     skipped_stages,
 )
 from model_project_constructor.orchestrator.config import (  # noqa: E402
+    DEFAULT_HOST,
     REPO_PLATFORMS,
+    ConfigError,
     validate_namespace,
 )
 from model_project_constructor.orchestrator.logging import _class_name  # noqa: E402
@@ -330,11 +335,48 @@ def build_ci_host_config() -> CIHostConfig:
     return CIHostConfig(**overrides)
 
 
+def resolve_host(
+    flag: str | None, *, live: bool, env: Mapping[str, str] | None = None
+) -> str:
+    """Return the one host this run is for, from ``--host`` and ``MPC_HOST``.
+
+    Until Larkspur point (3) the two were read separately: ``--host`` (default
+    ``gitlab``) chose the adapter and ``MPC_HOST`` (default ``gitlab``) chose which
+    token ``OrchestratorSettings`` returned, so ``--host github --live`` with
+    ``GITLAB_TOKEN`` set sent the GitLab token to ``api.github.com``, and
+    ``MPC_HOST=github --live`` with no flag sent the GitHub token to ``gitlab.com``.
+
+    The rule (operator ruling, Session 292): whichever of the two is given is used; a
+    LIVE run whose two disagree is refused, because it sends a credential and the
+    only safe answer to "which host?" is one the operator stated twice the same way.
+    A dry run reads no token, so there the flag simply wins and a stale ``MPC_HOST``
+    is not an error. Neither given means ``gitlab``.
+
+    Raises :class:`ConfigError` (the caller turns it into a usage error).
+    """
+    source = os.environ if env is None else env
+    if flag is not None and not live:
+        return flag
+    raw = source.get("MPC_HOST")
+    # ``OrchestratorSettings`` is the one parser of ``MPC_HOST`` (strip, lower-case,
+    # one sentence for a name that is not a host), so ask it instead of repeating it.
+    from_env = None if raw is None else OrchestratorSettings.from_env({"MPC_HOST": raw}).host
+    if flag is None:
+        return from_env or DEFAULT_HOST
+    if from_env is not None and from_env != flag:
+        raise ConfigError(
+            f"--host {flag} disagrees with MPC_HOST={from_env}. A live run needs one host "
+            f"to choose both the token it reads and the address it calls; set them to "
+            f"the same host, or unset MPC_HOST to follow --host."
+        )
+    return flag
+
+
 def build_website_runner(*, host: str, live: bool):
     """Return a WebsiteRunner callable.
 
     In fake mode, uses FakeRepoClient (in-memory, no credentials).
-    In live mode, constructs the real adapter for the chosen host.
+    In live mode, constructs the real adapter for ``host`` with ``host``'s token.
     """
     ci_platform = host
     ci_host_config = build_ci_host_config()
@@ -346,8 +388,10 @@ def build_website_runner(*, host: str, live: bool):
         )
         return agent.run, client  # return client so we can inspect files
 
-    # Live mode: build the real adapter
-    settings = OrchestratorSettings.from_env()
+    # Live mode: build the real adapter. The settings are read FOR ``host``, not for
+    # whatever ``MPC_HOST`` says: the token is chosen by ``settings.host`` and the adapter
+    # by ``host``, and two different hosts there send one host's token to the other.
+    settings = OrchestratorSettings.from_env({**os.environ, "MPC_HOST": host})
     token = settings.require_host_token()
 
     host_url = os.environ.get("MPC_HOST_URL", REPO_PLATFORMS[host].default_api_url)
@@ -476,8 +520,12 @@ def main() -> None:
     parser.add_argument(
         "--host",
         choices=sorted(REPO_PLATFORMS),
-        default="gitlab",
-        help="Target repo host (default: gitlab)",
+        default=None,
+        help=(
+            "Target repo host (default: MPC_HOST if set, else gitlab). A --live run "
+            "refuses --host and MPC_HOST that name different hosts, because the token "
+            "is chosen by one and the address by the other."
+        ),
     )
     parser.add_argument(
         "--checkpoint-dir",
@@ -575,6 +623,13 @@ def main() -> None:
     # Fail fast: --llm both requires --intake-fixture.
     if args.llm == "both" and not args.intake_fixture:
         parser.error("--llm both requires --intake-fixture")
+
+    # One host for the whole run (banner, repo target, CI manifest, token, adapter):
+    # settled here, before anything is built or any checkpoint is written.
+    try:
+        args.host = resolve_host(args.host, live=args.live)
+    except ConfigError as exc:
+        parser.error(str(exc))
 
     # --- Resume resolution (Phase 3 of resume-from-checkpoint-plan.md) ---
     # When --resume is set, override the auto-generated run_id with the
