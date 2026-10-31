@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 290 Did
+**Deliverable:** **Larkspur point (2): the project the tool scaffolds passes its own tests (IN PROGRESS)** — `BACKLOG.md`'s item *Running the pipeline on a made-up company found defects…*, point (2): `templates.py` writes the literal `<project_slug>` where `{project_slug}` was meant, each `*_stub_raises` test puts `pass` inside `pytest.raises`, and the scaffold's CI fails at lint because a bare `uv sync` skips the `dev` extra. Development workstream (a bug-fix pass).
+**Started:** 2026-10-31 16:40
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers: the area (Larkspur defects, the first option, recommended) and the item (point (2), the first option, recommended). **Not yet decided by the operator:** the item's own "operator call", whether red stubs are intended; it is put to them before any code that depends on it.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 289 Did
 **Deliverable:** **Session 288's 11 commits pushed to `origin/master` and their CI result read — COMPLETE: they verify on Linux.** The push was `a7fbedf..e361047` (12 commits: Session 288's 11 and this session's claim), a fast-forward with no force, at 15:54 on 2026-10-31; both workflows it started finished green. **The operator decided,** by two pickers: the area (the first option, recommended) and, immediately before the push, "Push now" — asked because the push also deploys the public tutorial site (`be57a68` edits `docs/tutorial.md`). **Mine, not put to the operator:** reading the runs' logs and not only their status, correcting the `BACKLOG.md` item the logs contradicted, learning #375, leaving the two commits made after the push unpushed, and running no review workflow (no code changed, so there was nothing to review). **Started:** 2026-10-31 15:53. **Completed:** 2026-10-31 (close-out about 16:15). **Commits: three** (`git rev-list --count 2b53616..HEAD` after this one lands): `e361047` (claim, pushed), `46f928f` (the `BACKLOG.md` correction) and this close-out; each has its own `CHANGELOG.md` entry. **The last two are not pushed.**
 

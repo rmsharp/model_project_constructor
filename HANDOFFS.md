@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S290
+date: 2026-10-31
+status: pending
+active_task: Larkspur point (2) in BACKLOG.md: the project the tool scaffolds fails its own tests, 8 of 8 (the literal `<project_slug>` in templates.py and governance_templates.py, `pass` inside `pytest.raises` in each *_stub_raises test, a scaffold CI that fails at lint because `uv sync` skips the dev extra). Chosen by the operator at Phase 0 from an area picker and an item picker. Whether red stubs are intended is the operator's call and is asked before dependent code.
+```
+
+```handoff
 session: S289
 date: 2026-10-31
 status: complete
