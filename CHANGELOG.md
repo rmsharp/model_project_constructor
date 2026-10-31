@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S288 — the `--db-url` help strings say what the tool enforces (layer 3 of 3, part 3)
+- **Change:** `packages/data-agent/src/model_project_constructor_data_agent/cli.py` (the `run` and `discover` options) and `scripts/run_pipeline.py` (the module docstring's flag list and the argparse help). Each called the database "read-only" as an instruction to the operator; each now says to use an account that cannot write, and that the tool also allows one `SELECT`, `WITH` or `VALUES` statement per check and opens the connection read-only where the database supports it. Strings only: no behaviour changed.
+- **Non-commit actions:** none. `ruff format --check` fails on both files at `HEAD`, in code these strings are not in (the formatter's diff has no hunk in them).
+- **Commit/PR:** this commit
+- **Session:** S288 · **Verified:** `ruff check` and `mypy` clean; `tests/data_agent_package` and `tests/scripts` pass (3,080). No test pins any of these strings (a grep of `tests/` for them found none).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S288 — `ReadOnlyViolation` is exported from the data-agent package, and `USAGE.md` describes the read-only access (layer 3 of 3, part 2)
 - **Change:** `packages/data-agent/src/model_project_constructor_data_agent/__init__.py` (imports and lists `ReadOnlyViolation`, which `ReadOnlyDB.execute` can now raise, so a library caller does not need the submodule path), `packages/data-agent/USAGE.md` (the `--db-url` option says the account must still be unable to write; a new *Read-only access* subsection describes the two layers, what the gate over-refuses and what it cannot stop; the public-API block lists the class; the error contract says what `execute` and `connect` now raise) and one test in `tests/data_agent_package/test_db_read_only.py` that pins the export. The re-export shims in `src/model_project_constructor/agents/data/` carry a subset of the package's names and were left alone.
 - **Non-commit actions:** the first draft of the `USAGE.md` paragraph said the connection-level behaviour of PostgreSQL, MySQL and MariaDB was measured on throwaway servers in Session 288; re-reading the layer-1 ledger entry showed the scout ran PostgreSQL 17 and MySQL 8.4 only, so the paragraph now says MariaDB was never run.

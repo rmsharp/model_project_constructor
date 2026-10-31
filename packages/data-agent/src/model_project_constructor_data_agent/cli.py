@@ -122,8 +122,11 @@ def run(
         None,
         "--db-url",
         help=(
-            "SQLAlchemy URL for the read-only database. If omitted, quality "
-            "checks are generated but not executed."
+            "SQLAlchemy URL for the database the quality checks run against. Use an "
+            "account that cannot write; each check must also be one SELECT, WITH or "
+            "VALUES statement, and the connection is opened read-only where the "
+            "database supports it. If omitted, quality checks are generated but not "
+            "executed."
         ),
     ),
     model: str = typer.Option(
@@ -173,7 +176,10 @@ def discover(
     db_url: str = typer.Option(
         ...,
         "--db-url",
-        help="SQLAlchemy URL for the database to probe (read-only role recommended).",
+        help=(
+            "SQLAlchemy URL for the database to probe (read-only role recommended; the "
+            "connection is also opened read-only where the database supports it)."
+        ),
     ),
     output: Path = typer.Option(
         ...,

@@ -43,9 +43,11 @@ Options:
                        "both" (default: anthropic). Routes through each
                        agent's make_llm_client factory. Ignored when
                        --llm=none.
-    --db-url URL       SQLAlchemy URL for the data agent's read-only DB.
-                       When omitted, data quality checks are generated but
-                       not executed. Ignored when --llm=none.
+    --db-url URL       SQLAlchemy URL for the data agent's database; use an
+                       account that cannot write (the data agent also refuses
+                       anything but a single read-only query). When omitted,
+                       data quality checks are generated but not executed.
+                       Ignored when --llm=none.
     --resume RUN_ID    Resume a previously checkpointed run from the first
                        missing envelope on disk. Overrides --run-id with
                        the resumed run's id. Reads
@@ -527,7 +529,9 @@ def main() -> None:
         "--db-url",
         default=None,
         help=(
-            "SQLAlchemy URL for the data agent's read-only DB "
+            "SQLAlchemy URL for the data agent's database; use an account that "
+            "cannot write (the data agent also refuses anything but a single "
+            "read-only query) "
             "(default: None = quality checks generated but not executed; "
             "ignored when --llm=none)"
         ),
