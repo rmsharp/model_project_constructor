@@ -5,22 +5,26 @@ from __future__ import annotations
 from typing import Any
 
 from model_project_constructor.agents.website.templates import (
+    _STUB_CALLS,
     build_base_files,
     derive_project_name,
     derive_project_slug,
     render_data_loading,
     render_evaluation,
+    render_features,
     render_gitignore,
     render_license,
     render_models,
     render_pyproject,
     render_qmd_business_understanding,
     render_qmd_data,
+    render_qmd_feature_engineering,
     render_qmd_implementation_plan,
     render_qmd_initial_models,
     render_readme,
     render_reports_data_md,
     render_reports_intake_md,
+    render_test_stub,
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -166,17 +170,24 @@ class TestIndividualRenderers:
 
     def test_qmd_data_lists_queries(self, data_report: DataReport) -> None:
         data = data_report.model_dump(mode="json")
-        out = render_qmd_data(data=data)
+        out = render_qmd_data(data=data, project_slug="foo_bar")
         assert "subrogation_training_set" in out
         assert "queries/primary/subrogation_training_set.sql" in out
+        assert "# from foo_bar.data_loading import load_primary" in out
 
     def test_qmd_initial_models_includes_metrics(
         self, intake_report: IntakeReport
     ) -> None:
         intake = intake_report.model_dump(mode="json")
-        out = render_qmd_initial_models(intake=intake)
+        out = render_qmd_initial_models(intake=intake, project_slug="foo_bar")
         assert "AUC" in out
         assert "supervised_classification" in out
+        assert "# from foo_bar.models import train, predict" in out
+
+    def test_qmd_feature_engineering_names_the_package(self) -> None:
+        out = render_qmd_feature_engineering(project_slug="foo_bar")
+        assert "``src/foo_bar/features.py``" in out
+        assert "# from foo_bar.features import build_feature_matrix" in out
 
     def test_qmd_implementation_plan_formats_dollar_range(
         self, intake_report: IntakeReport, data_report: DataReport
@@ -425,3 +436,50 @@ class TestBuildBaseFiles:
             project_slug="p",
         )
         assert not any(path.startswith("queries/") for path in files)
+
+
+class TestScaffoldedStubTests:
+    """``tests/test_<module>.py`` calls every stub the scaffold writes, so none can drift."""
+
+    @staticmethod
+    def _module_sources() -> dict[str, str]:
+        return {
+            "data_loading": render_data_loading(project_slug="foo_bar", primary_query_names=[]),
+            "features": render_features(),
+            "models": render_models(intake={}),
+            "evaluation": render_evaluation(intake={}),
+        }
+
+    def test_every_scaffolded_stub_is_called_by_its_test(self) -> None:
+        sources = self._module_sources()
+        assert set(_STUB_CALLS) == set(sources)
+        for module, source in sources.items():
+            called = [name for name, _ in _STUB_CALLS[module]]
+            for name in called:
+                assert f"def {name}(" in source, (module, name)
+            # One ``raise NotImplementedError`` per stub, and no stub that is not called.
+            assert source.count("raise NotImplementedError") == len(called), module
+
+    def test_base_files_write_one_test_per_scaffolded_module(self) -> None:
+        files = build_base_files(
+            intake={}, data={}, project_name="foo-bar", project_slug="foo_bar"
+        )
+        written = {p for p in files if p.startswith("tests/test_")}
+        assert written == {f"tests/test_{module}.py" for module in _STUB_CALLS}
+
+    def test_the_test_imports_the_real_package_and_calls_each_stub(self) -> None:
+        out = render_test_stub("models", "foo_bar")
+        assert 'PACKAGE = "foo_bar"' in out
+        assert "<" not in out
+        assert "pass" not in out
+        assert out.count("pytest.raises(NotImplementedError)") == 2
+        assert "module.train(None, None)" in out
+        assert "module.predict(None, None)" in out
+
+    def test_the_package_name_is_the_only_slug_dependent_line(self) -> None:
+        # What lets the output stay ``ruff format``-stable for any slug length.
+        short = render_test_stub("features", "a").splitlines()
+        long = render_test_stub("features", "a_much_longer_slug").splitlines()
+        differing = [i for i, (x, y) in enumerate(zip(short, long, strict=True)) if x != y]
+        assert len(short) == len(long)
+        assert [short[i] for i in differing] == ['PACKAGE = "a"']

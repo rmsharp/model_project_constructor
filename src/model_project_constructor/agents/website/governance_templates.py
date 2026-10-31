@@ -737,7 +737,7 @@ def render_pre_commit_config(*, ci_host_config: CIHostConfig | None = None) -> s
 # ---------------------------------------------------------------------------
 
 
-def render_fairness_audit_qmd() -> str:
+def render_fairness_audit_qmd(*, project_slug: str) -> str:
     return (
         "---\n"
         "title: \"Fairness Audit\"\n"
@@ -748,11 +748,11 @@ def render_fairness_audit_qmd() -> str:
         "\n"
         "This notebook is scaffolded because the intake report declared\n"
         "`uses_protected_attributes=true`. It should exercise the fairness\n"
-        "module in `src/<slug>/fairness/` and document the subgroup\n"
+        f"module in `src/{project_slug}/fairness/` and document the subgroup\n"
         "performance breakdown.\n"
         "\n"
         "```{python}\n"
-        "# from <project_slug>.fairness.audit import subgroup_metrics\n"
+        f"# from {project_slug}.fairness.audit import subgroup_metrics\n"
         "# subgroup_metrics(df, protected_attribute='...', metric='...')\n"
         "```\n"
     )
@@ -794,28 +794,30 @@ def render_fairness_package_init() -> str:
         "\n"
         '__all__: list[str] = ["subgroup_metrics"]\n'
         "\n"
-        "from .audit import subgroup_metrics  # noqa: F401\n"
+        "from .audit import subgroup_metrics\n"
     )
 
 
-def render_fairness_test_stub() -> str:
+def render_fairness_test_stub(*, project_slug: str) -> str:
+    """Render ``tests/test_fairness.py``, ``ruff format``-clean like ``render_test_stub``."""
+
     return (
         '"""Unit tests for the fairness audit module (scaffolded)."""\n'
         "\n"
         "from __future__ import annotations\n"
         "\n"
+        "import importlib\n"
+        "\n"
         "import pytest\n"
+        "\n"
+        f'PACKAGE = "{project_slug}"\n'
         "\n"
         "\n"
         "def test_subgroup_metrics_is_scaffolded() -> None:\n"
-        "    from importlib import import_module\n"
-        "\n"
-        "    module = import_module('<project_slug>.fairness.audit')\n"
-        "    assert hasattr(module, 'subgroup_metrics')\n"
+        '    module = importlib.import_module(f"{PACKAGE}.fairness.audit")\n'
+        '    assert hasattr(module, "subgroup_metrics")\n'
         "    with pytest.raises(NotImplementedError):\n"
-        "        module.subgroup_metrics(\n"
-        "            None, protected_attribute='x', metric='accuracy'\n"
-        "        )\n"
+        '        module.subgroup_metrics(None, protected_attribute="x", metric="accuracy")\n'
     )
 
 
@@ -936,7 +938,7 @@ def build_analysis_files(
         return {}
 
     return {
-        "analysis/fairness_audit.qmd": render_fairness_audit_qmd(),
+        "analysis/fairness_audit.qmd": render_fairness_audit_qmd(project_slug=project_slug),
         f"src/{project_slug}/fairness/__init__.py": render_fairness_package_init(),
         f"src/{project_slug}/fairness/audit.py": render_fairness_module(),
     }
@@ -959,7 +961,7 @@ def build_test_files(
         return {}
 
     return {
-        "tests/test_fairness.py": render_fairness_test_stub(),
+        "tests/test_fairness.py": render_fairness_test_stub(project_slug=project_slug),
     }
 
 

@@ -417,7 +417,7 @@ def render_qmd_business_understanding(*, intake: dict[str, Any]) -> str:
     )
 
 
-def render_qmd_data(*, data: dict[str, Any]) -> str:
+def render_qmd_data(*, data: dict[str, Any], project_slug: str) -> str:
     summary = str(data.get("summary", "")).strip()
     primary_queries = data.get("primary_queries") or []
     lines = [
@@ -433,7 +433,7 @@ def render_qmd_data(*, data: dict[str, Any]) -> str:
         lines.append(f"\nSQL: `queries/primary/{name}.sql`\n")
     lines.append(
         "\n```{python}\n"
-        "# from <project_slug>.data_loading import load_primary\n"
+        f"# from {project_slug}.data_loading import load_primary\n"
         "# df = load_primary(\"<query_name>\")\n"
         "```\n"
     )
@@ -454,19 +454,19 @@ def render_qmd_eda() -> str:
     )
 
 
-def render_qmd_feature_engineering() -> str:
+def render_qmd_feature_engineering(*, project_slug: str) -> str:
     return (
         _qmd_header("04 — Feature Engineering")
-        + "Features are implemented in ``src/<slug>/features.py`` so they\n"
+        + f"Features are implemented in ``src/{project_slug}/features.py`` so they\n"
         + "can be unit-tested. This narrative demonstrates their use.\n\n"
         + "```{python}\n"
-        + "# from <project_slug>.features import build_feature_matrix\n"
+        + f"# from {project_slug}.features import build_feature_matrix\n"
         + "# X = build_feature_matrix(raw_df)\n"
         + "```\n"
     )
 
 
-def render_qmd_initial_models(*, intake: dict[str, Any]) -> str:
+def render_qmd_initial_models(*, intake: dict[str, Any], project_slug: str) -> str:
     ms = intake.get("model_solution") or {}
     metrics = ", ".join(ms.get("evaluation_metrics") or []) or "(none declared)"
     return (
@@ -474,8 +474,8 @@ def render_qmd_initial_models(*, intake: dict[str, Any]) -> str:
         + f"**Model type:** `{ms.get('model_type', 'other')}`\n\n"
         + f"**Requested evaluation metrics:** {metrics}\n\n"
         + "```{python}\n"
-        + "# from <project_slug>.models import train, predict\n"
-        + "# from <project_slug>.evaluation import evaluate\n"
+        + f"# from {project_slug}.models import train, predict\n"
+        + f"# from {project_slug}.evaluation import evaluate\n"
         + "# model = train(X_train, y_train)\n"
         + "# preds = predict(model, X_test)\n"
         + "# scores = evaluate(y_test, preds)\n"
@@ -654,25 +654,53 @@ def render_tests_init() -> str:
     return ""
 
 
-def render_test_stub(module: str) -> str:
+# The stubs ``build_base_files`` scaffolds, and how to call each one. Every stub body is
+# ``raise NotImplementedError``, so the generated ``tests/test_<module>.py`` calls each of
+# them once and expects exactly that. ``render_data_loading`` and its siblings write the stubs,
+# so a stub added there has to be listed here;
+# ``test_every_scaffolded_stub_is_called_by_its_test`` fails when the two disagree.
+_STUB_CALLS: dict[str, tuple[tuple[str, str], ...]] = {
+    "data_loading": (("load_primary", '"example"'),),
+    "features": (("build_feature_matrix", "None"),),
+    "models": (("train", "None, None"), ("predict", "None, None")),
+    "evaluation": (("evaluate", "None, None"),),
+}
+
+
+def render_test_stub(module: str, project_slug: str) -> str:
+    """Render ``tests/test_<module>.py`` for one scaffolded ``src/<slug>/<module>.py``.
+
+    The output is already ``ruff format``-clean, because the generated pre-commit config runs
+    that hook and a file it rewrites fails the first commit. The package name sits in a
+    module constant so that no line holding it can be wrapped, whatever length the slug has.
+    """
+
+    calls = "".join(
+        f"    with pytest.raises(NotImplementedError):\n        module.{name}({args})\n"
+        for name, args in _STUB_CALLS[module]
+    )
     return (
         f'"""Unit tests for ``{module}``. Scaffolded — fill in real cases."""\n'
         "\n"
         "from __future__ import annotations\n"
         "\n"
+        "import importlib\n"
+        "\n"
         "import pytest\n"
+        "\n"
+        f'PACKAGE = "{project_slug}"\n'
         "\n"
         "\n"
         f"def test_{module}_importable() -> None:\n"
-        f"    import importlib\n"
-        f"    module = importlib.import_module('<project_slug>.{module}')\n"
-        f"    assert module is not None\n"
+        f'    module = importlib.import_module(f"{{PACKAGE}}.{module}")\n'
+        "    assert module is not None\n"
         "\n"
         "\n"
         f"def test_{module}_stub_raises() -> None:\n"
-        f"    # Replace with real assertions once implementations land.\n"
-        f"    with pytest.raises(NotImplementedError):\n"
-        f"        pass  # placeholder\n"
+        "    # Replace with real assertions once the implementation lands: a stub that no\n"
+        "    # longer raises makes this test fail, which is the prompt to do so.\n"
+        f'    module = importlib.import_module(f"{{PACKAGE}}.{module}")\n'
+        f"{calls}"
     )
 
 
@@ -811,19 +839,23 @@ def build_base_files(
         "analysis/01_business_understanding.qmd": render_qmd_business_understanding(
             intake=intake
         ),
-        "analysis/02_data.qmd": render_qmd_data(data=data),
+        "analysis/02_data.qmd": render_qmd_data(data=data, project_slug=project_slug),
         "analysis/03_eda.qmd": render_qmd_eda(),
-        "analysis/04_feature_engineering.qmd": render_qmd_feature_engineering(),
-        "analysis/05_initial_models.qmd": render_qmd_initial_models(intake=intake),
+        "analysis/04_feature_engineering.qmd": render_qmd_feature_engineering(
+            project_slug=project_slug
+        ),
+        "analysis/05_initial_models.qmd": render_qmd_initial_models(
+            intake=intake, project_slug=project_slug
+        ),
         "analysis/06_implementation_plan.qmd": render_qmd_implementation_plan(
             intake=intake, data=data
         ),
         "analysis/99_extensions.qmd": render_qmd_extensions(),
         "tests/__init__.py": render_tests_init(),
-        "tests/test_data_loading.py": render_test_stub("data_loading"),
-        "tests/test_features.py": render_test_stub("features"),
-        "tests/test_models.py": render_test_stub("models"),
-        "tests/test_evaluation.py": render_test_stub("evaluation"),
+        "tests/test_data_loading.py": render_test_stub("data_loading", project_slug),
+        "tests/test_features.py": render_test_stub("features", project_slug),
+        "tests/test_models.py": render_test_stub("models", project_slug),
+        "tests/test_evaluation.py": render_test_stub("evaluation", project_slug),
         "data/README.md": render_data_readme(data=data),
         "reports/intake_report.json": render_reports_intake_json(intake=intake),
         "reports/intake_report.md": render_reports_intake_md(intake=intake),
