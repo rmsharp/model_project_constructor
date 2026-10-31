@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-31 · [ad hoc] S289 — `BACKLOG.md`: the item on CI's interpreter is corrected to what the push's run measured
+- **Change:** `BACKLOG.md`, the item *CI tests one Python, and it is not the one sessions run* and its index row. Three sentences were false after the push: "3.12.3 at the last run" (CI ran CPython 3.14.4 on `ubuntu-26.04`; `ubuntu-latest` had moved from `ubuntu-24.04` since the previous push, a day earlier, with no change in this repository), "(what CI uses)" for 3.12, and "the suite takes about 75 s on CI" (pytest ran 180 s and 136 s in the two runs). It also records that 3.14.4 printed 7,351 warnings, nearly all dependency `DeprecationWarning`s, and that `pyproject.toml` sets no `filterwarnings`. The item's fix options are unchanged and remain an operator call.
+- **Non-commit actions:** none.
+- **Commit/PR:** this commit
+- **Session:** S289 · **Verified:** every figure read from the two runs' logs (41132134289, 41241062531), not recalled: the image from each run's "Runner Image" group, the interpreter from `uv sync`'s "Using CPython" line, the pytest times and counts from its summary line, the warning kinds by counting them in the log. Both ledger guards are run before this commit.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-31 · [ad hoc] S289 — claim: push Session 288's commits and read the CI result (in progress)
 - **Change:** a `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is the verification Session 288 left open: its 11 commits have never run on Linux CI, and `be57a68` edits `docs/tutorial.md`, so the push also fires Publish Tutorial. The push is confirmed with the operator immediately before it runs.
 - **Non-commit actions:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and Sessions 288 to 285 in `SESSION_NOTES.md` and `BACKLOG.md`'s plain-language index; the dashboard run; one area picker, where the operator took the first (recommended) option.
