@@ -653,7 +653,7 @@ class TestVocabularyDriftGuards:
 
 
 class TestCIHostConfigDefaults:
-    """No overrides -> byte-identical to the pre-C3b public-host output."""
+    """No overrides -> the public hosts, as before C3b (the install line has since changed)."""
 
     def test_gitlab_ci_default_is_unchanged(self) -> None:
         from model_project_constructor.agents.website.governance_templates import (
