@@ -1695,3 +1695,84 @@ def test_the_same_stand_in_with_a_sound_reply_still_completes(
 
     assert report.status == "COMPLETE"
     assert [q.name for q in report.primary_queries] == ["tx_claims_2024"]
+
+
+def test_a_quality_check_that_would_write_is_refused_and_recorded_as_an_error(
+    seeded_db: ReadOnlyDB,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    """A model-written write is refused before it runs, and the run goes on (Session 288).
+
+    Before the read-only gate, ``DROP TABLE claims`` here ran for real and persisted: the pysqlite
+    driver does not open a transaction before a DDL statement, so SQLAlchemy's rollback had
+    nothing to undo.
+    """
+    ok_check = QualityCheckSpec(
+        check_name="ok_check",
+        check_sql="SELECT COUNT(*) FROM claims",
+        expectation="claims table has rows",
+    )
+    writing_check = QualityCheckSpec(
+        check_name="drops_the_table",
+        check_sql="DROP TABLE claims",
+        expectation="a model that was talked into writing",
+    )
+    fake = FakeLLMClient(
+        primary_queries_sequence=[[primary_query_spec_valid]],
+        qc_response=[[ok_check, writing_check]],
+        summary_response=summary_response,
+        datasheet_response=datasheet_response,
+    )
+
+    report = DataAgent(llm=fake, db=seeded_db).run(sample_request)
+
+    assert report.status == "COMPLETE"
+    checks = {c.check_name: c for c in report.primary_queries[0].quality_checks}
+    assert checks["ok_check"].execution_status == "PASSED"
+    assert checks["drops_the_table"].execution_status == "ERROR"
+    assert "read-only gate" in checks["drops_the_table"].result_summary
+    # The refusal names its rule and never quotes the SQL.
+    assert "DROP" not in checks["drops_the_table"].result_summary
+    assert seeded_db.execute("SELECT COUNT(*) AS n FROM claims") == [{"n": 5}]
+
+
+def test_a_baseline_query_that_would_write_is_refused_and_the_snapshot_fails(
+    seeded_db: ReadOnlyDB,
+    sample_request: DataRequest,
+    primary_query_spec_valid: PrimaryQuerySpec,
+    qc_specs_valid: list[QualityCheckSpec],
+    summary_response: SummaryResult,
+    datasheet_response: Datasheet,
+) -> None:
+    class WritingBaselineClient(FakeLLMClient):
+        def generate_baseline_query(
+            self,
+            request: DataRequest,
+            metric_name: str,
+            metric_definition: str,
+            measurement_window: str,
+        ) -> BaselineQuerySpec:
+            return BaselineQuerySpec(
+                metric_name=metric_name,
+                sql="WITH x AS (SELECT 1) DELETE FROM claims",
+                measurement_unit="USD",
+            )
+
+    fake = WritingBaselineClient(
+        primary_queries_sequence=[[primary_query_spec_valid]],
+        qc_response=[qc_specs_valid],
+        summary_response=summary_response,
+        datasheet_response=datasheet_response,
+    )
+
+    report = DataAgent(llm=fake, db=seeded_db).run(_request_with_baseline(sample_request))
+
+    assert report.status == "COMPLETE"
+    assert report.baseline_snapshot is not None
+    assert report.baseline_snapshot.query_execution_status == "FAILED"
+    assert report.baseline_snapshot.value is None
+    assert any("read-only gate" in c for c in report.baseline_snapshot.caveats)
+    assert seeded_db.execute("SELECT COUNT(*) AS n FROM claims") == [{"n": 5}]

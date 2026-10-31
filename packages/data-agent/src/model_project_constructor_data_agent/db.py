@@ -1,23 +1,47 @@
 """Read-only database access for the EXECUTE_QC node.
 
-Read-only enforcement is a database-credential concern in production (§9.1).
-This wrapper deliberately does not attempt to parse or reject mutating SQL —
-the Data Agent's LLM is prompted to emit SELECTs, and the pipeline is
-configured with a SELECT-only role at deployment time. The wrapper's sole
-job is to surface a clean :class:`DBConnectionError` on connect failure so
+:class:`ReadOnlyDB` runs SQL a language model wrote, so "read-only" is made a property of the
+statement and of the connection, in two layers. Neither replaces a database role that cannot
+write (§9.1), and the deployment should still use one.
+
+* **The statement gate** (:mod:`.read_only_gate`). ``execute`` refuses anything but one
+  ``SELECT``, ``WITH`` or ``VALUES`` statement with no write keyword, ``INTO``, row lock or
+  side-effecting function in it, and raises :class:`~.read_only_gate.ReadOnlyViolation` before the
+  database is touched. EXECUTE_QC records that as a quality check in ``ERROR`` and the baseline as
+  a ``FAILED`` snapshot, never a crash. It over-refuses on purpose; its module docstring lists
+  what and why.
+* **The connection.** SQLite gets ``PRAGMA query_only = ON``, re-applied every time a connection
+  is borrowed from the pool and read back. PostgreSQL gets read-only transactions (SQLAlchemy's
+  ``postgresql_readonly``, which psycopg and psycopg2 apply per transaction and pg8000 as a session
+  default) and a read-only session default. MySQL and MariaDB get
+  ``SET SESSION TRANSACTION READ ONLY``. If that cannot be installed on one of those dialects,
+  :meth:`ReadOnlyDB.connect` fails rather than carry on writable. On any other dialect nothing is
+  installed here, so ``connect`` logs a WARNING and only the gate applies.
+
+Measured in Session 288: before this, ``execute`` ran whatever it was given, and ``DROP TABLE``,
+``CREATE TABLE``, ``VACUUM INTO``, a ``WITH ... DELETE`` and a few more persisted on SQLite;
+``PRAGMA query_only`` alone does not stop ``ATTACH`` or ``VACUUM INTO`` creating a file, and on
+PostgreSQL a session default can be switched off by a ``SELECT`` (the gate refuses ``set_config``).
+That is why there are two layers.
+
+The wrapper's other job is to surface a clean :class:`DBConnectionError` on connect failure so
 the graph can take the SKIP_EXECUTION off-ramp described in §10.
 """
 
 from __future__ import annotations
 
 import contextlib
+import functools
 import logging
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import unquote
 
 import sqlalchemy as sa
+
+from model_project_constructor_data_agent.read_only_gate import check_read_only_sql
 
 _LOG = logging.getLogger(__name__)
 
@@ -595,12 +619,131 @@ def _answers_select_1(engine: sa.Engine) -> bool:
     return True
 
 
+class _ReadOnlyNotEnforced(RuntimeError):
+    """The driver took a command meant to make a connection read-only and did not honour it."""
+
+
+def _enforce_sqlite_read_only(dbapi_connection: Any, *_unused: Any) -> None:
+    """Turn ``PRAGMA query_only`` on for this connection and read it back.
+
+    Registered on ``connect`` AND ``checkout``. ``connect`` alone is not enough: a
+    ``PRAGMA query_only = OFF`` that got through would stay off for the next borrower of the pooled
+    connection (measured, Session 288: the next ``DROP TABLE`` on it succeeded). The read-back is
+    there because SQLite ignores a pragma it does not know, so an unsupported build would
+    otherwise run writable and say nothing. It does not stop ``ATTACH`` or ``VACUUM INTO`` from
+    creating a file; the statement gate does.
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA query_only = ON")
+        cursor.execute("PRAGMA query_only")
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    if row is None or row[0] != 1:
+        raise _ReadOnlyNotEnforced("SQLite did not turn PRAGMA query_only on")
+
+
+def _enforce_postgresql_read_only(dbapi_connection: Any, *_unused: Any) -> None:
+    """Make this session's transactions start read-only, and read the setting back.
+
+    The weaker of PostgreSQL's two layers: ``connect()`` also gives the engine
+    ``postgresql_readonly``, which psycopg and psycopg2 apply per transaction (``BEGIN READ ONLY``)
+    and which a ``SELECT set_config('default_transaction_read_only', 'off', false)`` cannot undo.
+    This session default can be undone that way (measured on PostgreSQL 17, Session 288), which is
+    one reason the statement gate refuses ``set_config``. pg8000 applies ``postgresql_readonly``
+    as a session default too (SQLAlchemy 2.0.49's source; no pg8000 was run), so there the two
+    layers are one and the gate is the only thing standing between a ``SELECT`` and a writable
+    session. The ``SET`` opens a transaction, so it is committed before SQLAlchemy first sets the
+    per-transaction characteristic.
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+        cursor.execute("SHOW default_transaction_read_only")
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+    dbapi_connection.commit()
+    if row is None or str(row[0]).lower() != "on":
+        raise _ReadOnlyNotEnforced("PostgreSQL did not make the session read-only")
+
+
+def _enforce_mysql_read_only(dbapi_connection: Any, *_unused: Any) -> None:
+    """Make this session's transactions read-only (MySQL and MariaDB).
+
+    There is no read-back: the system variable's name differs by server and version, and a server
+    that does not know the statement refuses it, which fails the connection. A read-only session
+    does not stop ``INTO OUTFILE``, ``FOR SHARE``, ``GET_LOCK`` or ``SLEEP`` (measured on MySQL
+    8.4, Session 288); the statement gate does.
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("SET SESSION TRANSACTION READ ONLY")
+    finally:
+        cursor.close()
+
+
+def _engine_options(backend: str) -> dict[str, Any]:
+    """The ``create_engine`` keyword arguments that make ``backend`` read-only per transaction."""
+    if backend == "postgresql":
+        return {"execution_options": {"postgresql_readonly": True}}
+    return {}
+
+
+def _close_when_it_raises(hook: Callable[..., None]) -> Callable[..., None]:
+    """Wrap a ``connect`` hook so a raise closes the raw connection it was given.
+
+    SQLAlchemy does not close the connection when a ``connect`` listener raises: the half-made pool
+    entry is dropped and the session lingers until garbage collection (a leaked file handle on
+    SQLite, a server session elsewhere; measured on SQLite, Session 288). A ``checkout`` listener
+    needs no wrapper, because the pool invalidates the connection itself when one raises.
+    """
+
+    @functools.wraps(hook)
+    def wrapper(dbapi_connection: Any, *unused: Any) -> None:
+        try:
+            hook(dbapi_connection, *unused)
+        except BaseException:
+            with contextlib.suppress(Exception):
+                dbapi_connection.close()
+            raise
+
+    return wrapper
+
+
+def _install_read_only(engine: sa.Engine) -> str | None:
+    """Register the connection-level read-only hooks for ``engine``'s dialect.
+
+    Returns ``None`` when the dialect has them, else the dialect's name, so the caller can say that
+    only the statement gate applies. Call it before the first connection is made.
+    """
+    name = engine.dialect.name
+    if name == "sqlite":
+        sa.event.listen(engine, "connect", _close_when_it_raises(_enforce_sqlite_read_only))
+        sa.event.listen(engine, "checkout", _enforce_sqlite_read_only)
+    elif name == "postgresql":
+        sa.event.listen(engine, "connect", _close_when_it_raises(_enforce_postgresql_read_only))
+    elif name in ("mysql", "mariadb"):
+        sa.event.listen(engine, "connect", _close_when_it_raises(_enforce_mysql_read_only))
+        sa.event.listen(engine, "checkout", _enforce_mysql_read_only)
+    else:
+        return name
+    return None
+
+
 class ReadOnlyDB:
-    """Thin SQLAlchemy wrapper used by EXECUTE_QC."""
+    """SQLAlchemy wrapper used by EXECUTE_QC: runs one read-only query at a time.
+
+    Read-only in two layers, a statement gate in :meth:`execute` and a read-only connection from
+    :meth:`connect`; the module docstring describes both. They narrow what a model's SQL can do,
+    they do not replace an account that cannot write.
+    """
 
     def __init__(self, url: str) -> None:
         self.url = url
         self._engine: sa.Engine | None = None
+        self._dialect_name: str | None = None
 
     @property
     def dialect(self) -> str | None:
@@ -611,9 +754,18 @@ class ReadOnlyDB:
         return sql_dialect_from_url(self.url)
 
     def connect(self) -> None:
-        """Open the engine and round-trip ``SELECT 1`` to prove reachability."""
+        """Open the engine, make it read-only, and round-trip ``SELECT 1`` to prove reachability.
+
+        The read-only hooks are registered before the first connection, so ``SELECT 1`` already
+        runs under them. If they cannot be installed on SQLite, PostgreSQL, MySQL or MariaDB the
+        connection fails (a :class:`DBConnectionError`), because carrying on writable would be the
+        one silent failure here. On any other dialect there are no hooks; a WARNING says so,
+        naming the dialect and nothing from the URL, and only the statement gate applies.
+        """
         try:
-            engine = sa.create_engine(self.url)
+            backend = sa.make_url(self.url).get_backend_name()
+            engine = sa.create_engine(self.url, **_engine_options(backend))
+            unenforced = _install_read_only(engine)
             with engine.connect() as conn:
                 conn.execute(sa.text("SELECT 1"))
         except Exception as e:
@@ -628,11 +780,27 @@ class ReadOnlyDB:
                 f"{safe_message(e, url=self.url) or type(e).__name__}"
             ) from e
         self._engine = engine
+        self._dialect_name = engine.dialect.name
+        if unenforced is not None:
+            _LOG.warning(
+                "no connection-level read-only hook is implemented for the %r dialect, so only the "
+                "statement gate applies: the database account itself must be unable to write",
+                unenforced,
+            )
 
     def execute(self, sql: str) -> list[dict[str, Any]]:
-        """Execute a SELECT and return a list of row dicts."""
+        """Run one read-only query and return its rows as a list of dicts.
+
+        Raises :class:`RuntimeError` before :meth:`connect`. Raises
+        :class:`~model_project_constructor_data_agent.read_only_gate.ReadOnlyViolation` (a
+        ``ValueError`` carrying a rule code, and never the SQL) before the database is touched,
+        when ``sql`` is not a single ``SELECT``, ``WITH`` or ``VALUES`` statement with nothing in it
+        that writes; the gate over-refuses on purpose, so a refusal is not proof of a defect in the
+        SQL. A database error propagates unchanged.
+        """
         if self._engine is None:
             raise RuntimeError("ReadOnlyDB.execute called before connect()")
+        check_read_only_sql(sql, self._dialect_name)
         with self._engine.connect() as conn:
             result = conn.execute(sa.text(sql))
             return [dict(row) for row in result.mappings().all()]
@@ -781,3 +949,4 @@ class ReadOnlyDB:
         if self._engine is not None:
             self._engine.dispose()
             self._engine = None
+            self._dialect_name = None
