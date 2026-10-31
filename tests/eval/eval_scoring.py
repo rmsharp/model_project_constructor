@@ -110,8 +110,9 @@ def sql_execution_error(db: ReadOnlyDB, sql: str) -> str | None:
     try:
         db.execute(sql)
     except Exception as exc:  # noqa: BLE001 - any DB-level error = not executable
-        # Bad column, type mismatch, unsupported function (dialect) — all count
-        # the same for the metric; the text is for diagnosis only.
+        # Bad column, type mismatch, unsupported function (dialect), or, since Session 288, a
+        # statement ReadOnlyDB's read-only gate refuses (ReadOnlyViolation) — all count the same
+        # for the metric; the text is for diagnosis only.
         return f"{type(exc).__name__}: {exc}"
     return None
 

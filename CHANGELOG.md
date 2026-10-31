@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S288 — the eval harness's "executable" metric is documented as going through the read-only gate (layer 3 of 3, part 4)
+- **Change:** `tests/eval/README.md` (a paragraph under the thresholds table) and a comment in `tests/eval/eval_scoring.py`. `sql_execution_error` runs the model's primary SQL through `ReadOnlyDB.execute` and counts any exception as "not executable"; since Session 288 that includes a `ReadOnlyViolation`, so the "executable ≥ 95%" figure now also counts the gate's deliberate over-refusal, and a figure measured before Session 288 is not comparable. Production never executes primary queries (it validates and writes them), so the metric is now stricter than the pipeline. No scoring code changed.
+- **Non-commit actions:** none. Whether the metric should report a refusal separately (a scoring change, so an operator call) goes into `BACKLOG.md` in the next commit.
+- **Commit/PR:** this commit
+- **Session:** S288 · **Verified:** `tests/eval` and `tests/test_vocab_guard.py` pass (154 passed, 9 skipped: the live tier has no credentials); `ruff check` clean. The claim comes from the review's callers lens, which read `eval_scoring.py` and `tests/eval/README.md`; I re-read both before editing.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S288 — the `--db-url` help strings say what the tool enforces (layer 3 of 3, part 3)
 - **Change:** `packages/data-agent/src/model_project_constructor_data_agent/cli.py` (the `run` and `discover` options) and `scripts/run_pipeline.py` (the module docstring's flag list and the argparse help). Each called the database "read-only" as an instruction to the operator; each now says to use an account that cannot write, and that the tool also allows one `SELECT`, `WITH` or `VALUES` statement per check and opens the connection read-only where the database supports it. Strings only: no behaviour changed.
 - **Non-commit actions:** none. `ruff format --check` fails on both files at `HEAD`, in code these strings are not in (the formatter's diff has no hunk in them).

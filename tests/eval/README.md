@@ -138,6 +138,15 @@ Single-sourced in [`eval_thresholds.py`](eval_thresholds.py).
 | `generate_quality_checks` | outer array length == #primary queries | 100% |
 | Intake interview | `believe_enough_info` within the 20-question cap; 0 premature convergence | ≥ 95% / 0 |
 
+**"Executable" is measured through `ReadOnlyDB.execute`**, so since Session 288 a
+statement its read-only gate refuses (anything but one `SELECT`, `WITH` or `VALUES`
+statement, or a column or alias spelled like a write keyword and left unquoted) counts
+as not executable, and its error text starts `ReadOnlyViolation:`. Production never
+executes the primary queries (it validates and writes them), so this narrows the metric
+beyond what the pipeline does; figures measured before Session 288 are not comparable
+with later ones. Whether the metric should report a refusal separately is an open item
+in `BACKLOG.md`.
+
 **Laxer-tier miss** = a predicted `risk_tier` strictly *less strict* than the
 reference. The prompt's rule is "if in doubt, pick the stricter tier", so erring
 stricter is allowed; erring laxer is the zero-tolerance failure. Strictness order
