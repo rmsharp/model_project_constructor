@@ -23,11 +23,16 @@ literal is recognised only where every dialect agrees on where it ends, and ever
 refused.
 
 **What it deliberately over-refuses** (a refused query is reported as a failed check, never a
-crash): ``TABLE t``, ``SHOW``, ``EXPLAIN``, ``PRAGMA``; a column or table literally named
-``set``, ``do``, ``use``, ``load``, ``call`` or ``into`` unless quoted; ``t.delete`` (a keyword
+crash): ``TABLE t``, ``SHOW``, ``EXPLAIN``, ``PRAGMA``; a column, table or alias spelled like
+any word of the write-keyword list unless quoted (``set``, ``do``, ``use``, ``load``, ``call`` and
+``into``, but also ``copy``, ``refresh``, ``cluster``, ``backup``, ``restore``, ``grant``,
+``deny``, ``kill``, ``bulk``, ``rename``, ``handler``, ``declare``, ``execute`` and the rest of
+``_WRITE_WORDS``), and ``replace`` or ``truncate`` unless a ``(`` follows; ``t.delete`` (a keyword
 after a dot); ``INSERT(...)`` as a MySQL function; ``--`` with no space after it; ``#`` outside
-PostgreSQL; ``ESCAPE '\\'``; ``pg_*`` functions; any character outside printable ASCII in code
-(it is still allowed inside a literal, a quoted identifier or a comment).
+PostgreSQL; ``ESCAPE '\\'``; ``pg_*`` functions; a quoted identifier or a string whose text begins
+``pragma_`` (SQLite reads ``FROM "pragma_optimize"`` as the bare table function); any character
+outside printable ASCII in code (it is still allowed inside a literal, a quoted identifier or a
+comment).
 
 **What it cannot stop.** A function with a side effect that is not on the name list below, a
 ``SELECT`` that is merely expensive (no row cap, unbounded recursion), and anything a read-only
@@ -84,6 +89,10 @@ class ReadOnlyViolation(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(f"refused by the read-only gate ({code}): {_REASONS[code]}")
+
+    def __reduce__(self) -> tuple[type[ReadOnlyViolation], tuple[str]]:
+        # ``args`` holds the sentence, not the code; copy and pickle rebuild from the code.
+        return (type(self), (self.code,))
 
 
 @dataclass(frozen=True)
@@ -174,6 +183,11 @@ def check_read_only_sql(sql: str, dialect: str | None = None) -> None:
             raise ReadOnlyViolation("ASSIGNMENT")
         if token.kind == "word":
             _check_word(token.text.upper(), following)
+        elif token.kind in ("quoted", "string") and token.text.strip("'").lower().startswith(
+            "pragma_"
+        ):
+            # SQLite reads "pragma_x", [pragma_x] and 'pragma_x' as the bare table function.
+            raise ReadOnlyViolation("PRAGMA_FUNCTION")
         if token.kind in ("word", "quoted") and following == _Token("punct", "("):
             name = token.text.lower()
             if name in _SIDE_EFFECT_FUNCTIONS or name.startswith(_SIDE_EFFECT_PREFIXES):

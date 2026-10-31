@@ -16,6 +16,8 @@ substring gate and a word-boundary regex gate both leaving it green).
 
 from __future__ import annotations
 
+import copy
+import pickle
 from typing import Any
 
 import pytest
@@ -317,6 +319,12 @@ BENIGN: list[tuple[str, str, tuple[str | None, ...], str]] = [
         "SELECT [a]]; DROP TABLE t; --] FROM t",
         ("mssql",),
         "SQL Server doubles ]] inside a bracketed identifier: this is ONE identifier (see H116)",
+    ),
+    (
+        "B66",
+        "SELECT \"pragmatic\", 'pragma', [x_pragma_y] FROM t WHERE n = 'ok'",
+        ("sqlite", "mssql"),
+        "only a name that BEGINS pragma_ is refused (H117 to H123), not one that contains pragma",
     ),
 ]
 
@@ -770,6 +778,62 @@ HOSTILE: list[tuple[str, str, str | dict[str | None, str], tuple[str | None, ...
         ("sqlite",),
         "SQLite does not double ]], so B65's text ends the identifier early and the rest is code",
     ),
+    (
+        "H117",
+        'SELECT * FROM "pragma_optimize"',
+        "PRAGMA_FUNCTION",
+        ALL,
+        "SQLite resolves a double-quoted table function like the bare one (found in review)",
+    ),
+    (
+        "H118",
+        "SELECT * FROM `pragma_optimize`",
+        "PRAGMA_FUNCTION",
+        ALL,
+        "backtick-quoted",
+    ),
+    (
+        "H119",
+        "SELECT * FROM 'pragma_optimize'",
+        "PRAGMA_FUNCTION",
+        ALL,
+        "a single-quoted name, which SQLite also accepts as an identifier",
+    ),
+    (
+        "H120",
+        'SELECT * FROM "PRAGMA_OPTIMIZE"',
+        "PRAGMA_FUNCTION",
+        ALL,
+        "case-insensitive when quoted",
+    ),
+    (
+        "H121",
+        'SELECT * FROM main."pragma_optimize"(0x10002)',
+        "PRAGMA_FUNCTION",
+        ALL,
+        "schema-qualified and called with its argument",
+    ),
+    (
+        "H122",
+        "SELECT * FROM [pragma_optimize]",
+        {
+            "sqlite": "PRAGMA_FUNCTION",
+            "postgresql": "PRAGMA_FUNCTION",
+            "mysql": "PRAGMA_FUNCTION",
+            "mssql": "PRAGMA_FUNCTION",
+            "oracle": "PRAGMA_FUNCTION",
+            None: "BRACKET",
+        },
+        ALL,
+        "bracket-quoted on SQLite; elsewhere the word is bare after a subscript; unknown: BRACKET",
+    ),
+    (
+        "H123",
+        'SELECT 1 AS "Pragma_x"',
+        "PRAGMA_FUNCTION",
+        ALL,
+        "accepted over-refusal: any quoted name beginning pragma_, even an alias",
+    ),
 ]
 
 
@@ -953,6 +1017,17 @@ def test_a_refusal_never_quotes_the_sql(sql: str) -> None:
         check_read_only_sql(sql.format(m=marker), "postgresql")
     assert marker not in str(caught.value)
     assert f"({caught.value.code})" in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "copier", [copy.copy, copy.deepcopy, lambda e: pickle.loads(pickle.dumps(e))]
+)
+def test_a_violation_survives_copy_and_pickle(copier: Any) -> None:
+    original = ReadOnlyViolation("NUL")
+    rebuilt = copier(original)
+    assert isinstance(rebuilt, ReadOnlyViolation)
+    assert rebuilt.code == "NUL"
+    assert str(rebuilt) == str(original)
 
 
 def test_a_violation_is_a_value_error_that_carries_its_code() -> None:
