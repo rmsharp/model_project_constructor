@@ -167,6 +167,14 @@ def test_reflection_still_works_under_the_read_only_connection(claims_db: Path) 
         assert [e["name"] for e in db.get_information_schema()] == ["claims"]
 
 
+def test_the_refusal_is_importable_from_the_package() -> None:
+    """``execute`` raises it, so a library caller must not need the submodule path."""
+    import model_project_constructor_data_agent as package
+
+    assert package.ReadOnlyViolation is ReadOnlyViolation
+    assert "ReadOnlyViolation" in package.__all__
+
+
 # --------------------------------------------------------------------------------------------
 # REAL: the connection on its own, with the gate bypassed by going straight to the engine
 # --------------------------------------------------------------------------------------------

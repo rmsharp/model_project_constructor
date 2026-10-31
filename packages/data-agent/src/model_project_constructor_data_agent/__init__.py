@@ -28,6 +28,7 @@ from model_project_constructor_data_agent.llm import (
     SummaryResult,
     TableRanking,
 )
+from model_project_constructor_data_agent.read_only_gate import ReadOnlyViolation
 from model_project_constructor_data_agent.schemas import (
     BaselineSnapshot,
     ColumnMetadata,
@@ -62,6 +63,7 @@ __all__ = [
     "QualityCheck",
     "QualityCheckSpec",
     "ReadOnlyDB",
+    "ReadOnlyViolation",
     "SummaryResult",
     "TableRanking",
     "make_llm_client",

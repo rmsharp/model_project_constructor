@@ -62,7 +62,9 @@ model-data-agent run \
 
 Options:
 - `--db-url` is optional; if omitted, quality checks are generated but not
-  executed, and each is marked `NOT_EXECUTED` in the report.
+  executed, and each is marked `NOT_EXECUTED` in the report. When given, the
+  database is read through `ReadOnlyDB` (see *Read-only access* below); use an
+  account that cannot write.
 - `--model` overrides the default Claude model (default is a fast/economical
   Sonnet build).
 - `--fake-llm` substitutes a deterministic stub and is intended for smoke
@@ -101,6 +103,32 @@ of ordinary words, such as `Server@123`, removes those words from the message).
 line, in the report's `data_quality_concerns`, in the `--checkpoint-dir` envelope
 and in a generated project's `reports/data_report.json` and `.md`. Treat any
 such file as exposing it, and rotate the password.
+
+### Read-only access
+
+`ReadOnlyDB` runs SQL a language model wrote, so it is read-only in two layers.
+
+- **The statement gate.** `execute` accepts exactly one `SELECT`, `WITH` or `VALUES`
+  statement (one trailing `;` is fine) and refuses anything else, and any write
+  keyword, `INTO`, row lock, assignment or function on a short side-effect list, before
+  the database is touched. A refused quality check is reported as `ERROR` and a refused
+  baseline as `FAILED`; the run goes on. The gate over-refuses on purpose: `EXPLAIN`,
+  `SHOW`, `TABLE t`, a `--` comment with no space after it, and a column, table or alias
+  spelled like a write keyword (`set`, `do`, `use`, `load`, `call`, `refresh`, `copy` and
+  about forty more) are refused unless quoted. `read_only_gate.py`'s docstring lists
+  what and why.
+- **The connection.** `connect` opens it read-only on SQLite (`PRAGMA query_only`),
+  PostgreSQL (read-only transactions and a read-only session default) and MySQL and
+  MariaDB (`SET SESSION TRANSACTION READ ONLY`). If the database refuses or ignores
+  that, `connect` fails with `DBConnectionError` rather than carry on writable. On any
+  other dialect it logs a WARNING that names the dialect, and only the gate applies.
+
+**Neither replaces an account that cannot write, and you should still use one.** The
+gate cannot stop an expensive `SELECT` (no row cap, no timeout) or a function with a
+side effect that is not on its list. The connection-level behaviour was measured on
+throwaway PostgreSQL 17 and MySQL 8.4 servers in Session 288; MariaDB was never run (it
+is sent the MySQL statement, which its documentation accepts), and this repository's tests
+exercise none of the three against a real server, only against a stand-in driver.
 
 ## Example 2 — Python in a script
 
@@ -456,6 +484,7 @@ from model_project_constructor_data_agent import (
     ProducerMetadata,    # schema: which tool produced which entries
     probe_information_schema,  # automated producer (information_schema probe)
     ReadOnlyDB,          # SQLAlchemy wrapper (.get_information_schema() for discovery)
+    ReadOnlyViolation,   # ValueError raised by ReadOnlyDB.execute for SQL it refuses (.code)
     LLMClient,           # Protocol — implement this for alternate LLM vendors
     PrimaryQuerySpec,    # intermediate dataclass returned by LLMClient
     QualityCheckSpec,    # intermediate dataclass returned by LLMClient
@@ -542,7 +571,14 @@ curated-producer example.
   the model is called again and may answer differently, and a call that returns a
   report did not reproduce the failure; assign the result, because a bare call in a
   REPL echoes the state, which holds the model's reply.
-- `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure;
+- `ReadOnlyDB.execute()` raises `ReadOnlyViolation` (a `ValueError`; its `code` names
+  the rule and its message never quotes the SQL) for SQL that is not one read-only
+  query, before the database is touched, and the driver's own error for one the
+  database rejects. `DataAgent` catches both for a quality check and the baseline
+  query. A library caller who calls `execute` itself catches `ReadOnlyViolation`; it is
+  exported from this package.
+- `ReadOnlyDB.connect()` raises `DBConnectionError` on connect failure, and also when
+  the database refuses or ignores the command that makes the connection read-only;
   `DataAgent` catches it, routes the QC stage to `NOT_EXECUTED`, and appends the
   error text — with any URL password masked (best-effort), on one line and with
   every control character replaced by a space — to
