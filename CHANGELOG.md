@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-31 · [ad hoc] S291 — file the Node.js 20 deprecation notice the CI logs print
+- **Change:** `BACKLOG.md` only: one open item (after the CI-interpreter one) and its plain-language index row. Both CI runs read this session print three `##[warning]Node.js 20 is deprecated` annotations naming `actions/checkout@v4`, `actions/upload-artifact@v4` and `astral-sh/setup-uv@v4`, which the runner forces onto Node.js 24. Filed, not fixed: bumping an action changes the CI and is an operator call.
+- **Non-commit actions:** none. `BACKLOG.md` was searched first for `node.js 20`, `checkout@v4`, `setup-uv@v4` and `upload-artifact@v4` and carried none of them.
+- **Commit/PR:** this commit
+- **Session:** S291 · **Verified:** the annotation text is identical in runs `41241062531` and `41251659508` (read with `gh run view <id> --log`); the three action names are the ones the workflow files pin (`grep 'uses: '`). Not read: GitHub's linked changelog page, the newer releases of the three actions, and Publish Tutorial's log.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-31 · [ad hoc] S291 — claim: push Sessions 289 and 290's 8 commits and read the CI result (in progress)
 - **Change:** a `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is the verification Session 290 left open: its code (the scaffold's generated tests, install line and formatting) has never run on Linux CI. The push is confirmed with the operator immediately before it runs.
 - **Non-commit actions:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and Sessions 290 to 288 in `SESSION_NOTES.md` and `BACKLOG.md`'s plain-language index; the dashboard run; one area picker, where the operator took the first (recommended) option after an opening message of "go". Computed for the push: `git diff --name-only origin/master..HEAD` lists 13 files, none matching Publish Tutorial's path filter (read from the workflow file, not recalled) and none under `docs/wiki/`.
