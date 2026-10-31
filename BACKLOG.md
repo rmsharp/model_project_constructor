@@ -55,7 +55,8 @@ rows below it are the smaller residue that closing it exposed.
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed. Session 282 made a request the HTTP library cannot build (a control character, a broken half of a character or a number such as `NaN` in a value the host sent) fail cleanly like any other call. Session 283 did the same for three more: a reply nested more than 64 levels (a limit it chose; it also refuses a reply whose deep part nothing reads, and real ones nest at most 5), a redirect the library cannot build (an address such as `mailto:x`, or about 65,500 characters, or malformed in a few other ways), and a broken half of a character in the GitLab group name, **when the adapter is called directly: the website command and the pipeline script still end in a traceback for such a name, from another layer** (see the item on channels that write a file that will not reload). What is left here is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran its touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
-| Running the pipeline on a made-up company found defects in the tool and in what it scaffolds | Session 286 ran the whole pipeline on an invented insurer with no API key (`examples/larkspur_mutual/`). It worked end to end, and showed: the class named read-only is not (a `DROP TABLE` through it stuck on SQLite); the project the tool writes fails its own tests, 8 of 8; a GitLab token can be sent to GitHub when `--host` and `MPC_HOST` disagree; the GitHub path probably fails on an empty repository; what the stakeholder says about the data never reaches the data stage; and there is no route from a finished interview into the pipeline script. None is fixed. | **Mixed.** The read-only one is the one to do first; the test and token ones are small; the GitHub one needs a live run on a throwaway account; several are operator calls. |
+| Running the pipeline on a made-up company found defects in the tool and in what it scaffolds | Session 286 ran the whole pipeline on an invented insurer with no API key (`examples/larkspur_mutual/`). It worked end to end, and showed: the project the tool writes fails its own tests, 8 of 8; a GitLab token can be sent to GitHub when `--host` and `MPC_HOST` disagree; the GitHub path probably fails on an empty repository; what the stakeholder says about the data never reaches the data stage; and there is no route from a finished interview into the pipeline script. The first defect it showed, that the class named read-only was not (a `DROP TABLE` through it stuck on SQLite), was fixed in Session 288; the rest are not fixed. | **Mixed.** The test and token ones are small; the GitHub one needs a live run on a throwaway account; several are operator calls. |
+| The database wrapper is now read-only, and what that left | Session 288 made `ReadOnlyDB` refuse anything but one read query and open each connection read-only (SQLite, PostgreSQL, MySQL, MariaDB). Left: three wiki pages still say the opposite; PostgreSQL and MySQL are tested only against a stand-in driver and MariaDB was never run; the prompt for quality checks never says "one SELECT", so a check the model words differently is refused and lost; the eval's "SQL executes" figure now counts those refusals; and a few small things. | **Small each.** The wiki edit (it publishes), a real-server CI job and the prompt change are operator calls. |
 | Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed | **The main part closed in Sessions 284 and 285.** A repository host used to be able to crash the adapter by answering a successful call with valid JSON of the wrong shape (an empty object, an array, `null`, a number, a missing field): the website command ended in a traceback and the pipeline saved "unexpected error: KeyError". Now every value is checked where it is read and a clean error names the field; a wrong shape on the commit path is retried like any failed commit, and a failure to read the reply to the request that creates a project says that a project may exist. What stands: (4) a loop in GitHub's name-taken check that never changes its answer (an operator call to delete it); (5) a GitLab commit whose reply cannot be used is retried and the retry would be refused for creating files that now exist, hiding that the first commit landed (an inference, not measured); (6) the default branch is read, not checked, and goes back to the host (in GitHub's path unquoted); (7) a text of only spaces or control characters counts as non-empty; (8) the "a project may exist" note covers an unreadable success reply only, not a gateway timeout, a lost connection or a cut-off body; (9) the standalone website command exits 0 for a failed result, with a project that may exist. | **Small, each an operator call:** (4) delete it or not; (5) check the head commit after an unreadable commit reply, or send an action that tolerates an existing file; (6) refuse a non-text branch or fall back to `main`; (7) tighten or leave; (8) widen the note or read the reply as a stream; (9) exit non-zero and/or print the reason. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
 | The run log now names an exception's class only; the wiki still says otherwise, and nothing can show the text | Session 276 stopped `make_logged_runner` writing `str(exc)` into the `agent.error` event, because a host-echoed access token (`httpx.InvalidURL` quotes it) reached a log file through the JSON formatter `OPERATIONS.md` recommends. Two things are left: two wiki pages still describe the old `error_message` field (a commit touching `docs/wiki/` publishes it, so they wait for you), and an operator who wants the text can no longer get it from the log. | **Small; operator call** for the wiki. A caller-supplied scrubber (the script knows its token and database address) is the design for the second, if it is wanted. |
@@ -697,17 +698,9 @@ found, on 3.14 and for a leaked message, since killed), and by the touched test 
 **Found by Session 286, by running the whole pipeline keyless on a fictitious insurer (`examples/larkspur_mutual/`;
 its `README.md` carries the full list, each with how it was learned: *ran*, *read* or *review* — an independent reviewer
 ran or read it, a second could not refute it, and Session 286 has not re-run it).** The run itself worked end to end
-(`COMPLETE`, 55 files, 14 quality checks of which 11 pass). None of the points below was fixed. In the order Session 286
-would take them (an estimate, not a measurement):
-
-**(1) `ReadOnlyDB` is not read-only. The one to do first: it is a safety property, and it matters the day a real
-warehouse is connected (ran, on a scratch SQLite copy).** `ReadOnlyDB.execute` (`db.py:632`) runs whatever it is given
-through `sa.text`; the quality checks (`nodes.py:140`) and the baseline (`nodes.py:235`) execute the model's SQL
-without `validate_sql`, which (`sql_validation.py:16`) runs on the primary queries only and accepts any statement type
-it recognizes. `DROP TABLE` and `CREATE TABLE` persisted; `DELETE` and `UPDATE` ran and were rolled back only because
-nothing commits. A fix would refuse anything but one `SELECT` or `WITH` and open the connection read-only (SQLite
-`mode=ro`; `default_transaction_read_only` on PostgreSQL). **Operator call:** how strict, and whether to say in the
-docs that the account must be unable to write whatever the code does.
+(`COMPLETE`, 55 files, 14 quality checks of which 11 pass). None of the points below was fixed. Point (1), `ReadOnlyDB` not
+being read-only, was fixed in Session 288 and removed; the other numbers stay because Session 286 cites them, and what that
+fix left is its own item below. In the order Session 286 would take them (an estimate, not a measurement):
 
 **(2) The project the tool writes fails its own tests, 8 of 8 (ran).** `templates.py:668` writes the literal
 `<project_slug>` where `{project_slug}` was meant (also `:436,460,463,477,478` and `governance_templates.py:755,813`),
@@ -751,6 +744,57 @@ files; importing `model_project_constructor.ui.intake` opens `./intake_sessions.
 **(9) Nothing runs the example.** It is not in `tests/` or CI, so the figures in its README are observations that will
 go stale. `run_example.py` does stop if the database no longer matches the counts its datasheets quote. **Operator
 call:** a smoke test (about 2 seconds, needs the `ui` extra) or leave it as documentation.
+
+### `ReadOnlyDB` is now read-only; what it left: the wiki, real servers, the quality-check prompt, the eval metric
+
+**Left by Session 288**, which made `ReadOnlyDB.execute` refuse anything but one `SELECT`, `WITH` or `VALUES` statement
+(`read_only_gate.py`) and `connect` open the connection read-only on SQLite, PostgreSQL, MySQL and MariaDB (`db.py`); the
+`CHANGELOG.md` entries tagged S288 describe it, and the first of them the five-lens review. None of the points is a way to
+write through the shipped configuration: the review's red team measured the gate alone, the connection alone and both on
+real SQLite, and with both nothing got through. In the order Session 288 would take them (an estimate):
+
+**(1) Three wiki pages still say the opposite. Operator call: editing the wiki publishes it, on commit.**
+`Security-Considerations.md` §4.1 is headed "Read-only is enforced at the credential layer, not in code", says `ReadOnlyDB`
+"does not parse incoming SQL or attempt to reject mutating statements" and block-quotes the old module docstring, which no
+longer exists (as of Session 288 at lines 222-228); its §10 item 1 repeats it (line 368); `Architecture-Overview.md`
+(line 62) and `AI-Dependencies.md` (§6.2 and §7, lines 122 and 183) say the same. Not edited. A replacement for §4.1's
+body: "`ReadOnlyDB` runs SQL a language model wrote, so it refuses before it runs: `execute` accepts exactly one SELECT, WITH
+or VALUES statement (one trailing semicolon is fine) with no write keyword, INTO, row lock, assignment or function on a short
+side-effect list, and raises `ReadOnlyViolation` (a `ValueError` carrying a constant rule code, never the SQL) before the
+database is touched. It over-refuses on purpose. `connect` also opens the connection read-only on SQLite, PostgreSQL, MySQL
+and MariaDB; on any other dialect it logs a WARNING and only the gate applies. The operator's responsibility is unchanged:
+the URL must still be a role with SELECT-only privileges. The gate cannot stop an expensive SELECT or a side-effecting
+function that is not on its list, and a refusal is not proof the SQL is wrong." Section 10's item and the headings change
+with it.
+
+**(2) PostgreSQL, MySQL and MariaDB have no CI job against a real server. Operator call: a service-container job or a
+scheduled run.** `tests/data_agent_package/test_db_read_only_dialects.py` runs SQLAlchemy's real dialects on a stand-in
+`psycopg2` or `pymysql` module in `sys.modules`; it names what SQLAlchemy 2.x imports from each driver, so a release that
+imports more can break the tests without any change here. The server behaviour was measured once, by a scout, on throwaway
+PostgreSQL 17 and MySQL 8.4 containers; MariaDB was never run (it is sent the MySQL statement). pg8000 applies
+`postgresql_readonly` as a session default, so on that driver the gate is the only thing behind the session setting
+(SQLAlchemy's source; no pg8000 was run).
+
+**(3) The quality-check prompt never says SELECT, and a refused check is lost. Operator call: it changes prompts the live
+eval measures.** The primary-query prompt says "Always return valid SELECT SQL" and the baseline prompt "a single SELECT
+query"; `generate_quality_checks` (`anthropic_client.py`) says neither, `execute_qc` does not retry a failed check, and the
+refusal names its rule but not the word. A plausible claims column spelled like one of the 47 words in `_WRITE_WORDS`
+(`handler`, `cluster`, `use`, `copy`, `refresh`) is refused wherever it stands unquoted. A fix sketch: one sentence in the
+quality-check and baseline system prompts (one read-only statement, no comments, quote an identifier spelled like a keyword),
+an assertion beside `test_dialect_named_in_every_sql_emitting_prompt`, and the matched word (a constant, never the SQL) in
+the refusal message.
+
+**(4) The eval's "executable ≥ 95%" now counts the gate's refusals.** `sql_execution_error` runs the model's primary SQL
+through `ReadOnlyDB.execute`; production never executes primary queries. Documented in `tests/eval/README.md`. Whether the
+metric should report a refusal separately is a scoring change: operator call.
+
+**(5) Smaller, from the review.** MySQL and MariaDB re-run `SET SESSION TRANSACTION READ ONLY` on every pool checkout, about
+three round trips per table in `get_information_schema` (3.04 checkouts per table measured on SQLite; the MySQL cost is
+inferred, no server), which is redundant while the gate refuses `SET`. A mistyped SQLite path connects and creates a 0-byte
+file (`query_only` does not stop it; opening through a `file:` URL with `mode=ro` would, and a WAL database needs care).
+`connect()` called twice without `close()` orphans the first engine (older than this change), and a failed `connect` does not
+dispose the engine it built (the hook now closes the raw connection). The gate cannot stop an expensive `SELECT` (no row cap,
+no statement timeout) or a side-effecting function that is not on its list.
 
 ### Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed
 

@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S288 — `BACKLOG.md`: the read-only defect leaves the Larkspur item, and what the fix left is filed (layer 3 of 3, part 6)
+- **Change:** `BACKLOG.md`. Point (1) of the Larkspur-found defects ("`ReadOnlyDB` is not read-only") is removed, the item's intro says so, and the plain-language index row for the item no longer says "None is fixed" or that the read-only one is first; the numbers (2) to (4) stay because Session 286 cites them. A new item, with an index row, files what the fix left: (1) three wiki pages that still say the code does not filter SQL, with a replacement for §4.1 (an operator call, because a commit that touches `docs/wiki/` publishes it); (2) PostgreSQL, MySQL and MariaDB are tested only against a stand-in driver, MariaDB was never run, pg8000 sets a session default; (3) the quality-check prompt never says SELECT and a refused check is lost, a prompt change the live eval measures; (4) the eval's "executable" metric counts a refusal; (5) the smaller things (a MySQL round trip per checkout, a mistyped SQLite path creating a file, the engine `connect` does not dispose, what the gate cannot stop). Every wiki line number was re-checked against the files before it was written.
+- **Non-commit actions:** none.
+- **Commit/PR:** this commit
+- **Session:** S288 · **Verified:** `tests/test_session_notes_census.py` and `tests/test_read_budget.py` pass (82) with the edit in the tree; `BACKLOG.md` is 201,209 B and its index 36,766 B against the 52,912 B limit. The shard-proof loop is run once at close-out, not here.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S288 — tutorial section 6d says what `ReadOnlyDB` will and will not do (layer 3 of 3, part 5)
 - **Change:** `docs/tutorial.md`, section 6d ("Optional: connect a read-only database"): one added passage in the paragraph after the command. It says the quality checks run through `ReadOnlyDB`, which refuses anything but one `SELECT`, `WITH` or `VALUES` statement (a refused check is reported as an error and is not run) and opens the connection read-only on SQLite, PostgreSQL, MySQL and MariaDB; that this does not replace an account that cannot write; and that a column or alias spelled like a keyword has to be quoted. It is the only text a pilot user reads before connecting a database.
 - **Non-commit actions:** none. **Pushing this commit publishes the site:** `docs/*.md` is a trigger path of `.github/workflows/publish-tutorial.yml`. Nothing was pushed.
