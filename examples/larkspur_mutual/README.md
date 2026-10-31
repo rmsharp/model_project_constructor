@@ -145,10 +145,15 @@ second reviewer could not refute it, and I have not re-run it.
 
 **Live hosts (not exercised here)**
 
-10. **`--host` and `MPC_HOST` can disagree about which token to send (read).** In
-    `scripts/run_pipeline.py` the token variable follows `MPC_HOST` (default `gitlab`) while the adapter
-    and URL follow `--host`, so `--host github --live` with `GITLAB_TOKEN` set sends that token to
-    `api.github.com`.
+10. **`--host` and `MPC_HOST` could disagree about which token to send; fixed in Session 292 (read, then
+    run).** In `scripts/run_pipeline.py` the token variable followed `MPC_HOST` (default `gitlab`) while
+    the adapter and URL followed `--host`, so `--host github --live` with `GITLAB_TOKEN` set sent that
+    token to `api.github.com`, and the mirror, `MPC_HOST=github --live` with no `--host`, sent the GitHub
+    token to `gitlab.com`. Now one host is chosen for the run: whichever of the two is given, `gitlab` if
+    neither is, and a `--live` run whose two differ is refused (exit 2) before anything is built. A dry
+    run reads no token, so there `--host` wins. `MPC_HOST_URL` is still read for whichever host is
+    chosen, so an address meant for the other host would still receive that host's token; that part is
+    not fixed.
 11. **The GitHub live path probably fails (read, inferred).** The adapter creates the repository with no
     `auto_init` and then reads `git/ref/heads/<branch>`, which an empty repository does not have. It has
     never been run against a real host.

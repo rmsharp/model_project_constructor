@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-31 · [ad hoc] S292 — the backlog and the example's findings say what is now true about the token (Larkspur point 3, documentation 2 of 2)
+- **Change:** `BACKLOG.md` (point (3) of the Larkspur item now says it was fixed in Session 292 and what it left, and the plain-language index row lost the token clause and its "token one is small" note; 204,248 B to 205,105 B) and `examples/larkspur_mutual/README.md` (finding 10: fixed, with the mirror case and the part left). **What is left, filed under point (3):** `MPC_HOST_URL` is read for whichever host is chosen, so an address meant for the other host still receives that host's token; neither a per-host address variable nor a check can tell an enterprise address from a wrong one, so it is an operator call and a nit.
+- **Non-commit actions:** none.
+- **Commit/PR:** this commit
+- **Session:** S292 · **Verified:** the rewritten index row re-read after the edit; both ledger guards 82 passed with the `BACKLOG.md` edit. The example's README finding was written from the committed code.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-31 · [ad hoc] S292 — the operator-facing docs say how `--host` and `MPC_HOST` combine (Larkspur point 3, documentation 1 of 2)
 - **Change:** `OPERATIONS.md` (the `MPC_HOST` row: the script uses it when `--host` is absent, and a `--live` run refuses a `--host` naming the other host), `docs/tutorial.md` (the options table's `--host` default is now "`MPC_HOST` if set, else `gitlab`", with the refusal) and `.env.example` (the comment on `MPC_HOST`: change this line and set `GITHUB_TOKEN` to use GitHub). `docs/wiki/` is not touched on purpose (a commit that touches it publishes it); its three `MPC_HOST | no | gitlab` rows are still true.
 - **Non-commit actions:** none. **Push note:** `docs/tutorial.md` matches Publish Tutorial's `docs/*.md` path filter, so a push of this commit starts that workflow as well as CI; that is the operator's call.
