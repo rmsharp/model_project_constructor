@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S289
+date: 2026-10-31
+status: pending
+active_task: Push Session 288's 11 commits to origin/master and read the CI result (do they verify on Linux?). Chosen by the operator at Phase 0 from an area picker. The push publishes the tutorial site, so it is confirmed with the operator immediately before it runs.
+```
+
+```handoff
 session: S288
 date: 2026-10-30
 status: complete

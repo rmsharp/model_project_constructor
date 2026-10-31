@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-31 · [ad hoc] S289 — claim: push Session 288's commits and read the CI result (in progress)
+- **Change:** a `SESSION_NOTES.md` claim stub and a `status: pending` receipt in `HANDOFFS.md`; no other file. The deliverable is the verification Session 288 left open: its 11 commits have never run on Linux CI, and `be57a68` edits `docs/tutorial.md`, so the push also fires Publish Tutorial. The push is confirmed with the operator immediately before it runs.
+- **Non-commit actions:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and Sessions 288 to 285 in `SESSION_NOTES.md` and `BACKLOG.md`'s plain-language index; the dashboard run; one area picker, where the operator took the first (recommended) option.
+- **Commit/PR:** this commit
+- **Session:** S289 · **Verified:** working tree clean at Phase 0, 11 commits ahead of `origin/master`; the `CHANGELOG.md` and `HANDOFFS.md` frontiers both `2b53616` (gap 0, no merges, no pending receipt); `gh issue list` empty. Dashboard 96/100, one High+ risk whose cause its output does not state; its copy is v2.22.0 against canonical v2.23.0 (a `bin/sync` file, untouched).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S288 — close out: `ReadOnlyDB` is read-only; learnings #370 to #374
 - **Change:** `SESSION_NOTES.md` (the claim stub replaced by Session 288's closed record, with its handoff evaluation of Session 287, self-assessment and handoff; 104,927 B to 113,269 B), `HANDOFFS.md` (the receipt `complete`, `predecessor_score: 8`, `self_score: 8`), `PROJECT_LEARNINGS.md` (#370 to #374; 416,756 B to 421,797 B) and `CLAUDE.md` (the learnings count, 374, Sessions 9 to 288, and the file's size, 421.8 KB). The learnings: a name check on one token kind is bypassed by every other quoting of the name; SQLAlchemy does not close the raw connection when a `connect` listener raises; a test that records an event's name pins nothing about the function; `python -I` imports the real tree from a scratch copy of an editable install; prose that generalizes a measured list must be checked against the list.
 - **Non-commit actions:** none new. No push: the branch is 11 commits ahead of `origin/master` and a push would fire Publish Tutorial (`docs/tutorial.md`); that is the operator's call. The review workflow's scratch copies are under the session scratchpad and nothing in the repository refers to them.

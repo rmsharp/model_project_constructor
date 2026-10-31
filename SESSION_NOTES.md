@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 289 Did
+**Deliverable:** **push Session 288's 11 commits to `origin/master` and read the CI result: do they verify on Linux? (IN PROGRESS)**
+**Started:** 2026-10-31 15:53
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from an area picker (first option, recommended). The push publishes the tutorial site (`be57a68` edits `docs/tutorial.md`), so the push itself is confirmed with the operator immediately before it runs.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 288 Did
 **Deliverable:** **`ReadOnlyDB` is read-only — COMPLETE** (`BACKLOG.md` item 1 of the Larkspur-found defects, now removed from it). Three layers, each with its own `CHANGELOG.md` entry: **(1)** `read_only_gate.py`, a hand-written fail-closed scanner that accepts exactly one `SELECT`, `WITH` or `VALUES` statement (`fbf1cbf`); **(2)** `ReadOnlyDB.execute` calls it before a connection is borrowed, and `connect` installs per-dialect read-only hooks and fails rather than run writable (`4c20ccf`); **(3)** the documentation around it (`283de94`, `5cee3cd`, `7bc4996`, `0bfbb47`, `be57a68`) and a follow-up item in `BACKLOG.md` (`032e6fb`). A gate fix (`36d5039`) came out of the layer-2 review. **The operator decided** at Phase 0, after a two-step picker, three questions: a strict allowlist, connection-level read-only per dialect where one exists, and `validate_sql` out of scope; and, when this work resumed with layer 2 uncommitted in the tree, to continue it (a picker, because `SAFEGUARDS.md` says to ask before touching uncommitted work). **Mine, not put to the operator:** the fixes the review found, the test design, the documentation text, what to file, a passage in the tutorial (a push of it publishes the site; flagged), leaving the wiki alone and not pushing. **Started:** 2026-10-30 17:22. **Completed:** 2026-10-30 (close-out about 22:45). **Commits: eleven** (`git rev-list --count a7fbedf..HEAD` after this one lands): `8f3e947` claim, `fbf1cbf`, `36d5039`, `4c20ccf`, `283de94`, `5cee3cd`, `7bc4996`, `0bfbb47`, `be57a68`, `032e6fb` and this close-out; each has its own entry. **Nothing is pushed.**
 
