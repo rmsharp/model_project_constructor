@@ -139,7 +139,7 @@ def render_readme(*, intake: dict[str, Any], project_name: str) -> str:
         "## Getting Started\n"
         "\n"
         "```bash\n"
-        "uv sync\n"
+        "uv sync --extra dev\n"
         "uv run pytest\n"
         "```\n"
         "\n"

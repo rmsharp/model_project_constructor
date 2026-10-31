@@ -643,7 +643,7 @@ def render_gitlab_ci(*, ci_host_config: CIHostConfig | None = None) -> str:
         f"  image: {cfg.base_image}\n"
         "  before_script:\n"
         f"    - {pip_install}\n"
-        "    - uv sync\n"
+        "    - uv sync --extra dev\n"
         "\n"
         "lint:\n"
         "  stage: lint\n"
@@ -678,7 +678,7 @@ def render_github_actions_ci(*, ci_host_config: CIHostConfig | None = None) -> s
         "        with:\n"
         "          python-version: '3.11'\n"
         f"      - run: {pip_install}\n"
-        "      - run: uv sync\n"
+        "      - run: uv sync --extra dev\n"
     )
     return (
         "name: ci\n"

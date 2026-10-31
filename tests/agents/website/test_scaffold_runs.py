@@ -17,6 +17,7 @@ import os
 import re
 import subprocess
 import sys
+import tomllib
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -150,6 +151,63 @@ class TestTheGeneratedProjectChecksItself:
         # first commit fail.
         done = _run(scaffold.root, "-m", "ruff", "format", "--check", "--no-cache", ".")
         assert done.returncode == 0, _report(done)
+
+
+class TestTheCommandsInstallWhatTheyRun:
+    """The README, the CI file and the pre-commit hook run tools that must be installed first.
+
+    ``pytest`` and ``ruff`` are declared under ``[project.optional-dependencies] dev``, which a
+    bare ``uv sync`` does not install, so ``uv run pytest`` failed with "Failed to spawn" on any
+    machine without a global ``pytest`` (it appeared to work on the Mac where Session 286 ran it
+    only because a ``pytest`` from another environment was on ``PATH``). Installing needs the
+    network, so what is checked here is the link between the three: every ``uv sync`` asks for
+    the extra, and the extra declares every tool a ``uv run`` names.
+    """
+
+    TOOLS = ("pytest", "ruff")
+
+    @staticmethod
+    def _ci_file(scaffold: Scaffold) -> str:
+        if scaffold.variant.ci_platform == "gitlab":
+            return ".gitlab-ci.yml"
+        return ".github/workflows/ci.yml"
+
+    def _documents(self, scaffold: Scaffold) -> dict[str, str]:
+        names = ("README.md", self._ci_file(scaffold))
+        return {name: scaffold.files[name] for name in names}
+
+    def test_every_uv_sync_installs_the_dev_extra(self, scaffold: Scaffold) -> None:
+        for name, text in self._documents(scaffold).items():
+            syncs = [line.strip() for line in text.splitlines() if "uv sync" in line]
+            assert syncs, f"{name} never installs the project"
+            assert all(line.endswith("uv sync --extra dev") for line in syncs), (name, syncs)
+
+    def test_a_ci_job_installs_before_it_runs_a_tool(self, scaffold: Scaffold) -> None:
+        # GitLab installs once in ``default.before_script``; GitHub repeats the install in
+        # every job. Either way an install line has to come before the first ``uv run``.
+        lines = scaffold.files[self._ci_file(scaffold)].splitlines()
+        runs = [i for i, line in enumerate(lines) if "uv run" in line]
+        syncs = [i for i, line in enumerate(lines) if "uv sync" in line]
+        assert runs
+        assert syncs
+        assert min(syncs) < min(runs)
+        if scaffold.variant.ci_platform == "github":
+            after_jobs = lines[lines.index("jobs:") + 1 :]
+            jobs = [line for line in after_jobs if re.fullmatch(r"  [\w-]+:", line)]
+            assert len(jobs) == len(syncs) == 3, (jobs, syncs)
+
+    def test_the_dev_extra_declares_every_tool_the_commands_run(self, scaffold: Scaffold) -> None:
+        declared = tomllib.loads(scaffold.files["pyproject.toml"])["project"][
+            "optional-dependencies"
+        ]["dev"]
+        names = {re.split(r"[<>=!~\[ ]", requirement)[0] for requirement in declared}
+        used = {
+            tool
+            for text in self._documents(scaffold).values()
+            for tool in re.findall(r"uv run (\w+)", text)
+        }
+        assert set(self.TOOLS) <= used, used
+        assert used & set(self.TOOLS) <= names, (used, names)
 
 
 class TestNoPlaceholderSurvives:
