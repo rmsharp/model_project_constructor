@@ -310,7 +310,7 @@ This will:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--run-id ID` | Auto-generated | Unique identifier for this run |
-| `--host gitlab\|github` | `gitlab` | Target host platform |
+| `--host gitlab\|github` | `MPC_HOST` if set, else `gitlab` | Target host platform. A `--live` run refuses a `--host` that differs from `MPC_HOST`. |
 | `--checkpoint-dir PATH` | `.orchestrator/checkpoints` | Where checkpoint envelopes are written |
 | `--live` | off | Use a real repo host (see Step 5) |
 
