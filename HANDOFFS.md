@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S291
+date: 2026-10-31
+status: pending
+active_task: Push the 8 unpushed commits (Session 289's 46f928f and daef416, Session 290's six) to origin/master and read the CI result (do they verify on Linux?). Chosen by the operator at Phase 0 from an area picker. The 13 files touched match none of Publish Tutorial's path filter and none is under docs/wiki/, so the push runs CI only; it is confirmed with the operator immediately before it runs.
+```
+
+```handoff
 session: S290
 date: 2026-10-31
 status: complete
