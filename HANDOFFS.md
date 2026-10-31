@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S292
+date: 2026-10-31
+status: pending
+active_task: Larkspur point (3) in BACKLOG.md -- scripts/run_pipeline.py takes the token from the settings (which follow MPC_HOST, default gitlab) but builds the adapter from --host, so --host github --live with GITLAB_TOKEN set sends the GitLab token to api.github.com. Chosen by the operator at Phase 0 from two pickers. The fix's shape (read the host from one place, or refuse a mismatch) is put to the operator after the code is read and before any change.
+```
+
+```handoff
 session: S291
 date: 2026-10-31
 status: complete

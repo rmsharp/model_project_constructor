@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 292 Did
+**Deliverable:** **Larkspur point (3): `--host` and `MPC_HOST` can disagree about which token is sent, so `scripts/run_pipeline.py --host github --live` with `GITLAB_TOKEN` set sends the GitLab token to `api.github.com` (IN PROGRESS)**
+**Started:** 2026-10-31 18:29
+**Status:** Session claimed. Work beginning. Chosen by the operator at Phase 0 from two pickers (area: the first option, recommended; item: point (3), recommended; the opening message was only "go"). The design choice the item leaves open (read the host from one place, or refuse a mismatch) is not yet made; it is put to the operator after the code is read and before any change.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 291 Did
 **Deliverable:** **the 8 unpushed commits pushed to `origin/master` and their CI result read — COMPLETE: they verify on Linux.** The push was `e361047..5625713` (9 commits: Session 289's `46f928f` and `daef416`, Session 290's six, and this session's claim), a fast-forward with no force (0 commits behind, checked at the push), at 18:14 local on 2026-10-31; the one workflow it started, CI run `41251659508`, finished green. **The operator decided,** by two pickers: the area (the first option, recommended; the opening message was only "go") and, immediately before the push, "Push now". **Mine, not put to the operator:** computing the Publish Tutorial path filter from the workflow file, reading the logs and not the badge, filing the one new finding (`3db792c`), learning #380, leaving the close-out commit unpushed, and running no review workflow (no code, test or workflow file changed, so there was nothing to review). **Started:** 2026-10-31 18:06. **Completed:** 2026-10-31 (close-out about 18:25). **Commits: three** (`git rev-list --count 1012b73..HEAD` after this one lands): `5625713` claim (pushed), `3db792c` the `BACKLOG.md` filing and this close-out; each has its own `CHANGELOG.md` entry. **The last two are not pushed.**
 
