@@ -532,7 +532,7 @@ uv run python scripts/run_pipeline.py \
     --run-id run_b1_db_$(date +%s)
 ```
 
-The URL follows SQLAlchemy syntax (`postgresql://user:pass@host/db`, `sqlite:///path`, etc.). When connected, the `DataReport.confirmed_expectations` field will be populated based on real query results instead of the standard "database unreachable" line. Scope B-1 deliberately defaults to disconnected — the pilot's goal is to prove Claude's query generation, not debug SQL connectivity at the same time.
+The URL follows SQLAlchemy syntax (`postgresql://user:pass@host/db`, `sqlite:///path`, etc.). When connected, the `DataReport.confirmed_expectations` field will be populated based on real query results instead of the standard "database unreachable" line. `ReadOnlyDB`, which runs the quality checks, refuses anything but one `SELECT`, `WITH` or `VALUES` statement (a refused check is reported as an error and is not run) and opens the connection read-only on SQLite, PostgreSQL, MySQL and MariaDB. That narrows what a model-written query can do; it does not replace an account that cannot write, so connect one. It is stricter than SQL requires on purpose: a column or alias spelled like a keyword (`set`, `do`, `use`, `load`, `call`) has to be quoted, and it cannot stop an expensive `SELECT`. Scope B-1 deliberately defaults to disconnected — the pilot's goal is to prove Claude's query generation, not debug SQL connectivity at the same time.
 
 ### 6e: Scripted-answers intake (`--llm both`, Scope B-2)
 

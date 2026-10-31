@@ -16,6 +16,13 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-10
 
+### 2026-10-30 · [ad hoc] S288 — tutorial section 6d says what `ReadOnlyDB` will and will not do (layer 3 of 3, part 5)
+- **Change:** `docs/tutorial.md`, section 6d ("Optional: connect a read-only database"): one added passage in the paragraph after the command. It says the quality checks run through `ReadOnlyDB`, which refuses anything but one `SELECT`, `WITH` or `VALUES` statement (a refused check is reported as an error and is not run) and opens the connection read-only on SQLite, PostgreSQL, MySQL and MariaDB; that this does not replace an account that cannot write; and that a column or alias spelled like a keyword has to be quoted. It is the only text a pilot user reads before connecting a database.
+- **Non-commit actions:** none. **Pushing this commit publishes the site:** `docs/*.md` is a trigger path of `.github/workflows/publish-tutorial.yml`. Nothing was pushed.
+- **Commit/PR:** this commit
+- **Session:** S288 · **Verified:** `tests/test_vocab_guard.py`, `tests/test_wiki_no_line_citations.py` and `tests/agents/data/test_data_agent.py` pass (80). Not verified: the rendered page (no `mkdocs` build was run).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-10-30 · [ad hoc] S288 — the eval harness's "executable" metric is documented as going through the read-only gate (layer 3 of 3, part 4)
 - **Change:** `tests/eval/README.md` (a paragraph under the thresholds table) and a comment in `tests/eval/eval_scoring.py`. `sql_execution_error` runs the model's primary SQL through `ReadOnlyDB.execute` and counts any exception as "not executable"; since Session 288 that includes a `ReadOnlyViolation`, so the "executable ≥ 95%" figure now also counts the gate's deliberate over-refusal, and a figure measured before Session 288 is not comparable. Production never executes primary queries (it validates and writes them), so the metric is now stricter than the pipeline. No scoring code changed.
 - **Non-commit actions:** none. Whether the metric should report a refusal separately (a scoring change, so an operator call) goes into `BACKLOG.md` in the next commit.
