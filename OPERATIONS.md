@@ -350,7 +350,11 @@ Flags:
   `claude-sonnet-4-6` (~5× cheaper) and `claude-haiku-4-5-20251001`
   (fastest, lowest quality).
 - `--db-url URL` — optional; passes a SQLAlchemy URL so quality checks
-  execute against a real read-only store. Omit for pilot runs.
+  execute against a real database. Use an account that cannot write:
+  `ReadOnlyDB` also refuses anything but one `SELECT`, `WITH` or `VALUES`
+  statement and opens the connection read-only on SQLite, PostgreSQL, MySQL
+  and MariaDB (on any other dialect it logs a WARNING and only the statement
+  check applies), and neither replaces that account. Omit for pilot runs.
 - `--run-id ID` — embed a timestamp suffix when invoking repeatedly
   so checkpoint envelopes stay disambiguated across runs.
 

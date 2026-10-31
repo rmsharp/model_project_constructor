@@ -184,6 +184,21 @@ for q in report.primary_queries:
   `request.target_description` and `request.required_features`.
 - Database connectivity: the `db_url` or read-only credential was
   wrong or expired.
+- A quality check is `ERROR` with `execution error: refused by the read-only gate
+  (<RULE>): ...` in its `result_summary` (or the baseline snapshot is `FAILED` with
+  `baseline SQL execution error: refused by the read-only gate ...` in its `caveats`):
+  `ReadOnlyDB` allows exactly one `SELECT`, `WITH` or `VALUES` statement and refused
+  this SQL before it ran. The rule code says which rule; the SQL itself is in the
+  check's `check_sql`. The gate over-refuses on purpose, so a refusal is not proof the
+  SQL is wrong: quote a column or alias that is spelled like a keyword (`set`, `do`,
+  `use`, `load`, `call`, `refresh`, `copy` and about forty more), put a space after
+  `--`, remove a second statement. The codes and their one-line reasons are the
+  `_REASONS` table in `read_only_gate.py`.
+- `cannot connect to ...` although the URL and credentials are right: `connect` also
+  makes the connection read-only (`PRAGMA query_only` on SQLite, `SET SESSION
+  CHARACTERISTICS AS TRANSACTION READ ONLY` on PostgreSQL, `SET SESSION TRANSACTION
+  READ ONLY` on MySQL and MariaDB) and fails the connection if the database refuses or
+  ignores that; the cause is on the same line.
 
 **Reading a `graph crashed:` message.** Build the graph with the provider and model the
 run used and invoke it without the agent's `try`; the exception reaches you with its

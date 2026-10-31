@@ -76,9 +76,10 @@ against the 180,000 a year in the stakeholder's value case. The datasheets say s
 
 ## What the tool got wrong on this run
 
-Found while building and reviewing the example; none was fixed here. Provenance: **ran** = I ran it
-while building this example; **read** = I read the code and did not run it; **review** = an
-independent reviewer ran or read it, a second reviewer could not refute it, and I have not re-run it.
+Found while building and reviewing the example; none was fixed here. (Finding 4 was fixed afterwards,
+in Session 288; the others were not.) Provenance: **ran** = I ran it while building this example;
+**read** = I read the code and did not run it; **review** = an independent reviewer ran or read it, a
+second reviewer could not refute it, and I have not re-run it.
 
 **The interview and the pipeline**
 
@@ -98,10 +99,16 @@ independent reviewer ran or read it, a second reviewer could not refute it, and 
 
 **The data stage**
 
-4. **`ReadOnlyDB` is not read-only (ran, on a scratch copy).** On SQLite, `DROP TABLE` and
-   `CREATE TABLE` through `ReadOnlyDB.execute` persisted; `DELETE` and `UPDATE` ran and were rolled
-   back only because nothing commits. `validate_sql` runs on the primary queries only, and the
-   quality-check and baseline SQL are executed unvalidated. Connect an account that cannot write.
+4. **`ReadOnlyDB` was not read-only; fixed in Session 288 (ran, on a scratch copy, before the fix).**
+   On SQLite, `DROP TABLE` and `CREATE TABLE` through `ReadOnlyDB.execute` persisted; `DELETE` and
+   `UPDATE` ran and were rolled back only because nothing commits. `validate_sql` runs on the primary
+   queries only, so the quality-check and baseline SQL were executed unvalidated. Now `execute`
+   refuses anything but one `SELECT`, `WITH` or `VALUES` statement before the database is touched,
+   and `connect` opens the connection read-only on SQLite, PostgreSQL, MySQL and MariaDB (any other
+   dialect: a WARNING, and only the statement gate). This example still runs to `COMPLETE` with 14
+   quality checks, 11 passed and 3 failed, none refused. Connect an account that cannot write
+   anyway: the gate over-refuses on purpose, and it cannot stop an expensive `SELECT` or a
+   side-effecting function it does not list.
 5. **A failed quality check says nothing about how many rows fail (ran).** It carries `row_count: 0`
    and `sample_rows: []`. The database holds 173, 1,226 and 9 offending rows; the report cannot say so.
 6. **The baseline is a bare number (ran for the value; review for the rest).** The snapshot value is
