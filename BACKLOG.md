@@ -1097,10 +1097,11 @@ the same.** Both logs carry three `##[warning]Node.js 20 is deprecated. The foll
 forced to run on Node.js 24` annotations, one per group of jobs, naming `actions/checkout@v4`, `actions/upload-artifact@v4`
 and `astral-sh/setup-uv@v4` (the three the workflows under `.github/workflows/` pin), with a link to GitHub's changelog of
 2025-09-19. Nothing fails: both runs passed with the warning. **Not known:** when GitHub stops forcing Node.js 20 actions
-onto 24 (the linked page was not read), which newer releases of the three exist, and whether Publish Tutorial's run prints
-the same (its log was not read for this). **Fix, small, an operator call:** bump the three to releases that target the newer
-Node.js and read the next run, including its `Using CPython` line because the item above is open (learning #375); or leave
-it until the fallback is removed.
+onto 24 (the linked page was not read) and which newer releases of the three exist. **Publish Tutorial prints it too
+(read by Session 292, run `41257326075`):** it names `actions/checkout@v4` and `astral-sh/setup-uv@v4`, the two that workflow
+pins (`publish-tutorial.yml:40-41`), so a bump touches two workflow files and the second deploys the tutorial site.
+**Fix, small, an operator call:** bump the three to releases that target the newer Node.js and read the next run, including
+its `Using CPython` line because the item above is open (learning #375); or leave it until the fallback is removed.
 
 ### The argument parser prints a mistyped `--db-url` or `--private-token`, value and all
 
