@@ -322,7 +322,7 @@ uv run python scripts/run_pipeline.py --host github
 
 The generated project will contain `.github/workflows/ci.yml` instead of `.gitlab-ci.yml`.
 
-**Decoupling CI from host.** `scripts/run_pipeline.py` always ties the CI manifest to `--host`. To emit a CI manifest that differs from the repo host (e.g. a GitHub Actions workflow into a GitLab project for fake-mode cross-platform testing), use the standalone website CLI with `--ci-platform {gitlab,github}`; see `OPERATIONS.md` §4.1 for the recipe.
+**Decoupling CI from host.** `scripts/run_pipeline.py` always ties the CI manifest to the run's host (`--host`, else `MPC_HOST`). To emit a CI manifest that differs from the repo host (e.g. a GitHub Actions workflow into a GitLab project for fake-mode cross-platform testing), use the standalone website CLI with `--ci-platform {gitlab,github}`; see `OPERATIONS.md` §4.1 for the recipe.
 
 ---
 
@@ -664,6 +664,7 @@ if result.project_url:
 | Problem | Cause | Fix |
 |---------|-------|-----|
 | `ConfigError: GITLAB_TOKEN is required` | Missing credentials in `--live` mode | Set `GITLAB_TOKEN` or `GITHUB_TOKEN` in your environment |
+| `error: --host github disagrees with MPC_HOST=gitlab` (or the reverse) | `--live` refuses a `--host` that differs from `MPC_HOST`, because the token is chosen by one and the address by the other | Make them the same host (edit `MPC_HOST` in `.env`), or unset `MPC_HOST` to follow `--host`; set that host's token |
 | `ConfigError: ANTHROPIC_API_KEY is required` | Agent runner needs LLM access | Set `ANTHROPIC_API_KEY` for real LLM-backed runs |
 | `ModuleNotFoundError: langgraph` | Missing `agents` extra | Run `uv sync --extra agents` |
 | Pipeline halts at `FAILED_AT_INTAKE` | Intake report has `DRAFT_INCOMPLETE` status | Check the intake fixture or re-run the intake interview |

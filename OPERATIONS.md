@@ -23,8 +23,8 @@ orchestration layer's secret injection) before running the pipeline.
 | `MPC_HOST` | no | `gitlab` | `gitlab` or `github`. `scripts/run_pipeline.py` uses it when `--host` is not given, and a `--live` run **refuses** a `--host` that names the other host (exit 2, before anything is built), because the token is chosen by one and the address by the other. |
 | `MPC_HOST_URL` | no | host-specific | `https://gitlab.com` or `https://api.github.com`. Override for self-hosted / enterprise instances. |
 | `MPC_NAMESPACE` | no | host-specific (script-level) | Target group/org path where the Website Agent creates the project. **Must be a path, never a URL** — e.g. `rmsharp-modelpilot` or `data-science/model-drafts`, not `https://gitlab.com/rmsharp-modelpilot`. Rejected at config-load time (`ConfigError`) if it starts with `http://` or `https://`. |
-| `GITLAB_TOKEN` | yes (if `MPC_HOST=gitlab` and live) | — | Personal access token with `api` scope and create-project permission on the target namespace. Printable ASCII only, no whitespace: a value ending in a carriage return (a CRLF `.env` file), line feed, tab or space is refused before any request (see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)). |
-| `GITHUB_TOKEN` | yes (if `MPC_HOST=github` and live) | — | PAT with `repo` scope on the target owner/org. Same format rule as `GITLAB_TOKEN`. |
+| `GITLAB_TOKEN` | yes (if the host is `gitlab` and live: `MPC_HOST=gitlab`, or `--host gitlab` for `scripts/run_pipeline.py`) | — | Personal access token with `api` scope and create-project permission on the target namespace. Printable ASCII only, no whitespace: a value ending in a carriage return (a CRLF `.env` file), line feed, tab or space is refused before any request (see [TROUBLESHOOTING.md](TROUBLESHOOTING.md)). |
+| `GITHUB_TOKEN` | yes (if the host is `github` and live: `MPC_HOST=github`, or `--host github` for `scripts/run_pipeline.py`) | — | PAT with `repo` scope on the target owner/org. Same format rule as `GITLAB_TOKEN`. |
 | `ANTHROPIC_API_KEY` | yes (when calling first-party Claude) | — | Required by any live interview and the Data Agent's QC generation when the provider is `anthropic` (the default). The intake web UI needs it only when its provider resolves to `anthropic`; selecting `bedrock` uses the AWS credential chain instead. |
 | `MPC_CHECKPOINT_DIR` | no | `./.orchestrator/checkpoints` | Root for the `CheckpointStore`. Each run lands in a subdirectory named after its `run_id`. |
 | `MPC_LOG_LEVEL` | no | `INFO` | Stdlib level name: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. |
@@ -216,7 +216,7 @@ override the CI manifest independently of the repo host — useful for
 fake-path testing when you want to validate the opposite platform's
 manifest shape without a live run. Applies to every recipe in §4.1 /
 §4.2 / §4.3; ignored by `scripts/run_pipeline.py` (§4.4), which always
-emits the manifest for its `--host`.
+emits the manifest for the run's host (`--host`, else `MPC_HOST`).
 
 ### 4.2 Against a live GitLab instance
 

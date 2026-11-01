@@ -725,9 +725,11 @@ the mirror (`MPC_HOST=github --live` with no `--host`, the documented setup) sen
 Now `resolve_host` uses whichever is given, `gitlab` if neither, and refuses a `--live` run whose two differ (the
 operator's ruling); `build_website_runner` reads the token for the host it is given. **Still open:** `MPC_HOST_URL` is
 read for whichever host is chosen, so an address meant for the other host (a self-hosted GitLab's, with `--host github`)
-still receives that host's token. A fix is one address variable per host, or refusing an address the host's own
-default does not match; neither can tell a legitimate enterprise address from a wrong one. **Operator call**, a nit
-while the operator sets `MPC_HOST_URL` and `--host` together.
+still receives that host's token. Two fixes: one address variable per host (each address then belongs to its host by
+construction, at the price of a new variable and a migration for every `MPC_HOST_URL` user), or refusing an address the
+host's own default does not match (which cannot tell a legitimate enterprise address from a wrong one, so it would also
+refuse every self-hosted instance). **Operator call**, a nit while the operator sets `MPC_HOST_URL` and `--host`
+together.
 
 **(4) The GitHub live path probably fails (read, inferred; it has never been run against a real host).**
 `github_adapter.py:128` creates the repository with no `auto_init`, and `:207` then reads
