@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S293
+date: 2026-11-01
+status: pending
+active_task: Larkspur point (2) in BACKLOG.md -- the rest of the scaffold's own defects: stale "Phase 4B" prose in three renderers, 99_extensions.qmd's path to a nonexistent src/fairness/, undeclared Jupyter for notebooks 02-05, the governance CI job (JSON-only parse; a stage after test on GitLab), the ruff>=0.5 vs v0.5.0 mismatch, and slugs that shadow a standard-library module. Chosen by the operator at Phase 0 from two pickers. Choices the item leaves open are put to the operator after the code is read.
+```
+
+```handoff
 session: S292
 date: 2026-10-31
 status: complete

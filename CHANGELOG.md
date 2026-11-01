@@ -14,6 +14,15 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ---
 
+## 2026-11
+
+### 2026-11-01 · [ad hoc] S293 — claim: Larkspur point (2), the rest of the scaffold's own defects (in progress)
+- **Change:** a `SESSION_NOTES.md` claim stub, a `status: pending` receipt in `HANDOFFS.md` and a new `## 2026-11` month heading here; no other file. The deliverable is the remainder of point (2): the generated project's stale "Phase 4B" prose, `analysis/99_extensions.qmd`'s wrong path, undeclared Jupyter, the `governance` CI job, the `ruff` version mismatch and slugs that shadow a standard-library module. Choices the item leaves open go to the operator after the code is read.
+- **Non-commit actions:** Phase 0 read of `methodology/SESSION_RUNNER.md`, `methodology/SAFEGUARDS.md`, the front matter and Session 292's record in `SESSION_NOTES.md`, `BACKLOG.md`'s plain-language index and the Larkspur item; the dashboard run; two pickers, area and then item, where the operator took the recommended first option both times after an opening message of "go".
+- **Commit/PR:** this commit
+- **Session:** S293 · **Verified:** working tree clean at Phase 0, `master` 1 commit ahead of `origin/master` (`a6aa2e7`, docs only; 0 behind); the `CHANGELOG.md` and `HANDOFFS.md` frontiers both `a6aa2e7` (gap 0, no merges, no pending receipt); `gh issue list` empty. Dashboard 96/100, one High+ risk (the read-cap flags on `CHANGELOG.md` and `BACKLOG.md`, both ruled expected); its copy is v2.22.0 against canonical v2.23.0, not updated (a synced file). `SESSION_NOTES.md` 155,719 B against the 196,608 B trim trigger.
+- **Model:** Claude Sonnet 5.5
+
 ## 2026-10
 
 ### 2026-10-31 · [ad hoc] S292 — push: Session 292's 9 commits to origin/master; CI and Publish Tutorial green; the Node.js 20 item widened
