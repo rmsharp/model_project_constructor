@@ -22,13 +22,15 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from model_project_constructor.orchestrator.config import ConfigError
+from model_project_constructor.agents.website.governance_templates import CIHostConfig
+from model_project_constructor.orchestrator.config import REPO_PLATFORMS, ConfigError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "run_pipeline.py"
@@ -49,14 +51,34 @@ def run_pipeline_module():
 
 @pytest.fixture(autouse=True)
 def _clean_host_environment(monkeypatch):
-    """A developer's exported ``MPC_HOST`` or token must not decide these tests."""
-    for var in ("MPC_HOST", "MPC_HOST_URL", "MPC_NAMESPACE", "GITLAB_TOKEN", "GITHUB_TOKEN"):
+    """A developer's exported ``MPC_*`` setting or host token must not decide these tests.
+
+    Every ``MPC_*`` variable goes, not a hand-picked list: ``build_website_runner`` hands the whole
+    environment to ``OrchestratorSettings.from_env``, which validates ``MPC_LOG_LEVEL`` and others.
+    """
+    for var in [v for v in os.environ if v.startswith("MPC_")] + ["GITLAB_TOKEN", "GITHUB_TOKEN"]:
         monkeypatch.delenv(var, raising=False)
 
 
 @pytest.fixture
-def adapters(monkeypatch, run_pipeline_module):
-    """Replace both adapter classes and ``WebsiteAgent`` with stubs that record their arguments.
+def agent_calls(monkeypatch, run_pipeline_module):
+    """Replace ``WebsiteAgent`` with a stub; returns the keyword arguments of each construction."""
+    calls: list[dict] = []
+
+    class _Agent:
+        def __init__(self, *_args, **kwargs):
+            calls.append(dict(kwargs))
+
+        def run(self, *_args, **_kwargs):
+            return None
+
+    monkeypatch.setattr(run_pipeline_module, "WebsiteAgent", _Agent)
+    return calls
+
+
+@pytest.fixture
+def adapters(monkeypatch, agent_calls):
+    """Replace both adapter classes with stubs that record their arguments.
 
     Returns ``{"github": [kwargs, ...], "gitlab": [kwargs, ...]}``, one entry per construction, so a
     test can say that an adapter was never built as well as what the built one received.
@@ -71,19 +93,11 @@ def adapters(monkeypatch, run_pipeline_module):
         def __init__(self, **kwargs):
             built["gitlab"].append(dict(kwargs))
 
-    class _Agent:
-        def __init__(self, *_args, **_kwargs):
-            pass
-
-        def run(self, *_args, **_kwargs):
-            return None
-
     import model_project_constructor.agents.website.github_adapter as gh_mod
     import model_project_constructor.agents.website.gitlab_adapter as gl_mod
 
     monkeypatch.setattr(gh_mod, "GitHubAdapter", _GitHub)
     monkeypatch.setattr(gl_mod, "GitLabAdapter", _GitLab)
-    monkeypatch.setattr(run_pipeline_module, "WebsiteAgent", _Agent)
     return built
 
 
@@ -159,6 +173,23 @@ def test_a_live_run_with_only_the_other_hosts_token_names_the_token_it_needs(
     assert other_secret not in str(caught.value)
 
 
+@pytest.mark.parametrize("live", [True, False])
+@pytest.mark.parametrize("host", ["github", "gitlab"])
+def test_the_ci_manifest_follows_the_host_it_is_given_not_the_environment(
+    run_pipeline_module, adapters, agent_calls, monkeypatch, host, live
+):
+    """``ci_platform`` decides which CI file the generated project gets; the environment names the
+    other host here, and both tokens are set so a live run builds."""
+    other = "gitlab" if host == "github" else "github"
+    monkeypatch.setenv("MPC_HOST", other)
+    monkeypatch.setenv("GITLAB_TOKEN", GITLAB_SECRET)
+    monkeypatch.setenv("GITHUB_TOKEN", GITHUB_SECRET)
+
+    run_pipeline_module.build_website_runner(host=host, live=live)
+
+    assert agent_calls == [{"ci_platform": host, "ci_host_config": CIHostConfig()}]
+
+
 # ---------------------------------------------------------------------------
 # resolve_host: the command line's policy
 # ---------------------------------------------------------------------------
@@ -200,16 +231,23 @@ def test_resolve_host_refuses_a_live_run_whose_flag_and_variable_disagree(
         run_pipeline_module.resolve_host(flag, live=True, env={"MPC_HOST": mpc_host})
     assert f"--host {flag}" in str(caught.value)
     assert f"MPC_HOST={mpc_host}" in str(caught.value)
+    # The way out is part of the message: an operator who only sees the refusal needs it.
+    assert "unset MPC_HOST to follow --host" in str(caught.value)
 
 
-@pytest.mark.parametrize("flag", [None, "github"])
+@pytest.mark.parametrize("bad", ["gitlb", "", "   "])
+@pytest.mark.parametrize(("flag", "live"), [(None, True), (None, False), ("github", True)])
 def test_resolve_host_names_an_invalid_variable_in_the_words_settings_uses(
-    run_pipeline_module, flag
+    run_pipeline_module, flag, live, bad
 ):
-    """A live run with a misspelt ``MPC_HOST`` is refused whether or not ``--host`` is given; a
-    dry run is refused only when it has to read the variable (no flag)."""
-    with pytest.raises(ConfigError, match=r"MPC_HOST must be one of \['github', 'gitlab'\]"):
-        run_pipeline_module.resolve_host(flag, live=True, env={"MPC_HOST": "gitlb"})
+    """Whenever the variable has to be read it must be a host name: a live run reads it with or
+    without ``--host``, and a dry run reads it when there is no flag. A blank value is not "unset"
+    (``OrchestratorSettings`` has never accepted one), and that is a change for a dry run, which
+    never read the variable before Session 292. A dry run WITH a flag never reads it: the table
+    above pins that."""
+    message = re.escape(f"MPC_HOST must be one of {sorted(REPO_PLATFORMS)}")
+    with pytest.raises(ConfigError, match=message):
+        run_pipeline_module.resolve_host(flag, live=live, env={"MPC_HOST": bad})
 
 
 def test_resolve_host_reads_the_process_environment_by_default(run_pipeline_module, monkeypatch):
@@ -217,6 +255,26 @@ def test_resolve_host_reads_the_process_environment_by_default(run_pipeline_modu
     assert run_pipeline_module.resolve_host(None, live=True) == "github"
     with pytest.raises(ConfigError):
         run_pipeline_module.resolve_host("gitlab", live=True)
+
+
+def test_resolve_host_given_an_environment_does_not_fall_back_to_the_process_one(
+    run_pipeline_module, monkeypatch
+):
+    """An empty mapping is an environment, not "none given"."""
+    monkeypatch.setenv("MPC_HOST", "github")
+    assert run_pipeline_module.resolve_host(None, live=True, env={}) == "gitlab"
+
+
+def test_resolve_host_reads_only_mpc_host_not_the_rest_of_the_settings(run_pipeline_module):
+    """The other ``MPC_*`` settings are ``build_website_runner``'s business (a live run); a bad one
+    must not stop the choice of host."""
+    env = {
+        "MPC_HOST": "github",
+        "MPC_LOG_LEVEL": "bogus",
+        "MPC_HOST_URL": "",
+        "MPC_NAMESPACE": "https://x",
+    }
+    assert run_pipeline_module.resolve_host(None, live=True, env=env) == "github"
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +336,10 @@ def test_main_follows_mpc_host_when_no_host_flag_is_given(
         run_pipeline_module.main()
 
     assert runner_calls == [{"host": "github", "live": True}]
-    assert "Host: github" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Host: github" in out
+    # The repository target is built from the same host, not from the flag alone.
+    assert "Target: my-org on https://api.github.com" in out
 
 
 def test_main_follows_the_flag_when_mpc_host_is_unset(
@@ -303,11 +364,13 @@ def test_main_defaults_to_gitlab_when_neither_is_given(
         run_pipeline_module.main()
 
     assert runner_calls == [{"host": "gitlab", "live": False}]
-    assert "Host: gitlab" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Host: gitlab" in out
+    assert "Target: data-science/model-drafts on https://gitlab.com" in out
 
 
 def test_main_lets_a_dry_run_name_a_host_the_variable_does_not(
-    run_pipeline_module, runner_calls, monkeypatch
+    run_pipeline_module, runner_calls, monkeypatch, capsys
 ):
     """Nothing is sent in a dry run, so the flag wins and the stale variable is not an error."""
     monkeypatch.setenv("MPC_HOST", "gitlab")
@@ -317,13 +380,18 @@ def test_main_lets_a_dry_run_name_a_host_the_variable_does_not(
         run_pipeline_module.main()
 
     assert runner_calls == [{"host": "github", "live": False}]
+    assert "Target: my-org on https://api.github.com" in capsys.readouterr().out
 
 
-def test_main_reports_a_misspelt_mpc_host_as_a_usage_error_not_a_traceback(
-    run_pipeline_module, runner_calls, monkeypatch, capsys
+@pytest.mark.parametrize("bad", ["gitlb", ""])
+@pytest.mark.parametrize("mode", [["--live"], []])
+def test_main_reports_a_bad_mpc_host_as_a_usage_error_not_a_traceback(
+    run_pipeline_module, runner_calls, monkeypatch, capsys, bad, mode
 ):
-    monkeypatch.setenv("MPC_HOST", "gitlb")
-    _argv(monkeypatch, "--live")
+    """Also a DRY run with no ``--host``: before Session 292 it never read the variable and ran to
+    ``COMPLETE`` whatever it held; it now has to, to know which host to preview."""
+    monkeypatch.setenv("MPC_HOST", bad)
+    _argv(monkeypatch, *mode)
 
     with pytest.raises(SystemExit) as excinfo:
         run_pipeline_module.main()
@@ -342,10 +410,15 @@ def test_the_script_refuses_a_live_mismatch_and_prints_neither_token(tmp_path):
     """Argument parsing, the exit status and the output of the real script; the refusal happens
     before any request could be made, so no server is needed.
 
-    ``MPC_HOST_URL`` points at a loopback port nothing listens on: on the unfixed script this
-    test reached the real ``api.github.com`` with an invented token (measured, a 401), and a
-    regression must fail here without going to the internet to do it."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("MPC_")}
+    ``MPC_HOST_URL`` points at a loopback port nothing listens on. The first version of this
+    test had no such line, and on the unfixed script it reached the real ``api.github.com`` with
+    an invented token (measured, a 401); with the line, a regression fails here by connection
+    refused, and the proxy variables are set aside so that it cannot be routed elsewhere."""
+    proxies = {"http_proxy", "https_proxy", "all_proxy"}
+    env = {
+        k: v for k, v in os.environ.items() if not k.startswith("MPC_") and k.lower() not in proxies
+    }
+    env["NO_PROXY"] = "127.0.0.1"
     env.update(
         MPC_HOST="gitlab",
         MPC_HOST_URL="http://127.0.0.1:9",
@@ -376,6 +449,7 @@ def test_the_script_refuses_a_live_mismatch_and_prints_neither_token(tmp_path):
     shown = done.stdout + done.stderr
     assert done.returncode == 2, shown
     assert "--host github" in shown and "MPC_HOST=gitlab" in shown
+    assert "usage:" in done.stderr  # a usage error, not a bare message
     assert "Traceback" not in shown
     assert GITLAB_SECRET not in shown and GITHUB_SECRET not in shown
     assert not (tmp_path / "checkpoints").exists()

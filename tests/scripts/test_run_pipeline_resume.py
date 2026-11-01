@@ -98,7 +98,7 @@ def _seed_data_request_envelope(run_dir: Path, run_id: str) -> None:
     (run_dir / "DataRequest.json").write_text(json.dumps(env))
 
 
-def test_argparse_accepts_resume_flag(run_pipeline_module, tmp_path, monkeypatch):
+def test_argparse_accepts_resume_flag(run_pipeline_module, tmp_path, monkeypatch, capsys):
     """`--resume RUN_ID` parses; main() rejects missing dir before any
     pipeline construction. Exercises the argparse declaration + the
     pre-flight rejection in one shot.
@@ -112,6 +112,8 @@ def test_argparse_accepts_resume_flag(run_pipeline_module, tmp_path, monkeypatch
     with pytest.raises(SystemExit) as excinfo:
         run_pipeline_module.main()
     assert excinfo.value.code == 2
+    # Exit 2 alone would also come from a bad MPC_HOST in the developer's environment.
+    assert "has no checkpoints" in capsys.readouterr().err
 
 
 def test_resume_preflight_rejects_missing_run_dir(

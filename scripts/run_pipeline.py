@@ -352,6 +352,10 @@ def resolve_host(
     A dry run reads no token, so there the flag simply wins and a stale ``MPC_HOST``
     is not an error. Neither given means ``gitlab``.
 
+    ``MPC_HOST`` is "given" when it is set at all, blank included, and must then name a
+    host: a live run always had to, and a dry run with no ``--host`` now has to as well
+    (it never read the variable before Session 292), to know which host to preview.
+
     Raises :class:`ConfigError` (the caller turns it into a usage error).
     """
     source = os.environ if env is None else env
