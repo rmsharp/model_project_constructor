@@ -126,6 +126,8 @@ assert_vocab_parity(
 # satisfy the framework's documentation requirements. Only artifacts
 # actually emitted for this project are retained in the final manifest.
 
+REGULATORY_MAPPING_PATH = "governance/regulatory_mapping.md"
+
 _FRAMEWORK_ARTIFACTS: dict[str, list[str]] = {
     "SR_26_2": [
         "governance/model_card.md",
@@ -919,18 +921,10 @@ def build_governance_files(
         files["governance/impact_assessment.md"] = render_impact_assessment(
             intake=intake
         )
-        # Regulatory mapping uses the final emitted-paths set — pass the
-        # current in-progress set (will include tier 2+ artifacts at this
-        # point; that's correct because §8.2 only emits regulatory_mapping
-        # for tier 2+ anyway).
-        tentative_paths = set(files.keys()) | {"governance/regulatory_mapping.md"}
-        mapping = build_regulatory_mapping(
-            frameworks=list(governance.get("regulatory_frameworks") or []),
-            emitted_paths=tentative_paths,
-        )
-        files["governance/regulatory_mapping.md"] = render_regulatory_mapping(
-            intake=intake, mapping=mapping
-        )
+        # The mapping names the files that exist, so it is rendered last, from
+        # the whole set (below). Its slot is taken here so the order of the
+        # files, and its own path in that set, do not change.
+        files[REGULATORY_MAPPING_PATH] = ""
 
     # --- Tier 1 only ---
     if _tier_at_least(risk_tier, "tier_1_critical"):
@@ -941,6 +935,21 @@ def build_governance_files(
     if affects_consumers:
         files["governance/eu_ai_act_compliance.md"] = render_eu_ai_act_compliance(
             intake=intake
+        )
+
+    # --- The mapping, now that every file it can name has been added ---
+    # It used to be rendered at tier 2+, before the tier 1 files and the EU AI
+    # Act file were added, so it left those out although the manifest (built
+    # from the final set) listed them. Rendering it from ``set(files)`` means a
+    # framework entry that names any file is right without this function
+    # knowing which files are written late.
+    if REGULATORY_MAPPING_PATH in files:
+        files[REGULATORY_MAPPING_PATH] = render_regulatory_mapping(
+            intake=intake,
+            mapping=build_regulatory_mapping(
+                frameworks=list(governance.get("regulatory_frameworks") or []),
+                emitted_paths=set(files),
+            ),
         )
 
     return files

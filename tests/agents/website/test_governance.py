@@ -882,3 +882,183 @@ class TestCIHostConfigIntegration:
             "https://github.com/astral-sh/ruff-pre-commit"
             in stored[".pre-commit-config.yaml"]
         )
+
+
+# ---------------------------------------------------------------------------
+# The regulatory mapping is read from what the project really emits
+# ---------------------------------------------------------------------------
+
+MAPPING_PATH = "governance/regulatory_mapping.md"
+EU_AI_ACT_PATH = "governance/eu_ai_act_compliance.md"
+EVERY_FRAMEWORK = [
+    "SR_26_2",
+    "NAIC_AIS",
+    "EU_AI_ACT_ART_9",
+    "GDPR_ART_22",
+    "ASOP_56",
+    "NOT_A_FRAMEWORK",
+]
+
+
+def _cited(mapping_text: str) -> dict[str, list[str]]:
+    """Parse ``regulatory_mapping.md`` back into ``framework -> [artifact]``."""
+
+    cited: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in mapping_text.splitlines():
+        if line.startswith("### "):
+            current = line[4:].strip()
+            cited[current] = []
+        elif line.startswith("- `") and current is not None:
+            cited[current].append(line[3:].rstrip("`"))
+    return cited
+
+
+def _governance_files(
+    tier1_intake: IntakeReport,
+    data_report: DataReport,
+    *,
+    risk_tier: str,
+    affects_consumers: bool,
+    frameworks: list[str],
+) -> dict[str, str]:
+    from model_project_constructor.agents.website.governance_templates import (
+        build_governance_files,
+    )
+
+    intake = tier1_intake.model_dump(mode="json")
+    intake["governance"] = {
+        **intake["governance"],
+        "risk_tier": risk_tier,
+        "affects_consumers": affects_consumers,
+        "regulatory_frameworks": frameworks,
+    }
+    return build_governance_files(
+        intake=intake,
+        data=data_report.model_dump(mode="json"),
+        project_name="p",
+        project_slug="p",
+    )
+
+
+TIERS = ["tier_1_critical", "tier_2_high", "tier_3_moderate", "tier_4_low"]
+
+
+class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
+    """Session 293's review: the mapping file was rendered before the EU AI Act file existed."""
+
+    @pytest.mark.parametrize("risk_tier", TIERS)
+    @pytest.mark.parametrize("affects_consumers", [True, False])
+    def test_the_file_cites_what_the_manifest_cites(
+        self,
+        tier1_intake: IntakeReport,
+        data_report: DataReport,
+        risk_tier: str,
+        affects_consumers: bool,
+    ) -> None:
+        from model_project_constructor.agents.website.governance_templates import (
+            build_regulatory_mapping,
+        )
+
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier=risk_tier,
+            affects_consumers=affects_consumers,
+            frameworks=EVERY_FRAMEWORK,
+        )
+        if risk_tier in ("tier_3_moderate", "tier_4_low"):
+            assert MAPPING_PATH not in files
+            return
+        expected = build_regulatory_mapping(
+            frameworks=EVERY_FRAMEWORK, emitted_paths=set(files)
+        )
+        assert _cited(files[MAPPING_PATH]) == {
+            framework: artifacts for framework, artifacts in expected.items()
+        }
+
+    @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
+    def test_the_eu_ai_act_file_is_cited_when_it_is_emitted(
+        self, tier1_intake: IntakeReport, data_report: DataReport, risk_tier: str
+    ) -> None:
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier=risk_tier,
+            affects_consumers=True,
+            frameworks=["EU_AI_ACT_ART_9", "GDPR_ART_22"],
+        )
+        assert EU_AI_ACT_PATH in files
+        cited = _cited(files[MAPPING_PATH])
+        assert EU_AI_ACT_PATH in cited["EU_AI_ACT_ART_9"]
+        assert EU_AI_ACT_PATH in cited["GDPR_ART_22"]
+
+    @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
+    def test_the_eu_ai_act_file_is_not_cited_when_it_is_not_emitted(
+        self, tier1_intake: IntakeReport, data_report: DataReport, risk_tier: str
+    ) -> None:
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier=risk_tier,
+            affects_consumers=False,
+            frameworks=["EU_AI_ACT_ART_9", "GDPR_ART_22"],
+        )
+        assert EU_AI_ACT_PATH not in files
+        assert EU_AI_ACT_PATH not in files[MAPPING_PATH]
+
+    def test_a_framework_naming_every_late_file_cites_every_one_of_them(
+        self,
+        tier1_intake: IntakeReport,
+        data_report: DataReport,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Three governance files are written after the mapping's place in the build.
+
+        Fixing the EU AI Act file alone, by naming it, leaves the other two blind; a later
+        framework entry that cites either would be dropped without a word.
+        """
+        from model_project_constructor.agents.website import governance_templates
+
+        late = [
+            "governance/lcp_integration.md",
+            "governance/audit_log/README.md",
+            EU_AI_ACT_PATH,
+        ]
+        monkeypatch.setitem(governance_templates._FRAMEWORK_ARTIFACTS, "A_FUTURE_ONE", late)
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier="tier_1_critical",
+            affects_consumers=True,
+            frameworks=["A_FUTURE_ONE"],
+        )
+        assert set(late) <= set(files)
+        assert _cited(files[MAPPING_PATH])["A_FUTURE_ONE"] == late
+
+    def test_the_mapping_keeps_its_place_in_the_order_of_the_files(
+        self, tier1_intake: IntakeReport, data_report: DataReport
+    ) -> None:
+        """Nothing reads the order today; it is held so a change to it is a decision."""
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier="tier_1_critical",
+            affects_consumers=True,
+            frameworks=["SR_26_2"],
+        )
+        order = list(files)
+        assert order[order.index("governance/impact_assessment.md") + 1] == MAPPING_PATH
+        assert order.index(MAPPING_PATH) < order.index("governance/lcp_integration.md")
+        assert order.index(MAPPING_PATH) < order.index(EU_AI_ACT_PATH)
+
+    def test_the_file_the_agent_commits_cites_what_the_manifest_cites(
+        self, tier1_intake: IntakeReport, data_report: DataReport
+    ) -> None:
+        result, client = _run_agent(tier1_intake, data_report)
+        stored = client.get_files(result.project_id)
+        cited = _cited(stored[MAPPING_PATH])
+        manifest = result.governance_manifest.regulatory_mapping
+        assert {framework: sorted(paths) for framework, paths in cited.items()} == {
+            framework: sorted(paths) for framework, paths in manifest.items()
+        }
