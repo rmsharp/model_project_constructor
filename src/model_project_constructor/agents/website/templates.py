@@ -281,17 +281,46 @@ def render_src_init(*, project_name: str, project_slug: str) -> str:
     )
 
 
+def _py_str_literal(value: str) -> str:
+    """A Python string literal for ``value``, spelled the way ``ruff format`` keeps it.
+
+    A metric or query name is any string (the schemas constrain neither), and it is written
+    into generated source, so what comes back from ``ast.literal_eval`` must be ``value`` and
+    nothing in it may end the literal or run. ``json.dumps`` is not the answer: it always
+    uses double quotes, and ``ruff format`` rewrites ``"a\\"b"`` to ``'a"b'``, so the
+    generated project's own formatter hook would change the file on its first commit.
+
+    The quote is the one ruff chooses: double, unless the value holds more double quotes than
+    single ones. Only that quote is escaped. Every other character is spelled as ``repr``
+    spells it: a backslash, a newline, a tab and every character that is not printable (a NUL,
+    an escape, ``U+2028``, a lone surrogate) as an escape, and printable text, accents and
+    emoji included, as it stands. So the file never holds a control character or a character
+    no UTF-8 file can hold, and a terminal that shows it is not driven by it.
+    """
+
+    quote = "'" if value.count('"') > value.count("'") else '"'
+    # ``repr(char)[1:-1]`` is how one character is spelled inside a literal. It leaves both
+    # quote characters bare, so the chosen quote is the only one that needs a backslash.
+    spelled = [repr(char)[1:-1] for char in value]
+    body = "".join(
+        "\\" + spelling if char == quote else spelling
+        for char, spelling in zip(value, spelled, strict=True)
+    )
+    return quote + body + quote
+
+
 def _str_list_literal(items: list[str]) -> str:
     """A ``list[str]`` literal written the way ``ruff format`` writes it.
 
     One item per line with a trailing comma, which ruff keeps; ``[]`` when there are none,
     because ruff rewrites ``[`` newline ``]`` to that and the generated pre-commit config
-    runs ``ruff-format``. Both lists this renders can be empty in a valid report.
+    runs ``ruff-format``. Both lists this renders can be empty in a valid report. Each item is
+    a string literal that evaluates back to the item (:func:`_py_str_literal`).
     """
 
     if not items:
         return "[]"
-    return "[\n" + "".join(f'    "{item}",\n' for item in items) + "]"
+    return "[\n" + "".join(f"    {_py_str_literal(item)},\n" for item in items) + "]"
 
 
 def render_data_loading(*, project_slug: str, primary_query_names: list[str]) -> str:

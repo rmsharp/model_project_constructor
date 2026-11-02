@@ -13,6 +13,7 @@ process: the three things its README, its CI and its pre-commit hook run.
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import re
@@ -35,11 +36,14 @@ from model_project_constructor.agents.website.templates import (
     _STUB_CALLS,
     derive_project_name,
     derive_project_slug,
+    render_data_loading,
+    render_evaluation,
     render_test_stub,
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import RepoTarget
+from tests.agents.website.hostile_names import HOSTILE_NAMES
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -378,6 +382,63 @@ class TestFormatStabilityAtEverySlugLength:
             for name, text in texts.items():
                 (tmp_path / f"test_{name}_{length}.py").write_text(text, encoding="utf-8")
         done = _ruff(tmp_path, "format", "--check")
+        assert done.returncode == 0, _report(done)
+
+
+class TestHostileNamesAreFormattedAndLintedAsWritten:
+    """``ruff format`` is the judge of "spelled the way the shipped formatter keeps it".
+
+    The generated project's pre-commit config runs ``ruff-format``, so a literal ruff would
+    rewrite makes its first commit change the file. ``json.dumps`` and ``repr`` each fail some
+    rows here (``json.dumps`` always uses double quotes, ``repr`` picks single ones whenever
+    both kinds occur), which is why the writer chooses the quote itself.
+    """
+
+    def _write_every_hostile_name(self, directory: Path) -> int:
+        count = 0
+        for name, value in HOSTILE_NAMES:
+            metrics = render_evaluation(intake={"model_solution": {"evaluation_metrics": [value]}})
+            queries = render_data_loading(project_slug="p", primary_query_names=[value])
+            (directory / f"metrics_{name}.py").write_text(metrics, encoding="utf-8")
+            (directory / f"queries_{name}.py").write_text(queries, encoding="utf-8")
+            count += 2
+        return count
+
+    def test_ruff_format_leaves_every_file_as_written(self, tmp_path: Path) -> None:
+        assert self._write_every_hostile_name(tmp_path) == 2 * len(HOSTILE_NAMES)
+        done = _ruff(tmp_path, "format", "--check")
+        assert done.returncode == 0, _report(done)
+
+    def test_ruff_format_keeps_every_short_string_over_the_awkward_characters(
+        self, tmp_path: Path
+    ) -> None:
+        """The 781 strings of up to four quotes, backslashes, newlines and letters, in one file.
+
+        Where the quote is chosen by counting, the ties and near-ties are the places a wrong
+        comparison hides; a hand-picked list does not reach all of them.
+        """
+
+        alphabet = ['"', "'", "\\", "\n", "a"]
+        every = [
+            "".join(chars)
+            for length in range(5)
+            for chars in itertools.product(alphabet, repeat=length)
+        ]
+        text = render_evaluation(intake={"model_solution": {"evaluation_metrics": every}})
+        (tmp_path / "every.py").write_text(text, encoding="utf-8")
+        done = _ruff(tmp_path, "format", "--check")
+        assert done.returncode == 0, _report(done)
+
+    def test_ruff_check_passes_every_file(self, tmp_path: Path) -> None:
+        self._write_every_hostile_name(tmp_path)
+        done = _ruff(tmp_path, "check")
+        assert done.returncode == 0, _report(done)
+
+    def test_python_compiles_every_file(self, tmp_path: Path) -> None:
+        """Ruff parses a NUL that CPython refuses to compile, so ask CPython too."""
+
+        self._write_every_hostile_name(tmp_path)
+        done = _run(tmp_path, "-m", "compileall", "-q", ".")
         assert done.returncode == 0, _report(done)
 
 

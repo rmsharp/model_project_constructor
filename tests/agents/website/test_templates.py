@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import ast
+import itertools
 from typing import Any
+
+import pytest
 
 from model_project_constructor.agents.website.templates import (
     _STUB_CALLS,
+    _str_list_literal,
     build_base_files,
     derive_project_name,
     derive_project_slug,
@@ -30,6 +35,7 @@ from model_project_constructor.agents.website.templates import (
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
+from tests.agents.website.hostile_names import HOSTILE_IDS, HOSTILE_VALUES
 
 
 class TestProjectNameDerivation:
@@ -556,3 +562,113 @@ class TestEmptyListsAreWrittenAsRuffFormatsThem:
     def test_a_non_empty_list_stays_one_item_per_line_with_a_trailing_comma(self) -> None:
         out = render_data_loading(project_slug="foo_bar", primary_query_names=["a", "b"])
         assert 'PRIMARY_QUERY_NAMES: list[str] = [\n    "a",\n    "b",\n]\n' in out
+
+
+def _assigned(source: str, name: str) -> Any:
+    """The value of the module-level ``name: ... = <literal>`` in ``source``, evaluated safely."""
+
+    for node in ast.parse(source).body:
+        if (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == name
+        ):
+            assert node.value is not None
+            return ast.literal_eval(node.value)
+    raise AssertionError(f"{name} is not assigned in:\n{source}")
+
+
+class TestNamesAreWrittenAsPythonStrings:
+    """A metric or query name is any string; the list it lands in must say exactly that string.
+
+    Session 293's review: ``f'"{item}"'`` made a double quote, a newline or a NUL a syntax
+    error, changed a backslash, split ``a", "b`` into two items and ran ``a"+str(1+1)+"b`` when
+    the generated module was imported, and the run still ended ``COMPLETE``.
+    """
+
+    @pytest.mark.parametrize("value", HOSTILE_VALUES, ids=HOSTILE_IDS)
+    def test_a_metric_comes_back_as_the_same_string(self, value: str) -> None:
+        metrics = ["first", value, "last"]
+        out = render_evaluation(intake={"model_solution": {"evaluation_metrics": metrics}})
+        assert _assigned(out, "REQUESTED_METRICS") == metrics
+
+    @pytest.mark.parametrize("value", HOSTILE_VALUES, ids=HOSTILE_IDS)
+    def test_a_query_name_comes_back_as_the_same_string(self, value: str) -> None:
+        names = ["first", value, "last"]
+        out = render_data_loading(project_slug="foo_bar", primary_query_names=names)
+        assert _assigned(out, "PRIMARY_QUERY_NAMES") == names
+
+    @pytest.mark.parametrize("value", HOSTILE_VALUES, ids=HOSTILE_IDS)
+    def test_nothing_unprintable_reaches_the_file(self, value: str) -> None:
+        """A NUL, an escape, a separator or a lone surrogate is written as its escape."""
+
+        outs = [
+            render_evaluation(intake={"model_solution": {"evaluation_metrics": [value]}}),
+            render_data_loading(project_slug="foo_bar", primary_query_names=[value]),
+        ]
+        for out in outs:
+            assert all(char.isprintable() or char == "\n" for char in out)
+            out.encode("utf-8")  # a lone surrogate would raise here
+
+    @pytest.mark.parametrize("value", HOSTILE_VALUES, ids=HOSTILE_IDS)
+    def test_every_python_file_of_the_scaffold_parses(
+        self, intake_report: IntakeReport, data_report: DataReport, value: str
+    ) -> None:
+        intake = intake_report.model_dump(mode="json")
+        intake["model_solution"]["evaluation_metrics"] = [value]
+        data = data_report.model_dump(mode="json")
+        data["primary_queries"][0]["name"] = value
+        files = build_base_files(
+            intake=intake,
+            data=data,
+            project_name="subrogation-model",
+            project_slug="subrogation_model",
+        )
+        for path, text in files.items():
+            if path.endswith(".py"):
+                ast.parse(text)
+        evaluation = files["src/subrogation_model/evaluation.py"]
+        loading = files["src/subrogation_model/data_loading.py"]
+        assert _assigned(evaluation, "REQUESTED_METRICS") == [value]
+        assert _assigned(loading, "PRIMARY_QUERY_NAMES")[0] == value
+
+    @pytest.mark.parametrize(
+        ("value", "literal"),
+        [
+            # ruff-format prefers double quotes and changes a string only to avoid
+            # escapes: single quotes when the string holds more double quotes than single.
+            ("plain", '"plain"'),
+            ("", '""'),
+            ('a"b', r"""'a"b'"""),
+            ("a'b", r'''"a'b"'''),
+            ("a'b\"c", r'''"a'b\"c"'''),
+            ('a""b\'c', r"""'a""b\'c'"""),
+            ("a'b'c\"d", r'''"a'b'c\"d"'''),
+            ('"', r"""'"'"""),
+            ("'", r'''"'"'''),
+            # Every other character is spelled the way ``repr`` spells it.
+            ("a\nb", r'"a\nb"'),
+            ("a\\b", r'"a\\b"'),
+            ("a\x00b", r'"a\x00b"'),
+            ("a\u2028b", r'"a\u2028b"'),
+            ("a\ud800b", r'"a\ud800b"'),
+            # Printable text is left readable.
+            ("Précision@k", '"Précision@k"'),
+        ],
+    )
+    def test_the_quote_is_the_one_ruff_format_keeps(self, value: str, literal: str) -> None:
+        assert _str_list_literal([value]) == f"[\n    {literal},\n]"
+
+    def test_every_short_string_over_the_awkward_characters_round_trips(self) -> None:
+        """All 781 strings of up to four of: a double quote, a single quote, a backslash,
+        a newline and a letter, so every order and every tie and near-tie in the quote counts."""
+
+        alphabet = ['"', "'", "\\", "\n", "a"]
+        every = [
+            "".join(chars)
+            for length in range(5)
+            for chars in itertools.product(alphabet, repeat=length)
+        ]
+        assert len(every) == 781
+        out = render_evaluation(intake={"model_solution": {"evaluation_metrics": every}})
+        assert _assigned(out, "REQUESTED_METRICS") == every
