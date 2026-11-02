@@ -803,7 +803,7 @@ short, the governance job and hook described as "schema validation"), `Developme
 well-formedness), `Software-Bill-of-Materials.md` (`ruff>=0.5` at line 130, no `notebooks` extra, no hook pin),
 `Governance-Framework.md` (the "always emitted" table at line 26 and the `~38 files` total), `Extending-the-Pipeline.md:168`,
 `Worked-Examples.md` (lines 174-182 and 195: the tier-3 example is 40 files) and `Monitoring-and-Operations.md:113`.
-`docs/tutorial.md` shows `Files (38)` for a run that now writes 40. `README.md`'s repo map and test counts do not list
+`README.md`'s repo map and test counts do not list
 `_governance_check.py` or `_reserved_names.py` (the existing item about hand-typed test counts covers the numbers).
 
 ### `ReadOnlyDB` is now read-only; what it left: the wiki, real servers, the quality-check prompt, the eval metric
