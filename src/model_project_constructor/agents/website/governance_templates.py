@@ -937,12 +937,17 @@ def build_governance_files(
             intake=intake
         )
 
-    # --- The mapping, now that every file it can name has been added ---
+    # --- The mapping, now that every file this function writes has been added ---
     # It used to be rendered at tier 2+, before the tier 1 files and the EU AI
-    # Act file were added, so it left those out although the manifest (built
-    # from the final set) listed them. Rendering it from ``set(files)`` means a
-    # framework entry that names any file is right without this function
-    # knowing which files are written late.
+    # Act file were added. The EU AI Act file was the one actually left out
+    # (under EU_AI_ACT_ART_9 and GDPR_ART_22) although the manifest, built from
+    # the final set, listed it; no framework names the tier 1 files today.
+    # Rendering it from ``set(files)`` means a framework entry that names any
+    # file written here is right without this function knowing which are
+    # written late. Files written afterwards, by ``build_analysis_files`` and
+    # ``build_test_files`` (``analysis/`` and ``tests/``), are not in ``files``:
+    # an entry naming one would be dropped from this file while the manifest,
+    # built from the committed set, listed it. No entry names one today.
     if REGULATORY_MAPPING_PATH in files:
         files[REGULATORY_MAPPING_PATH] = render_regulatory_mapping(
             intake=intake,

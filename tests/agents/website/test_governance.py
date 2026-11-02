@@ -10,7 +10,9 @@ Each tier has a distinct JSON intake fixture under ``tests/fixtures/``:
   uses_protected_attributes=False, cycle_time=tactical, 2 frameworks
 
 Together they exercise every conditional branch in ``build_governance_files``
-and the regulatory-mapping computation in ``build_repo_project_result``.
+and the regulatory-mapping computation in ``build_repo_project_result`` (the manifest) and
+``build_governance_files`` (the ``regulatory_mapping.md`` file, rendered last since
+Session 294).
 """
 
 from __future__ import annotations
@@ -949,13 +951,18 @@ class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
 
     @pytest.mark.parametrize("risk_tier", TIERS)
     @pytest.mark.parametrize("affects_consumers", [True, False])
-    def test_the_file_cites_what_the_manifest_cites(
+    def test_the_file_cites_what_the_builder_gives_for_the_final_set(
         self,
         tier1_intake: IntakeReport,
         data_report: DataReport,
         risk_tier: str,
         affects_consumers: bool,
     ) -> None:
+        """The file equals ``build_regulatory_mapping`` over every file the build emits.
+
+        The manifest is built from the committed files by ``nodes.py``; it is compared with the
+        file by the agent-level tests at the end of this class.
+        """
         from model_project_constructor.agents.website.governance_templates import (
             build_regulatory_mapping,
         )
@@ -973,9 +980,7 @@ class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
         expected = build_regulatory_mapping(
             frameworks=EVERY_FRAMEWORK, emitted_paths=set(files)
         )
-        assert _cited(files[MAPPING_PATH]) == {
-            framework: artifacts for framework, artifacts in expected.items()
-        }
+        assert _cited(files[MAPPING_PATH]) == dict(expected)
 
     @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
     def test_the_eu_ai_act_file_is_cited_when_it_is_emitted(
@@ -1007,16 +1012,23 @@ class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
         assert EU_AI_ACT_PATH not in files
         assert EU_AI_ACT_PATH not in files[MAPPING_PATH]
 
-    def test_a_framework_naming_every_late_file_cites_every_one_of_them(
+    @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
+    @pytest.mark.parametrize("affects_consumers", [True, False])
+    def test_a_framework_naming_every_late_file_cites_exactly_the_ones_emitted(
         self,
         tier1_intake: IntakeReport,
         data_report: DataReport,
         monkeypatch: pytest.MonkeyPatch,
+        risk_tier: str,
+        affects_consumers: bool,
     ) -> None:
         """Three governance files are written after the mapping's place in the build.
 
         Fixing the EU AI Act file alone, by naming it, leaves the other two blind; a later
-        framework entry that cites either would be dropped without a word.
+        framework entry that cites either would be dropped without a word. The other half: a
+        file the tier or the consumer flag leaves out must not be cited just because an entry
+        names it (tier 2 writes neither tier 1 file; ``affects_consumers`` false writes no EU
+        AI Act file).
         """
         from model_project_constructor.agents.website import governance_templates
 
@@ -1029,12 +1041,67 @@ class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
         files = _governance_files(
             tier1_intake,
             data_report,
-            risk_tier="tier_1_critical",
-            affects_consumers=True,
+            risk_tier=risk_tier,
+            affects_consumers=affects_consumers,
             frameworks=["A_FUTURE_ONE"],
         )
-        assert set(late) <= set(files)
-        assert _cited(files[MAPPING_PATH])["A_FUTURE_ONE"] == late
+        emitted = [path for path in late if path in files]
+        assert emitted == [
+            path
+            for path in late
+            if (risk_tier == "tier_1_critical" or path == EU_AI_ACT_PATH)
+            and (affects_consumers or path != EU_AI_ACT_PATH)
+        ]
+        assert _cited(files[MAPPING_PATH])["A_FUTURE_ONE"] == emitted
+
+    @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
+    @pytest.mark.parametrize("affects_consumers", [True, False])
+    def test_the_header_states_the_tier_and_the_consumer_flag_of_the_intake(
+        self,
+        tier1_intake: IntakeReport,
+        data_report: DataReport,
+        risk_tier: str,
+        affects_consumers: bool,
+    ) -> None:
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier=risk_tier,
+            affects_consumers=affects_consumers,
+            frameworks=["SR_26_2"],
+        )
+        text = files[MAPPING_PATH]
+        assert f"- **Risk tier:** `{risk_tier}`" in text
+        assert f"- **Affects consumers:** `{affects_consumers}`" in text
+
+    def test_no_declared_framework_says_so(
+        self, tier1_intake: IntakeReport, data_report: DataReport
+    ) -> None:
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier="tier_2_high",
+            affects_consumers=True,
+            frameworks=[],
+        )
+        text = files[MAPPING_PATH]
+        assert "_(No regulatory frameworks declared in intake.)_" in text
+        assert _cited(text) == {}
+
+    def test_a_framework_with_no_scaffolded_artifact_says_so(
+        self, tier1_intake: IntakeReport, data_report: DataReport
+    ) -> None:
+        files = _governance_files(
+            tier1_intake,
+            data_report,
+            risk_tier="tier_2_high",
+            affects_consumers=True,
+            frameworks=["NOT_A_FRAMEWORK"],
+        )
+        text = files[MAPPING_PATH]
+        assert "### NOT_A_FRAMEWORK" in text
+        assert "_No scaffolded artifacts directly satisfy this framework._" in text
+        assert _cited(text) == {"NOT_A_FRAMEWORK": []}
 
     def test_the_mapping_keeps_its_place_in_the_order_of_the_files(
         self, tier1_intake: IntakeReport, data_report: DataReport
@@ -1062,3 +1129,41 @@ class TestTheRegulatoryMappingListsEveryFileTheProjectEmits:
         assert {framework: sorted(paths) for framework, paths in cited.items()} == {
             framework: sorted(paths) for framework, paths in manifest.items()
         }
+
+    @pytest.mark.parametrize("risk_tier", ["tier_1_critical", "tier_2_high"])
+    @pytest.mark.parametrize("affects_consumers", [True, False])
+    def test_the_file_and_the_manifest_agree_for_a_framework_naming_late_files(
+        self,
+        tier1_intake: IntakeReport,
+        data_report: DataReport,
+        monkeypatch: pytest.MonkeyPatch,
+        risk_tier: str,
+        affects_consumers: bool,
+    ) -> None:
+        """The two places the mapping is computed (the build and ``nodes.py``) stay one answer.
+
+        The real framework entries name none of the files written late, so the agreement the
+        class above shows at the real frameworks would hold even if one place hid them.
+        """
+        from model_project_constructor.agents.website import governance_templates
+
+        late = [
+            "governance/lcp_integration.md",
+            "governance/audit_log/README.md",
+            EU_AI_ACT_PATH,
+        ]
+        monkeypatch.setitem(governance_templates._FRAMEWORK_ARTIFACTS, "ASOP_56", late)
+        raw = tier1_intake.model_dump(mode="json")
+        raw["governance"] = {
+            **raw["governance"],
+            "risk_tier": risk_tier,
+            "affects_consumers": affects_consumers,
+            "regulatory_frameworks": ["ASOP_56"],
+        }
+        result, client = _run_agent(IntakeReport.model_validate(raw), data_report)
+        assert result.status == "COMPLETE"
+        stored = client.get_files(result.project_id)
+        cited = _cited(stored[MAPPING_PATH])
+        manifest = result.governance_manifest.regulatory_mapping
+        assert cited == {framework: list(paths) for framework, paths in manifest.items()}
+        assert cited["ASOP_56"] == [path for path in late if path in stored]
