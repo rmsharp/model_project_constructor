@@ -60,12 +60,10 @@ NOTICE = """\
   for the pipeline's language model. The pipeline's own model wrote none of it. The three
   failed quality checks are the three data problems the author planted and wrote checks for.
 * **This project's own checks pass, but it is a scaffold, not working code.** Its eight tests,
-  `ruff check` and `ruff format --check` pass because each stub test calls a stub and expects
-  `NotImplementedError`; nothing has been implemented. Some of its prose is stale (it still
-  says datasheets and governance files arrive "in Phase 4B"), its notebooks 02 to 05 need
-  Jupyter, which it does not declare, and on GitLab its `governance` CI job runs in a stage
-  after `test`. Those are defects in the scaffold this tool wrote, recorded in the example's
-  README, not something you did.
+  `ruff check`, `ruff format --check` and its governance check pass because each stub test
+  calls a stub and expects `NotImplementedError`; nothing has been implemented. Where the
+  scaffold the tool wrote still falls short (some prose is thin, and a file a higher risk tier
+  would add is not there) is recorded in the example's README, not something you did.
 * Produced by `examples/larkspur_mutual/run_example.py` in the Model Project Constructor
   repository, with the in-memory repository client. Nothing was created on any host.
 """

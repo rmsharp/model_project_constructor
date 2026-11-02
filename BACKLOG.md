@@ -55,7 +55,8 @@ rows below it are the smaller residue that closing it exposed.
 | `run` crashes at the very end if a database check returns binary data | After the whole run — every model call made and paid for — writing the report fails on a sample row that is a binary value that is not valid UTF-8 (or a PostgreSQL `bytea`). Exit 1, and no report. | **Small**, but a choice: hex-encode the value, or record that check as errored. |
 | Five more places can still put database, driver or other error text on the screen or in a report | Sessions 269 and 270 closed the routes that mattered most: the schema probe's messages, a failed connection (it ended in a traceback), the "database unreachable" note, and the SQL errors the `run` command copies into its report (one of which let a secret-looking string through unmasked). Five remain: an unparseable `--db-url` echoed as typed, warnings and log lines SQLAlchemy prints itself, the table and column names saved in the inventory, the output path, the website generator copying report text into files without a check of its own. Closed since: the repository host's error page, which could carry the access token itself (Session 274); the language model's error text copied into the data report (Session 279); the data agent's report assembly, which could raise instead of returning a failed report (Session 280); and the repository host's project address, project id, branch and commit id, which were printed and saved raw (Session 281). | **Small** for the SQLAlchemy lines, no ruling. **Operator call** on the saved names and on whether the website should check for itself. |
 | The project id, the branch and one commit reference are sent in an address without being encoded | Left over from the item Session 282 closed. Session 282 made a request the HTTP library cannot build (a control character, a broken half of a character or a number such as `NaN` in a value the host sent) fail cleanly like any other call. Session 283 did the same for three more: a reply nested more than 64 levels (a limit it chose; it also refuses a reply whose deep part nothing reads, and real ones nest at most 5), a redirect the library cannot build (an address such as `mailto:x`, or about 65,500 characters, or malformed in a few other ways), and a broken half of a character in the GitLab group name, **when the adapter is called directly: the website command and the pipeline script still end in a traceback for such a name, from another layer** (see the item on channels that write a file that will not reload). What is left here is that the project id, the branch and GitHub's parent commit reference the host sent are put into addresses as they are, so a `/`, `?`, `#` or `..` in one changes which address is asked for; the host already holds the token, so this gives it nothing new: a nit. Two smaller points ride with it: one sentence in the wiki (the project id "is passed back unchanged") is now slightly wrong and is not edited, because editing the wiki publishes it; and CI tests only the newest `httpx` and one Python, although older ones are allowed (Session 283 ran its touched tests by hand on Python 3.11 to 3.14 and `httpx` 0.27.2: all pass). | **Nits** and operator calls: quote the values (that changes what is sent to the host) or leave them; the wiki sentence is an operator call. |
-| Running the pipeline on a made-up company found defects in the tool and in what it scaffolds | Session 286 ran the whole pipeline on an invented insurer with no API key (`examples/larkspur_mutual/`). It worked end to end, and showed: the GitHub path probably fails on an empty repository; what the stakeholder says about the data never reaches the data stage; there is no route from a finished interview into the pipeline script; and the project the tool writes failed its own tests, 8 of 8. The class named read-only that was not (a `DROP TABLE` through it stuck on SQLite) was fixed in Session 288, the scaffold's failing tests, install line and formatting in Session 290, the token that followed `MPC_HOST` while the adapter followed `--host` in Session 292 (a `--live` run now refuses the two disagreeing; an `MPC_HOST_URL` meant for the other host is the part left), and the scaffold's stale "Phase 4B" prose and the wrong path in its extensions notebook in Session 293; the rest are not fixed, among them the scaffold's undeclared Jupyter and a governance job that checks only that a file parses (its GitLab stage order was fixed in Session 293). | **Mixed.** The GitHub one needs a live run on a throwaway account; several are operator calls. |
+| Running the pipeline on a made-up company found defects in the tool and in what it scaffolds | Session 286 ran the whole pipeline on an invented insurer with no API key (`examples/larkspur_mutual/`). It worked end to end, and showed: the GitHub path probably fails on an empty repository; what the stakeholder says about the data never reaches the data stage; there is no route from a finished interview into the pipeline script; and the project the tool writes failed its own tests, 8 of 8. The class named read-only that was not (a `DROP TABLE` through it stuck on SQLite) was fixed in Session 288, the scaffold's failing tests, install line and formatting in Session 290, the token that followed `MPC_HOST` while the adapter followed `--host` in Session 292 (a `--live` run now refuses the two disagreeing; an `MPC_HOST_URL` meant for the other host is the part left), and the rest of the scaffold's own defects in Session 293 (stale "Phase 4B" prose and a wrong path, the governance job that only parsed JSON and ran after the tests, undeclared Jupyter, two unrelated ruff versions, a project name that is a Python module's name; what they left is the next row). Not fixed: the GitHub path on an empty repository, what the interview learns about the data, and the route from a finished interview into the pipeline script. | **Mixed.** The GitHub one needs a live run on a throwaway account; several are operator calls. |
+| What the scaffold still gets wrong after the Larkspur fixes | Session 293 fixed the six defects Session 286 listed in the project the tool writes, and its independent review found more. Governance documents cite files that a lower risk tier does not emit, or datasheets that do not exist when a report has no queries; one mapping file omits the EU AI Act document; a double quote in a metric or query name breaks the generated Python; a project named like a package it imports (`pytest`, `pandas`) still fails; the generated README does not say it needs `uv` or `pre-commit`; the GitHub workflow assumes the branch is `main`; and several wiki pages now describe the old CI job, the old ruff floor and a render command that fails. | **Mixed; mostly small.** The tier-4 references need a content decision per file; the wiki edits publish on commit, so they are the operator's call. |
 | The database wrapper is now read-only, and what that left | Session 288 made `ReadOnlyDB` refuse anything but one read query and open each connection read-only (SQLite, PostgreSQL, MySQL, MariaDB). Left: three wiki pages still say the opposite; PostgreSQL and MySQL are tested only against a stand-in driver and MariaDB was never run; the prompt for quality checks never says "one SELECT", so a check the model words differently is refused and lost; the eval's "SQL executes" figure now counts those refusals; and a few small things. | **Small each.** The wiki edit (it publishes), a real-server CI job and the prompt change are operator calls. |
 | Smaller follow-ups from the wrong-shape fix: a dead loop, an unchecked default branch, and a GitLab commit that is retried after it may have landed | **The main part closed in Sessions 284 and 285.** A repository host used to be able to crash the adapter by answering a successful call with valid JSON of the wrong shape (an empty object, an array, `null`, a number, a missing field): the website command ended in a traceback and the pipeline saved "unexpected error: KeyError". Now every value is checked where it is read and a clean error names the field; a wrong shape on the commit path is retried like any failed commit, and a failure to read the reply to the request that creates a project says that a project may exist. What stands: (4) a loop in GitHub's name-taken check that never changes its answer (an operator call to delete it); (5) a GitLab commit whose reply cannot be used is retried and the retry would be refused for creating files that now exist, hiding that the first commit landed (an inference, not measured); (6) the default branch is read, not checked, and goes back to the host (in GitHub's path unquoted); (7) a text of only spaces or control characters counts as non-empty; (8) the "a project may exist" note covers an unreadable success reply only, not a gateway timeout, a lost connection or a cut-off body; (9) the standalone website command exits 0 for a failed result, with a project that may exist. | **Small, each an operator call:** (4) delete it or not; (5) check the head commit after an unreadable commit reply, or send an action that tolerates an existing file; (6) refuse a non-text branch or fall back to `main`; (7) tighten or leave; (8) widen the note or read the reply as a stream; (9) exit non-zero and/or print the reason. |
 | A website crash now leaves a result, but not where it happened, and the write of that result is still unguarded | Session 275 made the pipeline save a FAILED result when the website stage raises or is interrupted, so `--resume` refuses instead of making a second project. What it left: the result and the screen show only the exception's class, with no file or line; `--resume` refuses without saying why, or that a project may exist (the reason is in the JSON file); the write of that result is neither atomic nor guarded, so a full disk or a second Ctrl-C at that instant leaves no file or a half-written one that crashes `--resume`; a hard kill (SIGKILL, power loss) leaves none; and running again with the same `--run-id` and no `--resume` makes a second project and overwrites the saved result. | **Small** for the `--resume` message and the atomic write. **Operator call** for where the exception was raised (the reason's wording was ruled in Session 275), the hard-kill marker and the repeated `--run-id`. |
@@ -701,41 +702,18 @@ its `README.md` carries the full list, each with how it was learned: *ran*, *rea
 ran or read it, a second could not refute it, and Session 286 has not re-run it).** The run itself worked end to end
 (`COMPLETE`, 55 files, 14 quality checks of which 11 pass). Point (1), `ReadOnlyDB` not
 being read-only, was fixed in Session 288 and removed, and what that fix left is its own item below; point (2) was fixed in
-Session 290 except what its text below still lists; point (3) was fixed in Session 292 except what its text below
+Sessions 290 and 293 and what it left is its own item below; point (3) was fixed in Session 292 except what its text below
 still lists. The other numbers stay because Session 286 cites them. In the order
 Session 286 would take them (an estimate, not a measurement):
 
-**(2) What is left of the scaffold's own defects (read; ran for the part Session 290 fixed).** Session 290 made the
-project the tool writes pass its own tests, `ruff check` and `ruff format --check` (the unrendered package name, the stub
-tests that put `pass` inside `pytest.raises`, the formatting, a `noqa` that ruff 0.17 reports, empty lists written in a form
-ruff rewrites) and made its README and both CI files run `uv sync --extra dev`; `tests/agents/website/test_scaffold_runs.py`
-runs a scaffold's own tests and ruff, so these cannot come back unseen. Session 293 fixed the text that said things were still
-to come that were already there ("Phase 4B", written by `render_readme`, `render_qmd_extensions` and `render_data_readme`) and
-the `src/fairness/` path in `analysis/99_extensions.qmd` (the package is `src/<package>/fairness/`, and exists only when the
-intake report declares protected attributes); `TestTheTextDescribesWhatWasGenerated` holds the prose against the file set.
-Session 293 fixed the `governance` CI job, which only parsed JSON (it passed on `{}`) and, on GitLab, ran in a stage after
-`test`: GitLab, GitHub and the pre-commit hook now run `governance/check_governance.py` (the registry's 13 keys, types and
-vocabularies; every file the risk tier requires, present and non-empty; a datasheet per primary query), in the `lint` stage on
-GitLab. The hook moved to `language: python` (a bare `python` is missing on a machine with only `python3`) and to the
-`ruff-check` id, which the pinned release defines. Run for real: `pre-commit run --all-files` on a generated project passes,
-fails on a deleted model card, and skips a commit that touches only `src/`.
-Session 293 declared Jupyter for the notebooks (five or six of them need it: 02 to 05, and `fairness_audit` when protected
-attributes are declared): a separate `notebooks` extra of `ipykernel`, `nbclient`, `nbformat` and `pyyaml`, and a README
-section saying Quarto is a separate install and `uv run --extra notebooks quarto render analysis/<file>.qmd` renders one
-file (the directory form fails without a `_quarto.yml`); run for real on a generated project, four notebooks, exit 0, and
-without the extra Quarto reports `Jupyter: (None)`. The floors in the extra resolve at their lowest on Python 3.11 but no
-notebook was rendered at those versions.
-Session 293 fixed the ruff version: the `pyproject.toml` floor `ruff>=0.5` and the pre-commit pin `v0.5.0` were two unrelated
-literals for one June-2024 release (a fresh `uv sync` resolved 0.17.3 while the hook ran 0.5.0), and one `RUFF_VERSION`
-(0.15.10, the ruff this repository's tests format with) now feeds both, held by `TestTheRuffVersionIsDeclaredOnce`;
-a pre-commit mirror that lacks the `v0.15.10` tag would fail `pre-commit install` (a per-host setting for the rev was
-declined: nothing says such a mirror is in use). It also fixed the slug that is `tests`, the name of a standard-library module or a keyword (it failed all the generated
-tests, or could not be imported): `derive_project_slug` appends `_model` to a slug on a frozen list of 253 names
-(`_reserved_names.py`, held against the running Python by `test_reserved_names.py`). **Left from it:** a slug that is the
-name of a package the scaffold's test runner or code imports (`pytest`, `pluggy`, `sklearn`, `sqlalchemy`) shadows it the
-same way and is not on the list (an open-ended class); and a project NAMED like one of its own dependencies (`pandas`,
-`pytest`) writes `name = "pandas"` in `pyproject.toml` and `uv lock` refuses it ("depends on itself at an incompatible
-version"), a different fix at `pyproject.toml`'s `name`, not the slug. Both ran in Session 293's scouting.
+**(2) The scaffold's own defects: fixed in Sessions 290 and 293 (read; ran for the fixes).** Session 290 made the project
+the tool writes pass its own tests, `ruff check` and `ruff format --check`. Session 293 fixed the rest of what this point
+listed, each held by a test that a mutant fails and run for real on a generated project: the text that said governance, datasheets
+and the fairness package were still to come ("Phase 4B") and the `src/fairness/` path; the `governance` CI job, which only
+parsed JSON and ran after `test` on GitLab (it now runs `governance/check_governance.py` in the `lint` stage, from both CI
+files and the pre-commit hook); Jupyter for the notebooks (a `notebooks` extra and a README section); the ruff floor and the
+pre-commit pin (one `RUFF_VERSION`); and a project name that is a Python module's name (`_model` is appended). The
+`CHANGELOG.md` entries tagged S293 give the reasoning; what these left, and what the review found, is the next item.
 
 **(3) `--host` and `MPC_HOST` could disagree about which token to send; fixed in Session 292 except one part (read, then
 run).** `scripts/run_pipeline.py` took the token from the settings (which follow `MPC_HOST`, default `gitlab`) and built
@@ -778,6 +756,55 @@ files; importing `model_project_constructor.ui.intake` opens `./intake_sessions.
 **(9) Nothing runs the example.** It is not in `tests/` or CI, so the figures in its README are observations that will
 go stale. `run_example.py` does stop if the database no longer matches the counts its datasheets quote. **Operator
 call:** a smoke test (about 2 seconds, needs the `ui` extra) or leave it as documentation.
+
+### What the scaffold still gets wrong after Larkspur point (2)
+
+**Left by Session 293**, whose scouting and independent review (four lenses and an end-to-end run, two skeptics per finding)
+found these. None stops a generated project passing its own checks. Each was reproduced (ran) unless marked. In the order
+Session 293 would take them (an estimate, not a measurement):
+
+**(1) Governance documents that cite files the project does not have.** At risk tier 4, `governance/model_card.md` cites
+`governance/three_pillar_validation.md`; with `affects_consumers` true at tier 4, `eu_ai_act_compliance.md` cites
+`three_pillar_validation.md`, `ongoing_monitoring.md` and `deployment_gates.md`; none is emitted below tier 3. With no primary
+queries, `model_card.md` and `eu_ai_act_compliance.md` cite datasheets that do not exist. Six governance files cite
+"architecture-plan §8.2/§8.3", which exists only in this repository. `analysis/03_eda.qmd` says `data_loading.load_primary`;
+the importable name is `<package>.data_loading`. **A content decision per file:** emit the file or stop citing it.
+
+**(2) `regulatory_mapping.md` leaves out `eu_ai_act_compliance.md` (older than Session 293; found by its review).**
+`build_governance_files` builds the set of files the mapping may cite before it adds the consumer-facing file, so at tier 1
+and 2 with `affects_consumers` true the mapping omits the EU AI Act file under `EU_AI_ACT_ART_9` and `GDPR_ART_22` although
+the file is emitted and the manifest lists it. **Small:** add the path to that set before the mapping is built.
+
+**(3) A `"`, a backslash or a newline in a metric or query name breaks the generated Python (older; found by the review).**
+`_str_list_literal` in `templates.py` writes each item as `"{item}"` unescaped, into `REQUESTED_METRICS` and
+`PRIMARY_QUERY_NAMES`; one `"` makes the project fail its own tests and `ruff check`. `evaluation_metrics` is `list[str]` and
+`PrimaryQuery.name` a bare `str`, so the schemas allow it. **Small:** write each item with `json.dumps`. Related: a query named
+`""` is written as `queries/primary/.sql` and `data/datasheet_.md` (the governance check now agrees with that).
+
+**(4) Names that shadow what the project imports.** A slug equal to a package the scaffold's test runner or code imports
+(`pytest`, `pluggy`, `sklearn`, `sqlalchemy`) shadows it the way the standard-library names did and is not on the reserved
+list (an open-ended class). A project NAMED like one of its own dependencies (`pandas`, `pytest`) writes `name = "pandas"` in
+`pyproject.toml` and `uv lock` refuses it ("depends on itself at an incompatible version"); that fix is at `pyproject.toml`'s
+`name`, not the slug. And two repository names can share one package name (`types` and `types-model` both give
+`types_model`), which matters only if something later treats the registry's `model_id` as unique (nothing reads it today).
+
+**(5) The generated project does not say what it needs (read; ran for the pre-commit part).** Its README names neither `uv`
+nor `pre-commit`, and `pre-commit` is not in the dev extra, so the shipped `.pre-commit-config.yaml` cannot be installed from
+the project (`uvx pre-commit` works, which is how Session 293 ran it). The GitHub workflow hard-codes `branches: [main]` while
+`create_project` returns the host's real default branch, so on a repository whose default is not `main` the workflow never runs
+on push. CI's lint job runs `ruff check` and not `ruff format --check`, so the formatter is enforced only by the hook. The
+project ships no lock file, so each CI run resolves its dependencies afresh. A pre-commit mirror that lacks the `v0.15.10` tag
+(or the `ruff-check` hook id) fails `pre-commit install`; the pin has no per-host setting, because nothing says a mirror is in use.
+
+**(6) Wiki pages Session 293's changes made stale (they publish on commit, so an operator call; not edited).**
+`Generated-Project-Structure.md` (`ruff>=0.5` at line 100, no `check_governance.py` in the tree, the per-tier file counts a file
+short, the governance job and hook described as "schema validation"), `Development-Workflow.md` (line 80 tells the reader to run
+`quarto render analysis/`, which fails without a `_quarto.yml`; lines 14, 91 and 99 call the governance check JSON
+well-formedness), `Software-Bill-of-Materials.md` (`ruff>=0.5` at line 130, no `notebooks` extra, no hook pin),
+`Governance-Framework.md` (the "always emitted" table at line 26 and the `~38 files` total), `Extending-the-Pipeline.md:168`,
+`Worked-Examples.md` (lines 174-182 and 195: the tier-3 example is 40 files) and `Monitoring-and-Operations.md:113`.
+`docs/tutorial.md` shows `Files (38)` for a run that now writes 40. `README.md`'s repo map and test counts do not list
+`_governance_check.py` or `_reserved_names.py` (the existing item about hand-typed test counts covers the numbers).
 
 ### `ReadOnlyDB` is now read-only; what it left: the wiki, real servers, the quality-check prompt, the eval metric
 
