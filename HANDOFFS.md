@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S294
+date: 2026-11-02
+status: pending
+active_task: BACKLOG.md "What the scaffold still gets wrong after Larkspur point (2)" parts (2) and (3) -- regulatory_mapping.md omitting eu_ai_act_compliance.md at tiers 1 and 2 when affects_consumers is true, and a quote, backslash or newline in a metric or query name breaking the generated Python. Session claimed; work beginning.
+```
+
+```handoff
 session: S293
 date: 2026-11-02
 status: complete
