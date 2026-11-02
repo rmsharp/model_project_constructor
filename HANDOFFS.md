@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S295
+date: 2026-11-02
+status: pending
+active_task: BACKLOG.md "What the scaffold still gets wrong after Larkspur point (2)" part (7)(b) -- an inline Quarto `{python}` expression in a report field or metric name written into analysis/*.qmd prose runs when the notebook renders. Session claimed; work beginning.
+```
+
+```handoff
 session: S294
 date: 2026-11-02
 status: complete

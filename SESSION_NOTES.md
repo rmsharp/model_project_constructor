@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 295 Did
+**Deliverable:** **Part (7)(b) of the `BACKLOG.md` item "What the scaffold still gets wrong after Larkspur point (2)": an inline Quarto `{python}` expression inside a report field or metric name that is written into the generated `analysis/*.qmd` prose runs when the notebook renders — neutralise it where report text is interpolated.** (IN PROGRESS) The operator chose the area (scaffold defects left) and then the item at pickers, the recommended option both times, after an opening message of "go". **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md`.
+**Started:** 2026-11-02 13:12
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 294 Did
 **Deliverable:** **Parts (2) and (3) of the `BACKLOG.md` item "What the scaffold still gets wrong after Larkspur point (2)" — COMPLETE: the regulatory mapping that omitted `eu_ai_act_compliance.md`, and a quote, backslash or newline in a metric or query name breaking the generated Python. Both were class defects, not the "two small fixes" the item called them, and neither fix is the one the backlog proposed.** The operator chose the area and the item at pickers (the recommended option both times, after an opening message of "go"); no ruling was needed. **Mine, not put to the operator:** the design of both fixes, what to file instead of fix, the review and its fixes. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md`.
 **Started:** 2026-11-02 10:33 · **Completed:** 2026-11-02 12:55 (ledger-entry time; the review alone ran 69 minutes).
