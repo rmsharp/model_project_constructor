@@ -95,13 +95,41 @@ def render_gitignore() -> str:
     )
 
 
-def render_readme(*, intake: dict[str, Any], project_name: str) -> str:
+def _uses_protected_attributes(intake: dict[str, Any]) -> bool:
+    """Whether the fairness scaffold (``src/<slug>/fairness/`` and friends) is emitted.
+
+    The same test ``governance_templates.build_analysis_files`` and ``build_test_files`` apply.
+    ``test_the_extensions_notebook_points_at_the_fairness_package_only_if_it_exists`` fails if
+    the two ever disagree.
+    """
+
+    return bool((intake.get("governance") or {}).get("uses_protected_attributes"))
+
+
+def render_readme(
+    *, intake: dict[str, Any], project_name: str, data: dict[str, Any] | None = None
+) -> str:
+    """Render ``README.md``.
+
+    ``data`` is the data report. The layout lists ``queries/`` and the datasheets only when the
+    report has primary queries, because only then do they exist.
+    """
+
     business_problem = str(intake.get("business_problem", "")).strip()
     proposed_solution = str(intake.get("proposed_solution", "")).strip()
     model_solution = intake.get("model_solution") or {}
     target_variable = model_solution.get("target_variable") or "unsupervised"
     model_type = model_solution.get("model_type") or "other"
     stakeholder_id = intake.get("stakeholder_id", "unknown")
+    has_queries = bool((data or {}).get("primary_queries"))
+    queries_line = (
+        "- `queries/` — SQL pulled directly from the Data Agent report.\n" if has_queries else ""
+    )
+    data_line = (
+        "- `data/` — data dictionary and a datasheet for each primary query.\n"
+        if has_queries
+        else "- `data/` — data dictionary.\n"
+    )
 
     return (
         f"# {project_name}\n"
@@ -129,12 +157,13 @@ def render_readme(*, intake: dict[str, Any], project_name: str) -> str:
         "- `src/` — unit-testable Python modules (data loading, features,\n"
         "  models, evaluation). All analysis code lives here.\n"
         "- `analysis/` — Quarto narratives that import from `src/`.\n"
-        "- `queries/` — SQL pulled directly from the Data Agent report.\n"
+        f"{queries_line}"
         "- `tests/` — scaffolded unit tests for the `src/` modules.\n"
         "- `reports/` — the intake and data reports in both JSON and Markdown.\n"
-        "- `data/` — data dictionary and (in Phase 4B) datasheets.\n"
-        "- `governance/` — (Phase 4B) governance artifacts proportional to\n"
-        "  the model's risk tier and cycle time.\n"
+        f"{data_line}"
+        "- `governance/` — governance artifacts proportional to the model's risk\n"
+        "  tier and cycle time (the model registry, model card and change log at\n"
+        "  every tier).\n"
         "\n"
         "## Getting Started\n"
         "\n"
@@ -630,14 +659,29 @@ def render_qmd_implementation_plan(
     )
 
 
-def render_qmd_extensions() -> str:
+def render_qmd_extensions(*, intake: dict[str, Any], project_slug: str) -> str:
+    """Render ``analysis/99_extensions.qmd``.
+
+    The fairness bullet names the fairness scaffold only when the project has one: it is emitted
+    when the intake report declares protected attributes, at every risk tier, and not otherwise.
+    """
+
+    if _uses_protected_attributes(intake):
+        fairness = (
+            "- Fairness / subgroup analyses (start from `analysis/fairness_audit.qmd`\n"
+            f"  and the package in `src/{project_slug}/fairness/`)\n"
+        )
+    else:
+        fairness = (
+            "- Fairness / subgroup analyses (no fairness scaffold was generated: the\n"
+            "  intake report does not say the model uses protected attributes)\n"
+        )
     return (
         _qmd_header("99 — Extensions & Next Experiments")
         + "Candidate extensions for future iterations:\n\n"
         + "- Additional feature sources surfaced by EDA\n"
         + "- Alternative model families beyond the initial choice\n"
-        + "- Fairness / subgroup analyses (see ``src/fairness/`` once\n"
-        + "  governance scaffolding lands in Phase 4B)\n"
+        + fairness
     )
 
 
@@ -725,9 +769,11 @@ def render_data_readme(*, data: dict[str, Any]) -> str:
     lines = [
         "# Data Dictionary\n",
         "\n",
-        "This directory holds the data contract for the project. Phase 4B\n",
-        "will add a per-query datasheet (``datasheet_<query>.md``) under\n",
-        "the governance scaffolding rules.\n",
+        "This directory holds the data contract for the project.\n",
+    ]
+    if queries:
+        lines.append("Each primary query has a datasheet here, `datasheet_<query>.md`.\n")
+    lines += [
         "\n",
         "## Primary Queries\n",
         "\n",
@@ -742,7 +788,8 @@ def render_data_readme(*, data: dict[str, Any]) -> str:
         purpose = q.get("purpose", "")
         lines.append(f"### `{name}`\n\n")
         lines.append(f"- **Expected row order:** {row_order}\n")
-        lines.append(f"- **Purpose:** {purpose}\n\n")
+        lines.append(f"- **Purpose:** {purpose}\n")
+        lines.append(f"- **Datasheet:** `datasheet_{name}.md`\n\n")
     return "".join(lines)
 
 
@@ -835,7 +882,7 @@ def build_base_files(
 
     files: dict[str, str] = {
         ".gitignore": render_gitignore(),
-        "README.md": render_readme(intake=intake, project_name=project_name),
+        "README.md": render_readme(intake=intake, project_name=project_name, data=data),
         "LICENSE": render_license(intake=intake, project_name=project_name),
         "pyproject.toml": render_pyproject(
             project_name=project_name, project_slug=project_slug
@@ -863,7 +910,9 @@ def build_base_files(
         "analysis/06_implementation_plan.qmd": render_qmd_implementation_plan(
             intake=intake, data=data
         ),
-        "analysis/99_extensions.qmd": render_qmd_extensions(),
+        "analysis/99_extensions.qmd": render_qmd_extensions(
+            intake=intake, project_slug=project_slug
+        ),
         "tests/__init__.py": render_tests_init(),
         "tests/test_data_loading.py": render_test_stub("data_loading", project_slug),
         "tests/test_features.py": render_test_stub("features", project_slug),

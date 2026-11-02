@@ -10,6 +10,7 @@ from model_project_constructor.agents.website.templates import (
     derive_project_name,
     derive_project_slug,
     render_data_loading,
+    render_data_readme,
     render_evaluation,
     render_features,
     render_gitignore,
@@ -18,6 +19,7 @@ from model_project_constructor.agents.website.templates import (
     render_pyproject,
     render_qmd_business_understanding,
     render_qmd_data,
+    render_qmd_extensions,
     render_qmd_feature_engineering,
     render_qmd_implementation_plan,
     render_qmd_initial_models,
@@ -77,6 +79,59 @@ class TestIndividualRenderers:
         assert "stakeholder_claims_001" in readme
         assert "## License" in readme
         assert "LICENSE" in readme
+
+    def test_readme_lists_queries_and_datasheets_only_when_the_report_has_queries(
+        self, intake_report: IntakeReport
+    ) -> None:
+        intake = intake_report.model_dump(mode="json")
+        queries = {"primary_queries": [{"name": "q1"}]}
+        with_queries = render_readme(intake=intake, project_name="p", data=queries)
+        assert "- `queries/` —" in with_queries
+        assert "datasheet" in with_queries
+        for data in (None, {}, {"primary_queries": []}):
+            readme = render_readme(intake=intake, project_name="p", data=data)
+            assert "`queries/`" not in readme
+            assert "datasheet" not in readme
+            assert "- `data/` — data dictionary.\n" in readme
+
+    def test_readme_does_not_defer_governance_to_a_later_phase(
+        self, intake_report: IntakeReport
+    ) -> None:
+        readme = render_readme(intake=intake_report.model_dump(mode="json"), project_name="p")
+        assert "Phase" not in readme
+        assert "- `governance/` — governance artifacts proportional" in readme
+
+    def test_extensions_notebook_names_the_fairness_package_with_the_slug(self) -> None:
+        intake = {"governance": {"uses_protected_attributes": True}}
+        text = render_qmd_extensions(intake=intake, project_slug="renewal_pricing")
+        assert "`src/renewal_pricing/fairness/`" in text
+        assert "`analysis/fairness_audit.qmd`" in text
+        assert "src/fairness/" not in text
+        assert "Phase" not in text
+
+    def test_extensions_notebook_names_no_fairness_path_without_protected_attributes(
+        self,
+    ) -> None:
+        unflagged: list[dict[str, Any]] = [
+            {},
+            {"governance": {}},
+            {"governance": {"uses_protected_attributes": False}},
+        ]
+        for intake in unflagged:
+            text = render_qmd_extensions(intake=intake, project_slug="renewal_pricing")
+            assert "fairness/" not in text
+            assert "fairness_audit" not in text
+            assert "no fairness scaffold was generated" in text
+            assert "Phase" not in text
+
+    def test_data_readme_promises_a_datasheet_per_query_and_none_without_queries(self) -> None:
+        data = {"primary_queries": [{"name": "alpha"}, {"purpose": "no name given"}]}
+        text = render_data_readme(data=data)
+        assert "`datasheet_alpha.md`" in text
+        assert "`datasheet_unnamed.md`" in text
+        assert "Phase" not in text
+        for empty in ({}, {"primary_queries": []}):
+            assert "datasheet" not in render_data_readme(data=empty)
 
     def test_license_is_proprietary_placeholder_not_a_known_license(
         self, intake_report: IntakeReport

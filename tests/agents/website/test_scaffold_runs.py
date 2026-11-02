@@ -307,6 +307,62 @@ class TestNoPlaceholderSurvives:
             assert text.count(f"import {scaffold.slug}.{module} as module") == 2, module
 
 
+class TestTheTextDescribesWhatWasGenerated:
+    """What a generated file says is there has to be there, and what is there has to be said.
+
+    Session 286 read the scaffold's prose against its files and found it describing a project
+    that had not been written yet: the README called ``governance/`` and the datasheets "Phase
+    4B" work although Phase 4B had run, and ``analysis/99_extensions.qmd`` pointed at a
+    ``src/fairness/`` that no project has (the package is ``src/<slug>/fairness/``, and exists
+    only when the intake report declares protected attributes). Nothing compared the prose with
+    the file set, so no test noticed.
+    """
+
+    def test_no_file_speaks_of_a_phase_that_has_already_run(self, scaffold: Scaffold) -> None:
+        offenders = {
+            path: match.group(0)
+            for path, text in scaffold.files.items()
+            if (match := re.search(r"Phase 4[AB]\b", text))
+        }
+        assert offenders == {}
+
+    def test_the_readme_layout_lists_exactly_the_directories_that_exist(
+        self, scaffold: Scaffold
+    ) -> None:
+        listed = re.findall(r"^- `([a-z_]+/)`", scaffold.files["README.md"], flags=re.MULTILINE)
+        assert {"src/", "analysis/", "tests/", "reports/", "data/", "governance/"} <= set(listed)
+        for directory in listed:
+            assert any(path.startswith(directory) for path in scaffold.files), directory
+        # ``queries/`` holds the report's SQL, so a report with no primary queries has none.
+        has_queries = any(path.startswith("queries/") for path in scaffold.files)
+        assert ("queries/" in listed) == has_queries
+
+    def test_datasheets_are_mentioned_exactly_where_they_exist(self, scaffold: Scaffold) -> None:
+        sheets = sorted(path for path in scaffold.files if path.startswith("data/datasheet_"))
+        for path in ("README.md", "data/README.md"):
+            assert ("datasheet" in scaffold.files[path]) == bool(sheets), path
+        for sheet in sheets:
+            assert Path(sheet).name in scaffold.files["data/README.md"], sheet
+
+    def test_the_extensions_notebook_points_at_the_fairness_package_only_if_it_exists(
+        self, scaffold: Scaffold
+    ) -> None:
+        text = scaffold.files["analysis/99_extensions.qmd"]
+        package = f"src/{scaffold.slug}/fairness/"
+        exists = any(path.startswith(package) for path in scaffold.files)
+        assert exists == scaffold.variant.protected_attributes
+        assert "src/fairness/" not in text
+        assert (package in text) == exists
+        assert ("analysis/fairness_audit.qmd" in text) == (
+            "analysis/fairness_audit.qmd" in scaffold.files
+        )
+
+    def test_every_path_the_extensions_notebook_names_exists(self, scaffold: Scaffold) -> None:
+        text = scaffold.files["analysis/99_extensions.qmd"]
+        for reference in re.findall(r"`((?:src|analysis)/[^`]+)`", text):
+            assert any(path.startswith(reference) for path in scaffold.files), reference
+
+
 @pytest.fixture(scope="module")
 def tier1() -> dict[str, str]:
     return _generate(TIER1_GITHUB)[1]
