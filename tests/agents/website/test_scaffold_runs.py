@@ -405,7 +405,8 @@ class TestHostileNamesAreFormattedAndLintedAsWritten:
         return count
 
     def test_ruff_format_leaves_every_file_as_written(self, tmp_path: Path) -> None:
-        assert self._write_every_hostile_name(tmp_path) == 2 * len(HOSTILE_NAMES)
+        self._write_every_hostile_name(tmp_path)
+        assert len(list(tmp_path.glob("*.py"))) == 2 * len(HOSTILE_NAMES)
         done = _ruff(tmp_path, "format", "--check")
         assert done.returncode == 0, _report(done)
 

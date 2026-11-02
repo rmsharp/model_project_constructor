@@ -648,6 +648,8 @@ class TestNamesAreWrittenAsPythonStrings:
             ("'", r'''"'"'''),
             # Every other character is spelled the way ``repr`` spells it.
             ("a\nb", r'"a\nb"'),
+            ("a\tb", r'"a\tb"'),
+            ("a\rb", r'"a\rb"'),
             ("a\\b", r'"a\\b"'),
             ("a\x00b", r'"a\x00b"'),
             ("a\u2028b", r'"a\u2028b"'),
@@ -672,3 +674,66 @@ class TestNamesAreWrittenAsPythonStrings:
         assert len(every) == 781
         out = render_evaluation(intake={"model_solution": {"evaluation_metrics": every}})
         assert _assigned(out, "REQUESTED_METRICS") == every
+        loading = render_data_loading(project_slug="foo_bar", primary_query_names=every)
+        assert _assigned(loading, "PRIMARY_QUERY_NAMES") == every
+
+    @pytest.mark.parametrize("plane", range(17), ids=lambda plane: f"plane_{plane}")
+    def test_every_code_point_round_trips_and_nothing_unprintable_is_written(
+        self, plane: int
+    ) -> None:
+        """All 1,114,112 code points, a plane at a time, one per item.
+
+        The hand-picked list names the classes that came to mind; this one has no classes. A
+        writer that leaves one more kind of character raw (a bidirectional override, a zero-width
+        joiner, a private-use or unassigned code point, a tag character, a vertical tab) passes
+        every row above and fails here. Printable is the running interpreter's own judgement, the
+        same one ``repr`` makes, so the check holds on every Python version; what differs between
+        versions is only which of the newer code points count as assigned.
+        """
+
+        every = [chr(code) for code in range(plane * 0x10000, (plane + 1) * 0x10000)]
+        out = _str_list_literal(every)
+        assert ast.literal_eval(out) == every
+        assert all(char.isprintable() or char == "\n" for char in out)
+        out.encode("utf-8")  # a lone surrogate would raise here
+
+    @pytest.mark.parametrize(
+        "names",
+        [
+            ["AUC", "AUC"],
+            ["a", "b", "a"],
+            [" a ", "\n", " ", "\t", "x "],
+        ],
+        ids=["duplicates", "separated_duplicates", "surrounding_whitespace"],
+    )
+    def test_names_are_kept_as_given_on_every_path(
+        self, intake_report: IntakeReport, data_report: DataReport, names: list[str]
+    ) -> None:
+        """No path through the scaffold drops a duplicate or trims a name."""
+
+        metrics = render_evaluation(intake={"model_solution": {"evaluation_metrics": names}})
+        assert _assigned(metrics, "REQUESTED_METRICS") == names
+        loading = render_data_loading(project_slug="foo_bar", primary_query_names=names)
+        assert _assigned(loading, "PRIMARY_QUERY_NAMES") == names
+
+        intake = intake_report.model_dump(mode="json")
+        intake["model_solution"]["evaluation_metrics"] = names
+        data = data_report.model_dump(mode="json")
+        data["primary_queries"] = [{**data["primary_queries"][0], "name": n} for n in names]
+        files = build_base_files(
+            intake=intake,
+            data=data,
+            project_name="subrogation-model",
+            project_slug="subrogation_model",
+        )
+        evaluation = files["src/subrogation_model/evaluation.py"]
+        data_loading = files["src/subrogation_model/data_loading.py"]
+        assert _assigned(evaluation, "REQUESTED_METRICS") == names
+        assert _assigned(data_loading, "PRIMARY_QUERY_NAMES") == names
+
+    def test_the_corpus_is_not_empty_and_has_no_repeats(self) -> None:
+        """An emptied corpus would skip every parametrised test above and still pass."""
+
+        assert len(HOSTILE_VALUES) >= 40
+        assert len(set(HOSTILE_IDS)) == len(HOSTILE_IDS)
+        assert len(set(HOSTILE_VALUES)) == len(HOSTILE_VALUES)

@@ -12,6 +12,11 @@ mattered, plus the choices a writer makes (which quote, when). The lone surrogat
 purpose: it cannot travel through the agent (a checkpoint or a hash refuses it first), but the
 renderer is a plain function and a lone surrogate must come out as an ASCII escape, not as a
 character no file can hold.
+
+Every invisible character is written here as an escape, never raw: a raw U+2028 or U+FEFF looks
+like a space or nothing in a diff, and an editor that rewrites line terminators or strips a byte
+order mark would change the value without a word. The decomposed accent, the Angstrom sign and
+the ligature are the names a normalising writer would change (NFC and NFKC each alter one).
 """
 
 from __future__ import annotations
@@ -38,12 +43,29 @@ HOSTILE_NAMES: list[tuple[str, str]] = [
     ("delete", "a\x7fb"),
     ("terminal_escape", "a\x1b[31mb"),
     ("next_line", "a\x85b"),
-    ("line_separator", "a b"),
-    ("paragraph_separator", "a b"),
-    ("byte_order_mark", "﻿a"),
+    ("line_separator", "a\u2028b"),
+    ("paragraph_separator", "a\u2029b"),
+    ("byte_order_mark", "\ufeffa"),
+    ("vertical_tab", "a\x0bb"),
+    ("form_feed", "a\x0cb"),
+    ("group_separator", "a\x1db"),
+    ("no_break_space", "a\xa0b"),
+    ("ideographic_space", "a\u3000b"),
+    ("zero_width_space", "a\u200bb"),
+    ("zero_width_joiner", "a\u200db"),
+    ("right_to_left_override", "a\u202eb"),
+    ("private_use", "a\ue000b"),
+    ("noncharacter", "a\uffffb"),
+    ("unassigned", "a\u0378b"),
+    ("tag_character", "a\U000e0001b"),
     ("non_bmp", "AUC \U0001f600"),
     ("lone_surrogate", "a\ud800b"),
     ("accented", "Précision@k"),
+    ("decomposed_accent", "e\u0301"),
+    ("angstrom_sign", "\u212b"),
+    ("fi_ligature", "\ufb01"),
+    ("surrounding_spaces", " a "),
+    ("only_whitespace", " \t "),
     ("braces", "{x} {{y}}"),
     ("empty", ""),
     ("long", "m" * 200),
