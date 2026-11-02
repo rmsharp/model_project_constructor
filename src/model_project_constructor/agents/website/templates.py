@@ -24,6 +24,7 @@ import json
 import re
 from typing import Any
 
+from model_project_constructor.agents.website._quarto_markup import neutralise_report
 from model_project_constructor.agents.website._reserved_names import RESERVED_SLUGS, SUFFIX
 
 # The one ruff version a generated project names: ``pyproject.toml`` asks for ``ruff>=`` this
@@ -510,6 +511,7 @@ def _render_business_case_block(*, intake: dict[str, Any]) -> str:
 
 
 def render_qmd_business_understanding(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     estimated_value = intake.get("estimated_value") or {}
     narrative = str(estimated_value.get("narrative", "")).strip()
     return (
@@ -528,6 +530,7 @@ def render_qmd_business_understanding(*, intake: dict[str, Any]) -> str:
 
 
 def render_qmd_data(*, data: dict[str, Any], project_slug: str) -> str:
+    data = neutralise_report(data)
     summary = str(data.get("summary", "")).strip()
     primary_queries = data.get("primary_queries") or []
     lines = [
@@ -577,6 +580,7 @@ def render_qmd_feature_engineering(*, project_slug: str) -> str:
 
 
 def render_qmd_initial_models(*, intake: dict[str, Any], project_slug: str) -> str:
+    intake = neutralise_report(intake)
     ms = intake.get("model_solution") or {}
     metrics = ", ".join(ms.get("evaluation_metrics") or []) or "(none declared)"
     return (
@@ -705,6 +709,8 @@ def _render_production_measurement_plan(
 def render_qmd_implementation_plan(
     *, intake: dict[str, Any], data: dict[str, Any]
 ) -> str:
+    intake = neutralise_report(intake)
+    data = neutralise_report(data)
     estimated_value = intake.get("estimated_value") or {}
     impact = _format_usd_band(
         estimated_value.get("annual_impact_usd_low"),
