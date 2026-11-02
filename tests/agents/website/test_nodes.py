@@ -86,6 +86,24 @@ class TestCreateProject:
         assert delta["default_branch"] == "main"
         assert delta["status"] == "PARTIAL"
 
+    def test_a_project_named_like_a_python_module_gets_another_package_name(
+        self, fake_client: FakeRepoClient, intake_report: Any, data_report: Any, repo_target: Any
+    ) -> None:
+        # The repository keeps the name the stakeholder chose; the Python package does not,
+        # because ``import types`` would reach the standard library and not the project.
+        target = repo_target.model_dump(mode="json")
+        target["project_name_hint"] = "Types"
+        state = initial_state(
+            intake_report=intake_report.model_dump(mode="json"),
+            data_report=data_report.model_dump(mode="json"),
+            repo_target=target,
+        )
+
+        delta = make_nodes(fake_client)["create_project"](state)
+
+        assert delta["project_name"] == "types"
+        assert delta["project_slug"] == "types_model"
+
     def test_suffix_on_single_conflict(
         self,
         intake_report: Any,

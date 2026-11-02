@@ -24,6 +24,8 @@ import json
 import re
 from typing import Any
 
+from model_project_constructor.agents.website._reserved_names import RESERVED_SLUGS, SUFFIX
+
 _SLUG_INVALID = re.compile(r"[^a-z0-9_]+")
 _NAME_INVALID = re.compile(r"[^a-z0-9\-]+")
 
@@ -44,9 +46,12 @@ def derive_project_name(hint: str) -> str:
 def derive_project_slug(project_name: str) -> str:
     """Turn a project name into a python-package-safe slug.
 
-    Lowercase, underscore-separated, must start with a letter. Collisions
-    with Python keywords are not handled — Phase 4A project names are
-    derived from business domain strings, not from keywords.
+    Lowercase, underscore-separated, must start with a letter. A slug that
+    is the name of a standard-library module, ``test``, ``tests`` or a Python
+    keyword gets ``_model`` appended (``types`` -> ``types_model``), because
+    the generated tests and notebooks import the package by this name and the
+    wrong module would answer (see ``_reserved_names``). Every other slug is
+    unchanged, so a repository created before that rule keeps its name.
     """
 
     base = project_name.replace("-", "_").lower()
@@ -54,6 +59,8 @@ def derive_project_slug(project_name: str) -> str:
     collapsed = re.sub(r"_+", "_", cleaned).strip("_")
     if not collapsed or not collapsed[0].isalpha():
         collapsed = f"m_{collapsed}" if collapsed else "model_project"
+    if collapsed in RESERVED_SLUGS:
+        collapsed = f"{collapsed}{SUFFIX}"
     return collapsed
 
 
