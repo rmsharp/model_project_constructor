@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import pytest
+import yaml
 
 from model_project_constructor.agents.website.agent import WebsiteAgent
 from model_project_constructor.agents.website.fake_client import FakeRepoClient
@@ -683,6 +684,62 @@ class TestCIHostConfigDefaults:
 
         out = render_pre_commit_config()
         assert "- repo: https://github.com/astral-sh/ruff-pre-commit\n" in out
+
+
+class TestTheGovernanceCheckIsNotQueuedBehindTheTests:
+    """A GitLab stage starts only when every earlier stage passed.
+
+    The governance job used to sit in a third stage after ``test``, so a failing unit test hid
+    a failing governance check until the tests were green. The GitHub workflow has three jobs
+    with no ``needs``, which run side by side, so nothing is hidden there.
+    """
+
+    CONFIGS = [
+        pytest.param(None, id="default"),
+        pytest.param(
+            {"base_image": "registry.example/py:3.11", "index_url": "https://idx.example/simple"},
+            id="enterprise-overrides",
+        ),
+    ]
+
+    @staticmethod
+    def _gitlab(overrides: dict[str, str] | None) -> tuple[list[str], dict[str, Any]]:
+        from model_project_constructor.agents.website.governance_templates import (
+            CIHostConfig,
+            render_gitlab_ci,
+        )
+
+        config = CIHostConfig(**overrides) if overrides else None
+        document = yaml.safe_load(render_gitlab_ci(ci_host_config=config))
+        jobs = {k: v for k, v in document.items() if isinstance(v, dict) and "script" in v}
+        return document["stages"], jobs
+
+    @pytest.mark.parametrize("overrides", CONFIGS)
+    def test_every_gitlab_job_names_a_declared_stage(
+        self, overrides: dict[str, str] | None
+    ) -> None:
+        # A job in an undeclared stage makes GitLab refuse the whole pipeline.
+        stages, jobs = self._gitlab(overrides)
+        assert set(jobs) == {"lint", "unit-tests", "model-registry-schema"}
+        for name, job in jobs.items():
+            assert job["stage"] in stages, name
+
+    @pytest.mark.parametrize("overrides", CONFIGS)
+    def test_the_gitlab_governance_job_runs_in_an_earlier_stage_than_the_tests(
+        self, overrides: dict[str, str] | None
+    ) -> None:
+        stages, jobs = self._gitlab(overrides)
+        governance = stages.index(jobs["model-registry-schema"]["stage"])
+        assert governance < stages.index(jobs["unit-tests"]["stage"])
+
+    def test_the_github_jobs_do_not_wait_for_each_other(self) -> None:
+        from model_project_constructor.agents.website.governance_templates import (
+            render_github_actions_ci,
+        )
+
+        jobs = yaml.safe_load(render_github_actions_ci())["jobs"]
+        assert set(jobs) == {"lint", "test", "governance"}
+        assert [name for name, job in jobs.items() if "needs" in job] == []
 
 
 class TestCIHostConfigOverrides:

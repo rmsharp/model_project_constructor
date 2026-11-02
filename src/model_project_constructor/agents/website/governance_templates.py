@@ -634,10 +634,12 @@ def render_gitlab_ci(*, ci_host_config: CIHostConfig | None = None) -> str:
         pip_install = f"pip install --index-url {cfg.index_url} uv"
     return (
         f"{variables_block}"
+        # The governance check shares the cheap first stage with lint. A stage starts only
+        # when every earlier one passed, so a third stage after ``test`` hid a failing
+        # governance file behind a failing unit test.
         "stages:\n"
         "  - lint\n"
         "  - test\n"
-        "  - governance\n"
         "\n"
         "default:\n"
         f"  image: {cfg.base_image}\n"
@@ -656,7 +658,7 @@ def render_gitlab_ci(*, ci_host_config: CIHostConfig | None = None) -> str:
         "    - uv run pytest -q\n"
         "\n"
         "model-registry-schema:\n"
-        "  stage: governance\n"
+        "  stage: lint\n"
         "  script:\n"
         '    - uv run python -c "import json; json.load(open('
         "'governance/model_registry.json'))\"\n"
