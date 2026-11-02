@@ -713,8 +713,12 @@ runs a scaffold's own tests and ruff, so these cannot come back unseen. Session 
 to come that were already there ("Phase 4B", written by `render_readme`, `render_qmd_extensions` and `render_data_readme`) and
 the `src/fairness/` path in `analysis/99_extensions.qmd` (the package is `src/<package>/fairness/`, and exists only when the
 intake report declares protected attributes); `TestTheTextDescribesWhatWasGenerated` holds the prose against the file set.
-Still open: its `governance` CI job parses JSON only (Session 293 moved it out
-of the stage after `test` on GitLab, where a failing test used to hide it).
+Session 293 fixed the `governance` CI job, which only parsed JSON (it passed on `{}`) and, on GitLab, ran in a stage after
+`test`: GitLab, GitHub and the pre-commit hook now run `governance/check_governance.py` (the registry's 13 keys, types and
+vocabularies; every file the risk tier requires, present and non-empty; a datasheet per primary query), in the `lint` stage on
+GitLab. The hook moved to `language: python` (a bare `python` is missing on a machine with only `python3`) and to the
+`ruff-check` id, which the pinned release defines. Run for real: `pre-commit run --all-files` on a generated project passes,
+fails on a deleted model card, and skips a commit that touches only `src/`.
 Session 293 declared Jupyter for the notebooks (five or six of them need it: 02 to 05, and `fairness_audit` when protected
 attributes are declared): a separate `notebooks` extra of `ipykernel`, `nbclient`, `nbformat` and `pyyaml`, and a README
 section saying Quarto is a separate install and `uv run --extra notebooks quarto render analysis/<file>.qmd` renders one

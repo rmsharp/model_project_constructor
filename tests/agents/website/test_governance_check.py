@@ -10,11 +10,15 @@ tables against the generator that writes the files it expects.
 from __future__ import annotations
 
 import json
+import re
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any, get_args
 
 import pytest
+import yaml
 
 from model_project_constructor.agents.website import _governance_check as gc
 from model_project_constructor.agents.website.agent import WebsiteAgent
@@ -22,6 +26,9 @@ from model_project_constructor.agents.website.fake_client import FakeRepoClient
 from model_project_constructor.agents.website.governance_templates import (
     build_governance_files,
     build_model_registry_entry,
+    render_github_actions_ci,
+    render_gitlab_ci,
+    render_pre_commit_config,
 )
 from model_project_constructor.schemas.v1.common import CycleTime, ModelType, RiskTier
 from model_project_constructor.schemas.v1.data import DataReport
@@ -29,6 +36,7 @@ from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import RepoTarget
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+SCRIPT = "governance/check_governance.py"
 
 
 def _load(name: str) -> dict[str, Any]:
@@ -263,8 +271,96 @@ class TestTheTablesFollowTheGenerator:
             project_name="p",
             project_slug="p",
         )
-        emitted = {path for path in files if path.startswith("governance/")}
+        # The script is emitted into ``governance/`` and does not require itself.
+        emitted = {path for path in files if path.startswith("governance/")} - {SCRIPT}
+        assert SCRIPT in files
         entry = json.loads(files[gc.REGISTRY_PATH])
         # ``tmp_path`` holds no ``queries/``, so only the governance files are asked for.
         required = {path for path, _ in gc.required_files(entry, tmp_path)}
         assert required == emitted
+
+
+def _run_script(root: Path, *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the scaffold's own copy the way a CI job does: ``python <path>``, isolated."""
+    target = SCRIPT if cwd is None else str(root / SCRIPT)
+    return subprocess.run(
+        [sys.executable, "-I", target],
+        cwd=cwd or root,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+
+class TestTheScaffoldWritesAndRunsIt:
+    def test_the_scaffold_writes_the_module_source_unchanged(self, pristine: Path) -> None:
+        assert (pristine / SCRIPT).read_text() == Path(gc.__file__).read_text()
+
+    def test_run_as_the_job_runs_it_a_fresh_scaffold_passes(self, pristine: Path) -> None:
+        done = _run_script(pristine)
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert done.stdout.strip().endswith("governance check: 0 problem(s)")
+
+    def test_run_as_the_job_runs_it_a_damaged_scaffold_fails(self, project: Path) -> None:
+        (project / "governance" / "model_card.md").unlink()
+        done = _run_script(project)
+        assert done.returncode == 1, done.stdout + done.stderr
+        assert "governance/model_card.md: missing" in done.stdout
+        assert done.stdout.strip().endswith("governance check: 1 problem(s)")
+
+    def test_a_registry_that_is_an_empty_object_fails_the_job(self, project: Path) -> None:
+        # What the old one-line check passed.
+        (project / gc.REGISTRY_PATH).write_text("{}", encoding="utf-8")
+        assert _run_script(project).returncode == 1
+
+    def test_it_reads_the_project_it_sits_in_not_the_working_directory(
+        self, project: Path, tmp_path: Path
+    ) -> None:
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        done = _run_script(project, cwd=elsewhere)
+        assert done.returncode == 0, done.stdout + done.stderr
+
+
+class TestEveryCallerRunsIt:
+    COMMAND = "uv run python governance/check_governance.py"
+
+    def test_the_gitlab_job_runs_it(self) -> None:
+        job = yaml.safe_load(render_gitlab_ci())["model-registry-schema"]
+        assert job["script"] == [self.COMMAND]
+
+    def test_the_github_job_runs_it(self) -> None:
+        steps = yaml.safe_load(render_github_actions_ci())["jobs"]["governance"]["steps"]
+        assert self.COMMAND in [step.get("run") for step in steps]
+
+    def test_the_pre_commit_hook_runs_it_in_an_environment_that_has_python(self) -> None:
+        config = yaml.safe_load(render_pre_commit_config())
+        (hook,) = [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
+        # ``language: system`` ran a bare ``python``, which does not exist on a machine that
+        # has only ``python3``; ``language: python`` gives the hook its own environment.
+        assert hook["language"] == "python"
+        assert hook["entry"] == "python governance/check_governance.py"
+        # The script reads the whole record, not the files staged.
+        assert hook["pass_filenames"] is False
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "governance/model_registry.json",
+            "governance/three_pillar_validation.md",
+            "governance/audit_log/README.md",
+            "data/datasheet_subrogation_training_set.md",
+            "queries/primary/subrogation_training_set.sql",
+        ],
+    )
+    def test_the_hook_runs_when_anything_it_reads_changes(self, path: str) -> None:
+        config = yaml.safe_load(render_pre_commit_config())
+        (hook,) = [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
+        assert re.search(hook["files"], path)
+
+    @pytest.mark.parametrize("path", ["src/model/models.py", "README.md", "analysis/03_eda.qmd"])
+    def test_the_hook_does_not_run_for_unrelated_files(self, path: str) -> None:
+        config = yaml.safe_load(render_pre_commit_config())
+        (hook,) = [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
+        assert not re.search(hook["files"], path)

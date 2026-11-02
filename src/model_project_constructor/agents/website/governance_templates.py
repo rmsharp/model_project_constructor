@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from importlib.resources import files
 from typing import Any, Literal
 
 from model_project_constructor._vocab_guard import assert_vocab_parity
@@ -626,6 +627,21 @@ def render_datasheet(*, query: dict[str, Any]) -> str:
     )
 
 
+CHECK_GOVERNANCE_PATH = "governance/check_governance.py"
+
+
+def render_check_governance() -> str:
+    """The script the CI jobs and the pre-commit hook run: ``_governance_check.py``, verbatim.
+
+    It is a real module in this package so that this repository's ``ruff`` and ``mypy`` check
+    it and its tests import it; the generated project gets the same text, which uses only the
+    standard library.
+    """
+
+    source = files("model_project_constructor.agents.website").joinpath("_governance_check.py")
+    return source.read_text(encoding="utf-8")
+
+
 def render_gitlab_ci(*, ci_host_config: CIHostConfig | None = None) -> str:
     cfg = ci_host_config or CIHostConfig()
     variables_block = ""
@@ -661,8 +677,7 @@ def render_gitlab_ci(*, ci_host_config: CIHostConfig | None = None) -> str:
         "model-registry-schema:\n"
         "  stage: lint\n"
         "  script:\n"
-        '    - uv run python -c "import json; json.load(open('
-        "'governance/model_registry.json'))\"\n"
+        f"    - uv run python {CHECK_GOVERNANCE_PATH}\n"
     )
 
 
@@ -710,8 +725,7 @@ def render_github_actions_ci(*, ci_host_config: CIHostConfig | None = None) -> s
         "    runs-on: ubuntu-latest\n"
         "    steps:\n"
         f"{steps}"
-        '      - run: uv run python -c "import json; json.load(open('
-        "'governance/model_registry.json'))\"\n"
+        f"      - run: uv run python {CHECK_GOVERNANCE_PATH}\n"
     )
 
 
@@ -722,16 +736,20 @@ def render_pre_commit_config(*, ci_host_config: CIHostConfig | None = None) -> s
         f"  - repo: {cfg.pre_commit_repo}\n"
         f"    rev: v{RUFF_VERSION}\n"
         "    hooks:\n"
-        "      - id: ruff\n"
+        "      - id: ruff-check\n"
         "      - id: ruff-format\n"
         "  - repo: local\n"
         "    hooks:\n"
         "      - id: model-registry-schema\n"
-        "        name: Validate governance/model_registry.json\n"
-        "        entry: python -c \"import json, sys; "
-        "json.load(open('governance/model_registry.json'))\"\n"
-        "        language: system\n"
-        "        files: ^governance/model_registry\\.json$\n"
+        "        name: Check the governance record\n"
+        # ``language: python`` gives the hook an environment that has ``python``; the
+        # ``system`` hook it replaces ran a bare ``python``, which a machine with only
+        # ``python3`` does not have. The script reads the whole record (the registry, the
+        # files its tier requires, a datasheet per primary query), so it takes no filenames.
+        f"        entry: python {CHECK_GOVERNANCE_PATH}\n"
+        "        language: python\n"
+        "        pass_filenames: false\n"
+        "        files: ^(governance/|data/datasheet_|queries/primary/)\n"
     )
 
 
@@ -862,6 +880,7 @@ def build_governance_files(
         intake=intake, project_name=project_name
     )
     files["governance/change_log.md"] = render_change_log(intake=intake)
+    files[CHECK_GOVERNANCE_PATH] = render_check_governance()
     if ci_platform == "gitlab":
         files[".gitlab-ci.yml"] = render_gitlab_ci(ci_host_config=ci_host_config)
     else:

@@ -281,6 +281,13 @@ class TestTheRuffVersionIsDeclaredOnce:
     ) -> None:
         assert self._rev(scaffold) == f"v{self._floor(scaffold)}"
 
+    def test_the_hooks_use_the_ids_the_pinned_release_defines(self, scaffold: Scaffold) -> None:
+        # ``ruff`` is a "legacy alias" of ``ruff-check`` from ruff-pre-commit v0.11 on, and
+        # ``ruff-check`` does not exist at v0.5.0: the id and the pin move together.
+        config = yaml.safe_load(scaffold.files[".pre-commit-config.yaml"])
+        (repo,) = [r for r in config["repos"] if "ruff" in r["repo"]]
+        assert [hook["id"] for hook in repo["hooks"]] == ["ruff-check", "ruff-format"]
+
     def test_both_come_from_the_one_constant(self, scaffold: Scaffold) -> None:
         from model_project_constructor.agents.website.templates import RUFF_VERSION
 
