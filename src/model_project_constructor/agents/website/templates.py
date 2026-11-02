@@ -26,12 +26,14 @@ from typing import Any
 
 from model_project_constructor.agents.website._reserved_names import RESERVED_SLUGS, SUFFIX
 
-# The one ruff version a generated project names: ``pyproject.toml`` asks for ``ruff>=`` this and
-# the pre-commit hook pins ``rev: v`` this, so ``uv sync`` and the hook run the same formatter.
-# It was two unrelated hand-typed literals (``>=0.5`` and ``v0.5.0``), both June 2024. Raise it
-# only together with ``uv lock --upgrade-package ruff``: the scaffold tests format generated
-# files with this repository's locked ruff, and ``TestTheRuffVersionIsDeclaredOnce`` fails when
-# the pin is ahead of it.
+# The one ruff version a generated project names: ``pyproject.toml`` asks for ``ruff>=`` this
+# and the pre-commit hook pins ``rev: v`` this, so both start from the same release
+# (``uv sync`` resolves the newest at or above it, the hook runs exactly it; the formatters
+# agree on the generated files across 0.15 to 0.17). It was two unrelated hand-typed literals
+# (``>=0.5`` and ``v0.5.0``), both June 2024. Raise it only together with
+# ``uv lock --upgrade-package ruff``: the scaffold tests format generated files with this
+# repository's locked ruff, and ``TestTheRuffVersionIsDeclaredOnce`` fails when the pin is
+# ahead of it.
 RUFF_VERSION = "0.15.10"
 
 _SLUG_INVALID = re.compile(r"[^a-z0-9_]+")

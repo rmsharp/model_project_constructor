@@ -347,6 +347,11 @@ class TestTheGeneratedPackageCanBeImported:
         self, scaffold: Scaffold
     ) -> None:
         bare = derive_project_name(scaffold.variant.name_hint).replace("-", "_")
+        # Whatever the slug is, the wheel, the registry and the package directory agree on it.
+        wheel = tomllib.loads(scaffold.files["pyproject.toml"])["tool"]["hatch"]["build"]
+        assert wheel["targets"]["wheel"]["packages"] == [f"src/{scaffold.slug}"]
+        registry = json.loads(scaffold.files["governance/model_registry.json"])
+        assert registry["model_id"] == scaffold.slug
         if not scaffold.variant.id.startswith("reserved-"):
             assert scaffold.slug == bare
             return
@@ -430,6 +435,16 @@ class TestTheCommandsInstallWhatTheyRun:
                 assert self.SYNC in commands, name
                 first_tool = next(i for i, c in enumerate(commands) if "uv run" in c)
                 assert commands.index(self.SYNC) < first_tool, name
+
+    def test_every_script_a_command_runs_is_in_the_project(self, scaffold: Scaffold) -> None:
+        # The governance check is written for every CI host; a scaffold for one host that lost
+        # it would fail its own first pipeline.
+        ci = scaffold.files[self._ci_file(scaffold)]
+        hook = scaffold.files[".pre-commit-config.yaml"]
+        scripts = set(re.findall(r"uv run python (\S+\.py)", ci))
+        scripts |= set(re.findall(r"entry: python (\S+\.py)", hook))
+        assert scripts == {"governance/check_governance.py"}
+        assert scripts <= set(scaffold.files)
 
     def test_the_dev_extra_declares_every_tool_the_commands_run(self, scaffold: Scaffold) -> None:
         declared = tomllib.loads(scaffold.files["pyproject.toml"])["project"][

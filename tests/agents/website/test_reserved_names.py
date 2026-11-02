@@ -48,6 +48,11 @@ class TestAReservedNameIsRenamed:
             ("Class", "class_model"),
             ("import", "import_model"),
             ("pass", "pass_model"),
+            # Five reserved names contain an underscore, and ``derive_project_name`` turns every
+            # underscore into a hyphen, so the pipeline reaches them only in these forms.
+            ("Py Compile", "py_compile_model"),
+            ("sre-parse", "sre_parse_model"),
+            ("Pydoc Data", "pydoc_data_model"),
         ],
     )
     def test_the_slug_gets_the_suffix(self, hint: str, slug: str) -> None:
@@ -103,6 +108,15 @@ class TestTheFrozenListAgreesWithThePython:
     def test_every_lower_case_keyword_is_listed(self) -> None:
         keywords = {k for k in keyword.kwlist if PRODUCIBLE.fullmatch(k)}
         assert keywords and sorted(keywords - RESERVED_SLUGS) == []
+
+    def test_nothing_else_is_listed(self) -> None:
+        # The other direction: an entry that is not a standard-library name, a keyword, one of
+        # the names only some Pythons have, or test/tests would rename every repository that
+        # a stakeholder happened to name that. Holds on 3.11 to 3.15.
+        running = {n for n in sys.stdlib_module_names if PRODUCIBLE.fullmatch(n)}
+        keywords = {k for k in keyword.kwlist if PRODUCIBLE.fullmatch(k)}
+        allowed = running | keywords | DIFFERS_BY_VERSION | {"test", "tests"}
+        assert sorted(RESERVED_SLUGS - allowed) == []
 
     def test_test_and_tests_are_listed(self) -> None:
         # ``test`` is a standard-library package on python.org and Homebrew builds and is not in

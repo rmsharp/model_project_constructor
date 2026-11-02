@@ -313,6 +313,8 @@ class TestTier3Moderate:
         as governance regardless of which platform produced it."""
         result, _ = _run_agent(tier3_intake, data_report, ci_platform=ci_platform)
         artifacts = set(result.governance_manifest.artifacts_created)
+        # The governance check the CI job runs is a governance artifact too.
+        assert "governance/check_governance.py" in artifacts
         if ci_platform == "gitlab":
             assert ".gitlab-ci.yml" in artifacts
             assert ".github/workflows/ci.yml" not in artifacts
