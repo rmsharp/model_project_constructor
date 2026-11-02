@@ -10,7 +10,6 @@ tables against the generator that writes the files it expects.
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -183,6 +182,14 @@ class TestTheRegistry:
 
 
 class TestTheRequiredFiles:
+    def test_a_registry_problem_and_a_missing_file_are_both_printed(self, project: Path) -> None:
+        # "Every problem is printed": a bad registry must not hide a deleted document.
+        _set_registry(project, cycle_time="weekly")
+        (project / "governance" / "model_card.md").unlink()
+        problems = gc.check(project)
+        assert any("cycle_time" in p for p in problems)
+        assert any("model_card.md: missing" in p for p in problems)
+
     def test_a_deleted_model_card_is_missing_at_every_tier(self, project: Path) -> None:
         (project / "governance" / "model_card.md").unlink()
         assert gc.check(project) == [
@@ -241,6 +248,42 @@ class TestTheRequiredFiles:
         _set_registry(project, affects_consumers="yes")
         (project / "governance" / "eu_ai_act_compliance.md").unlink(missing_ok=True)
         assert [p for p in gc.check(project) if "eu_ai_act" in p] == []
+
+
+class TestAQueryWithAnEmptyName:
+    """The generator writes ``queries/primary/.sql`` and ``data/datasheet_.md`` for it."""
+
+    def test_the_check_asks_for_the_datasheet_the_generator_wrote(self, tmp_path: Path) -> None:
+        primary = tmp_path / "queries" / "primary"
+        primary.mkdir(parents=True)
+        (primary / ".sql").write_text("select 1\n", encoding="utf-8")
+        assert gc.required_files({}, tmp_path)[-1] == (
+            "data/datasheet_.md",
+            "queries/primary/.sql exists",
+        )
+
+    def test_a_scaffold_with_such_a_query_passes_its_own_check(self, tmp_path: Path) -> None:
+        data = _load("sample_datareport.json")
+        data["primary_queries"][0]["name"] = ""
+        intake = _load("subrogation_intake.json")
+        client = FakeRepoClient()
+        result = WebsiteAgent(client, ci_platform="gitlab").run(
+            IntakeReport.model_validate(intake),
+            DataReport.model_validate(data),
+            RepoTarget(
+                host_url="https://gitlab.example.com",
+                namespace="ns",
+                project_name_hint="Empty Name",
+                visibility="private",
+            ),
+        )
+        assert result.status == "COMPLETE", result.failure_reason
+        files = client.get_files(result.project_id)
+        assert "data/datasheet_.md" in files and "queries/primary/.sql" in files
+        for relative, text in files.items():
+            (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / relative).write_text(text, encoding="utf-8")
+        assert gc.check(tmp_path) == []
 
 
 class TestTheTablesFollowTheGenerator:
@@ -344,23 +387,23 @@ class TestEveryCallerRunsIt:
         # The script reads the whole record, not the files staged.
         assert hook["pass_filenames"] is False
 
-    @pytest.mark.parametrize(
-        "path",
-        [
-            "governance/model_registry.json",
-            "governance/three_pillar_validation.md",
-            "governance/audit_log/README.md",
-            "data/datasheet_subrogation_training_set.md",
-            "queries/primary/subrogation_training_set.sql",
-        ],
-    )
-    def test_the_hook_runs_when_anything_it_reads_changes(self, path: str) -> None:
+    def test_the_hook_runs_on_every_commit_so_a_deletion_is_seen(self) -> None:
+        # pre-commit never hands a deleted path to a hook, so a ``files`` filter skips a commit
+        # that only deletes a governance document, which is the case the check exists for. The
+        # script costs milliseconds and reads the whole record, so it runs every time.
         config = yaml.safe_load(render_pre_commit_config())
         (hook,) = [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
-        assert re.search(hook["files"], path)
+        assert hook["always_run"] is True
+        assert "files" not in hook
 
-    @pytest.mark.parametrize("path", ["src/model/models.py", "README.md", "analysis/03_eda.qmd"])
-    def test_the_hook_does_not_run_for_unrelated_files(self, path: str) -> None:
-        config = yaml.safe_load(render_pre_commit_config())
-        (hook,) = [h for repo in config["repos"] if repo["repo"] == "local" for h in repo["hooks"]]
-        assert not re.search(hook["files"], path)
+    def test_neither_job_can_pass_when_the_check_fails(self) -> None:
+        # An advisory or manual or conditional job would restore the old behaviour: green
+        # whatever the record holds.
+        gitlab = yaml.safe_load(render_gitlab_ci())["model-registry-schema"]
+        for key in ("allow_failure", "when", "rules", "only", "except", "needs"):
+            assert key not in gitlab, key
+        github = yaml.safe_load(render_github_actions_ci())["jobs"]["governance"]
+        for key in ("continue-on-error", "if", "needs"):
+            assert key not in github, key
+        for step in github["steps"]:
+            assert "continue-on-error" not in step and "if" not in step, step

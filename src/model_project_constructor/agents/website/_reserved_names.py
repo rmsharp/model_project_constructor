@@ -13,7 +13,9 @@ reaches, and the failure is not the same everywhere:
 - a Python keyword (``class``, ``import`` ...) is a ``SyntaxError`` in every generated test file.
 
 ``derive_project_slug`` appends ``_model`` to a slug found here, so ``Types`` becomes
-``types_model`` and every other slug is unchanged.
+``types_model`` and every other slug is unchanged. A project named ``types-model`` has that
+slug already, so two repositories can share a package name (and the registry's ``model_id``,
+which nothing reads as unique).
 
 The list is frozen, not read from the running interpreter, so the same project name gives the
 same package name on any machine and on any Python that the project allows (3.11 and later).

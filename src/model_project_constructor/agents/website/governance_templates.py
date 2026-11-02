@@ -16,6 +16,9 @@ Responsibility (architecture-plan §8.2, §8.3, §11):
 - Emit the monitoring cadence from §8.3 into ``ongoing_monitoring.md``.
 - Populate a ``model_registry.json`` registry entry that mirrors the
   ``GovernanceManifest.model_registry_entry`` field.
+- Emit ``governance/check_governance.py`` (the text of ``_governance_check.py``),
+  which the generated CI jobs and pre-commit hook run to check the registry and
+  that every file the registry's tier calls for is there.
 
 The module is a pure Python collection of f-string templates — no
 template engine, no side effects. ``build_governance_files(...)`` is the
@@ -746,10 +749,13 @@ def render_pre_commit_config(*, ci_host_config: CIHostConfig | None = None) -> s
         # ``system`` hook it replaces ran a bare ``python``, which a machine with only
         # ``python3`` does not have. The script reads the whole record (the registry, the
         # files its tier requires, a datasheet per primary query), so it takes no filenames.
+        # ``always_run`` because pre-commit never hands a deleted path to a hook: a ``files``
+        # filter would skip a commit that only deletes a governance document, which is the
+        # case the check exists for. It reads a few small files and costs milliseconds.
         f"        entry: python {CHECK_GOVERNANCE_PATH}\n"
         "        language: python\n"
         "        pass_filenames: false\n"
-        "        files: ^(governance/|data/datasheet_|queries/primary/)\n"
+        "        always_run: true\n"
     )
 
 

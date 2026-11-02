@@ -4,9 +4,11 @@ Run by CI and by pre-commit as ``python governance/check_governance.py``. It use
 the standard library, so it needs no install. Exit 0 means every check passed and 1
 means at least one problem, each of which is printed. Nothing is rewritten.
 
-It checks that ``governance/model_registry.json`` parses and carries every key with the
-right type and a known value, and that every file the registry's risk tier calls for
-exists and is not empty. It does not check what a person has written in those files.
+It checks that ``governance/model_registry.json`` parses and carries every key with
+the right type and a known value, and that each file the registry calls for exists and
+is not empty: the documents its risk tier requires, the EU AI Act file when
+``affects_consumers`` is true, and one datasheet for each ``queries/primary/*.sql``. It
+does not check what a person has written in those files.
 """
 
 from __future__ import annotations
@@ -115,8 +117,11 @@ def required_files(entry: dict[str, Any], root: Path) -> list[tuple[str, str]]:
         required += [(path, "affects_consumers is true") for path in CONSUMER_FACING]
     primary = root / "queries" / "primary"
     for query in sorted(primary.glob("*.sql")) if primary.is_dir() else []:
+        # ``removesuffix``, not ``Path.stem``: a query named "" is written as ``.sql``,
+        # whose stem is ".sql", while its datasheet is ``datasheet_.md``.
+        name = query.name.removesuffix(".sql")
         required.append(
-            (f"data/datasheet_{query.stem}.md", f"queries/primary/{query.name} exists")
+            (f"data/datasheet_{name}.md", f"queries/primary/{query.name} exists")
         )
     return required
 
