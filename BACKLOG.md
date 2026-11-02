@@ -714,10 +714,14 @@ to come that were already there ("Phase 4B", written by `render_readme`, `render
 the `src/fairness/` path in `analysis/99_extensions.qmd` (the package is `src/<package>/fairness/`, and exists only when the
 intake report declares protected attributes); `TestTheTextDescribesWhatWasGenerated` holds the prose against the file set.
 Still open: notebooks 02 to 05 need Jupyter, which its `pyproject.toml` does not declare; its `governance` CI job parses JSON only (Session 293 moved it out
-of the stage after `test` on GitLab, where a failing test used to hide it); its `pyproject.toml` asks for `ruff>=0.5` while its pre-commit hook pins `v0.5.0`;
-and a project whose slug is `tests` or the name of a standard-library module (`json`, `email`, `logging`, `types`, `os`)
-fails all its generated tests, because the name resolves to the wrong package (measured by Session 290's review; older than
-that session, and `derive_project_slug` keeps no list of reserved names).
+of the stage after `test` on GitLab, where a failing test used to hide it); its `pyproject.toml` asks for `ruff>=0.5` while its pre-commit hook pins `v0.5.0`.
+Session 293 fixed the slug that is `tests`, the name of a standard-library module or a keyword (it failed all the generated
+tests, or could not be imported): `derive_project_slug` appends `_model` to a slug on a frozen list of 253 names
+(`_reserved_names.py`, held against the running Python by `test_reserved_names.py`). **Left from it:** a slug that is the
+name of a package the scaffold's test runner or code imports (`pytest`, `pluggy`, `sklearn`, `sqlalchemy`) shadows it the
+same way and is not on the list (an open-ended class); and a project NAMED like one of its own dependencies (`pandas`,
+`pytest`) writes `name = "pandas"` in `pyproject.toml` and `uv lock` refuses it ("depends on itself at an incompatible
+version"), a different fix at `pyproject.toml`'s `name`, not the slug. Both ran in Session 293's scouting.
 
 **(3) `--host` and `MPC_HOST` could disagree about which token to send; fixed in Session 292 except one part (read, then
 run).** `scripts/run_pipeline.py` took the token from the settings (which follow `MPC_HOST`, default `gitlab`) and built

@@ -75,6 +75,13 @@ VARIANTS = [
         False,
         empty_lists=True,
     ),
+    # A project name that is a Python module's name. Each fails differently without the rename:
+    # ``tests`` under pytest (its own ``tests`` package wins), ``statistics`` only when the
+    # package is imported with ``src`` after the standard library (pytest hides it), and
+    # ``class`` as a SyntaxError in every generated test file.
+    Variant("reserved-tests", "tier1_intake.json", "github", "Tests", True),
+    Variant("reserved-statistics", "subrogation_intake.json", "gitlab", "Statistics", False),
+    Variant("reserved-keyword", "subrogation_intake.json", "gitlab", "Class", False),
 ]
 TIER1_GITHUB = VARIANTS[1]
 
@@ -181,6 +188,57 @@ class TestTheGeneratedProjectChecksItself:
         # first commit fail.
         done = _ruff(scaffold.root, "format", "--check")
         assert done.returncode == 0, _report(done)
+
+
+class TestTheGeneratedPackageCanBeImported:
+    """The tests above run under pytest, which adds the project's own directories to the path.
+
+    A package installed the way ``uv sync`` installs it (editable, ``src`` appended after the
+    standard library) is found differently: a package named like a standard-library module
+    (``statistics``) passes pytest and cannot be imported at all. This child process appends
+    ``src`` last, as that install does, and imports every module the scaffold wrote.
+    """
+
+    @staticmethod
+    def _modules(scaffold: Scaffold) -> list[str]:
+        prefix = f"src/{scaffold.slug}/"
+        names = []
+        for path in scaffold.files:
+            if path.startswith(prefix) and path.endswith(".py"):
+                name = path.removeprefix("src/").removesuffix(".py").replace("/", ".")
+                names.append(name.removesuffix(".__init__"))
+        return sorted(names)
+
+    def test_every_module_imports_with_src_after_the_standard_library(
+        self, scaffold: Scaffold
+    ) -> None:
+        modules = self._modules(scaffold)
+        assert scaffold.slug in modules and len(modules) >= 5, modules
+        code = (
+            "import importlib, sys\n"
+            "sys.path.append('src')\n"
+            f"for name in {modules!r}:\n"
+            "    importlib.import_module(name)\n"
+            "print('imported', len(sys.modules))\n"
+        )
+        done = _run(scaffold.root, "-I", "-c", code)
+        assert done.returncode == 0, _report(done)
+
+    def test_a_package_named_like_a_python_module_is_renamed_everywhere(
+        self, scaffold: Scaffold
+    ) -> None:
+        bare = derive_project_name(scaffold.variant.name_hint).replace("-", "_")
+        if not scaffold.variant.id.startswith("reserved-"):
+            assert scaffold.slug == bare
+            return
+        assert scaffold.slug == f"{bare}_model"
+        offenders = sorted(
+            path
+            for path, text in scaffold.files.items()
+            if path.startswith(f"src/{bare}/")
+            or re.search(rf"^\s*(?:from|import) {bare}[. ]", text, flags=re.MULTILINE)
+        )
+        assert offenders == []
 
 
 class TestFormatStabilityAtEverySlugLength:
