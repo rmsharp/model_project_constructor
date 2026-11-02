@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from model_project_constructor._vocab_guard import assert_vocab_parity
+from model_project_constructor.agents.website.templates import RUFF_VERSION
 from model_project_constructor.schemas.v1.common import CycleTime, RiskTier
 
 CIPlatform = Literal["gitlab", "github"]
@@ -719,7 +720,7 @@ def render_pre_commit_config(*, ci_host_config: CIHostConfig | None = None) -> s
     return (
         "repos:\n"
         f"  - repo: {cfg.pre_commit_repo}\n"
-        "    rev: v0.5.0\n"
+        f"    rev: v{RUFF_VERSION}\n"
         "    hooks:\n"
         "      - id: ruff\n"
         "      - id: ruff-format\n"

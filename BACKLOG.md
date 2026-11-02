@@ -714,8 +714,12 @@ to come that were already there ("Phase 4B", written by `render_readme`, `render
 the `src/fairness/` path in `analysis/99_extensions.qmd` (the package is `src/<package>/fairness/`, and exists only when the
 intake report declares protected attributes); `TestTheTextDescribesWhatWasGenerated` holds the prose against the file set.
 Still open: notebooks 02 to 05 need Jupyter, which its `pyproject.toml` does not declare; its `governance` CI job parses JSON only (Session 293 moved it out
-of the stage after `test` on GitLab, where a failing test used to hide it); its `pyproject.toml` asks for `ruff>=0.5` while its pre-commit hook pins `v0.5.0`.
-Session 293 fixed the slug that is `tests`, the name of a standard-library module or a keyword (it failed all the generated
+of the stage after `test` on GitLab, where a failing test used to hide it).
+Session 293 fixed the ruff version: the `pyproject.toml` floor `ruff>=0.5` and the pre-commit pin `v0.5.0` were two unrelated
+literals for one June-2024 release (a fresh `uv sync` resolved 0.17.3 while the hook ran 0.5.0), and one `RUFF_VERSION`
+(0.15.10, the ruff this repository's tests format with) now feeds both, held by `TestTheRuffVersionIsDeclaredOnce`;
+a pre-commit mirror that lacks the `v0.15.10` tag would fail `pre-commit install` (a per-host setting for the rev was
+declined: nothing says such a mirror is in use). It also fixed the slug that is `tests`, the name of a standard-library module or a keyword (it failed all the generated
 tests, or could not be imported): `derive_project_slug` appends `_model` to a slug on a frozen list of 253 names
 (`_reserved_names.py`, held against the running Python by `test_reserved_names.py`). **Left from it:** a slug that is the
 name of a package the scaffold's test runner or code imports (`pytest`, `pluggy`, `sklearn`, `sqlalchemy`) shadows it the

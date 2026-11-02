@@ -190,6 +190,58 @@ class TestTheGeneratedProjectChecksItself:
         assert done.returncode == 0, _report(done)
 
 
+class TestTheRuffVersionIsDeclaredOnce:
+    """The ``pyproject.toml`` floor and the pre-commit pin come from one number.
+
+    They were two hand-typed literals, ``ruff>=0.5`` and ``rev: v0.5.0``: the same June-2024
+    release written two ways, so a fresh ``uv sync`` resolved ruff 0.17 while the hook ran 0.5.0
+    (the two formatters disagree about ordinary code from 0.9 on). The comparison below is on the
+    text, not on ``packaging.version``, because ``Version("0.5") == Version("0.5.0")`` is how the
+    drift went unseen.
+    """
+
+    @staticmethod
+    def _floor(scaffold: Scaffold) -> str:
+        dev = tomllib.loads(scaffold.files["pyproject.toml"])["project"]["optional-dependencies"][
+            "dev"
+        ]
+        (requirement,) = [r for r in dev if r.startswith("ruff")]
+        match = re.fullmatch(r"ruff>=(\d+\.\d+\.\d+)", requirement)
+        assert match, requirement
+        return match.group(1)
+
+    @staticmethod
+    def _rev(scaffold: Scaffold) -> str:
+        config = yaml.safe_load(scaffold.files[".pre-commit-config.yaml"])
+        (repo,) = [r for r in config["repos"] if "ruff" in r["repo"]]
+        return str(repo["rev"])
+
+    def test_the_hook_pins_exactly_the_version_the_project_asks_for(
+        self, scaffold: Scaffold
+    ) -> None:
+        assert self._rev(scaffold) == f"v{self._floor(scaffold)}"
+
+    def test_both_come_from_the_one_constant(self, scaffold: Scaffold) -> None:
+        from model_project_constructor.agents.website.templates import RUFF_VERSION
+
+        assert self._floor(scaffold) == RUFF_VERSION
+        assert re.fullmatch(r"\d+\.\d+\.\d+", RUFF_VERSION)
+
+    def test_the_pin_is_not_newer_than_the_ruff_these_tests_format_with(
+        self, scaffold: Scaffold
+    ) -> None:
+        # ``test_ruff_format_would_change_nothing`` runs this repository's locked ruff. A pin
+        # above it would let the hook run a formatter no test here has seen: raise the constant
+        # together with ``uv lock --upgrade-package ruff``, never ahead of it.
+        from packaging.version import Version
+
+        from model_project_constructor.agents.website.templates import RUFF_VERSION
+
+        done = _run(scaffold.root, "-m", "ruff", "--version")
+        installed = done.stdout.split()[-1]
+        assert Version(installed) >= Version(RUFF_VERSION), (installed, RUFF_VERSION)
+
+
 class TestTheGeneratedPackageCanBeImported:
     """The tests above run under pytest, which adds the project's own directories to the path.
 
