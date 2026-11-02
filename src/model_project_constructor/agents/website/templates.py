@@ -187,6 +187,17 @@ def render_readme(
         "uv run pytest\n"
         "```\n"
         "\n"
+        "## Rendering the analysis notebooks\n"
+        "\n"
+        "The files in `analysis/` are [Quarto](https://quarto.org/docs/get-started/)\n"
+        "documents. Quarto is a separate install, not a Python package, and it runs\n"
+        "their Python cells through Jupyter, which the `notebooks` extra provides.\n"
+        "Render one file at a time (`quarto render analysis` needs a `_quarto.yml`):\n"
+        "\n"
+        "```bash\n"
+        "uv run --extra notebooks quarto render analysis/03_eda.qmd\n"
+        "```\n"
+        "\n"
         "## License\n"
         "\n"
         "See [LICENSE](LICENSE) — not yet confirmed by Legal.\n"
@@ -229,6 +240,17 @@ def render_pyproject(*, project_name: str, project_slug: str) -> str:
         '    "pytest>=8",\n'
         '    "pytest-cov>=5",\n'
         f'    "ruff>={RUFF_VERSION}",\n'
+        "]\n"
+        # What Quarto needs to run a Python cell through Jupyter, and no more: not the
+        # ``jupyter`` metapackage (an 80-package closure) and not ``quarto-cli`` (an sdist
+        # that downloads Quarto from GitHub at build time, which fails behind an internal
+        # package index). A separate extra because every CI job installs ``dev`` and none
+        # opens a notebook.
+        "notebooks = [\n"
+        '    "ipykernel>=6",\n'
+        '    "nbclient>=0.8",\n'
+        '    "nbformat>=5.7",\n'
+        '    "pyyaml>=6",\n'
         "]\n"
         "\n"
         "[build-system]\n"

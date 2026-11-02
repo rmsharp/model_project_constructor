@@ -190,6 +190,66 @@ class TestTheGeneratedProjectChecksItself:
         assert done.returncode == 0, _report(done)
 
 
+class TestTheNotebooksCanBeRendered:
+    """The analysis notebooks are Quarto files whose Python cells Quarto runs through Jupyter.
+
+    Nothing in the scaffold declared Jupyter, said Quarto is needed, or said how to render a
+    notebook, and ``quarto render analysis`` (the directory) fails without a ``_quarto.yml``.
+    It went unseen on any machine whose ``PATH`` python already had Jupyter. The packages are a
+    separate ``notebooks`` extra, not ``dev``: no CI job opens a notebook, and ``dev`` is what
+    every job installs.
+    """
+
+    NEEDED = {"ipykernel", "nbclient", "nbformat", "pyyaml"}
+
+    @staticmethod
+    def _extras(scaffold: Scaffold) -> dict[str, set[str]]:
+        extras = tomllib.loads(scaffold.files["pyproject.toml"])["project"]["optional-dependencies"]
+        return {
+            name: {re.split(r"[<>=!~\[ ]", requirement)[0] for requirement in requirements}
+            for name, requirements in extras.items()
+        }
+
+    @staticmethod
+    def _python_notebooks(scaffold: Scaffold) -> list[str]:
+        return sorted(
+            path
+            for path, text in scaffold.files.items()
+            if path.startswith("analysis/") and path.endswith(".qmd") and "```{python}" in text
+        )
+
+    def test_there_are_notebooks_with_python_cells(self, scaffold: Scaffold) -> None:
+        notebooks = self._python_notebooks(scaffold)
+        assert {f"analysis/0{n}_" for n in (2, 3, 4, 5)} <= {nb[:12] for nb in notebooks}
+        # The fairness audit has a Python cell too and needs the same packages.
+        assert ("analysis/fairness_audit.qmd" in notebooks) == scaffold.variant.protected_attributes
+
+    def test_the_notebooks_extra_declares_what_quarto_needs_to_run_them(
+        self, scaffold: Scaffold
+    ) -> None:
+        extras = self._extras(scaffold)
+        assert sorted(self.NEEDED - extras.get("notebooks", set())) == [], extras
+
+    def test_the_dev_extra_stays_what_every_ci_job_installs(self, scaffold: Scaffold) -> None:
+        assert self._extras(scaffold)["dev"] == {"pytest", "pytest-cov", "ruff"}
+
+    def test_the_readme_names_quarto_and_the_command_that_renders_one_notebook(
+        self, scaffold: Scaffold
+    ) -> None:
+        readme = scaffold.files["README.md"]
+        assert "https://quarto.org/docs/get-started/" in readme
+        assert "uv run --extra notebooks quarto render analysis/03_eda.qmd" in readme
+
+    def test_every_extra_a_document_asks_for_is_declared(self, scaffold: Scaffold) -> None:
+        # ``uv run --extra X`` is invisible to the ``uv run (\w+)`` check above, so a README
+        # naming an extra that was later renamed would otherwise pass.
+        declared = self._extras(scaffold)
+        ci_file = TestTheCommandsInstallWhatTheyRun._ci_file(scaffold)
+        documents = (scaffold.files["README.md"], scaffold.files[ci_file])
+        asked = {name for text in documents for name in re.findall(r"--extra (\w+)", text)}
+        assert asked and asked <= set(declared), (asked, declared)
+
+
 class TestTheRuffVersionIsDeclaredOnce:
     """The ``pyproject.toml`` floor and the pre-commit pin come from one number.
 

@@ -713,8 +713,14 @@ runs a scaffold's own tests and ruff, so these cannot come back unseen. Session 
 to come that were already there ("Phase 4B", written by `render_readme`, `render_qmd_extensions` and `render_data_readme`) and
 the `src/fairness/` path in `analysis/99_extensions.qmd` (the package is `src/<package>/fairness/`, and exists only when the
 intake report declares protected attributes); `TestTheTextDescribesWhatWasGenerated` holds the prose against the file set.
-Still open: notebooks 02 to 05 need Jupyter, which its `pyproject.toml` does not declare; its `governance` CI job parses JSON only (Session 293 moved it out
+Still open: its `governance` CI job parses JSON only (Session 293 moved it out
 of the stage after `test` on GitLab, where a failing test used to hide it).
+Session 293 declared Jupyter for the notebooks (five or six of them need it: 02 to 05, and `fairness_audit` when protected
+attributes are declared): a separate `notebooks` extra of `ipykernel`, `nbclient`, `nbformat` and `pyyaml`, and a README
+section saying Quarto is a separate install and `uv run --extra notebooks quarto render analysis/<file>.qmd` renders one
+file (the directory form fails without a `_quarto.yml`); run for real on a generated project, four notebooks, exit 0, and
+without the extra Quarto reports `Jupyter: (None)`. The floors in the extra resolve at their lowest on Python 3.11 but no
+notebook was rendered at those versions.
 Session 293 fixed the ruff version: the `pyproject.toml` floor `ruff>=0.5` and the pre-commit pin `v0.5.0` were two unrelated
 literals for one June-2024 release (a fresh `uv sync` resolved 0.17.3 while the hook ran 0.5.0), and one `RUFF_VERSION`
 (0.15.10, the ruff this repository's tests format with) now feeds both, held by `TestTheRuffVersionIsDeclaredOnce`;
