@@ -16,8 +16,9 @@ was given (``BACKLOG.md``, "What the scaffold still gets wrong after Larkspur po
 * two queries (or two checks) with one name wrote one file, the second replacing the first, and
   ``Foo`` and ``foo`` were two entries in the commit and one file on macOS or Windows;
 * a ``/`` made a directory the generated governance check does not look in, an empty name made
-  ``queries/primary/.sql``, ``CON`` is a file name Windows cannot check out, and a name of 243
-  characters or more made the generated check crash on a file name past 255 bytes.
+  ``queries/primary/.sql``, ``CON`` is a file name Windows cannot check out, and a name of 243 to
+  251 characters made the generated check crash on a file name past 255 bytes (one of 252 or more
+  could not be written at all, and the old check then reported no problem for the tree it saw).
 
 The schemas constrain none of it, and the repository's rule for text an agent writes is to fix it
 where it is used (``_py_str_literal``, ``_quarto_markup``), because a fix in the schema does not
@@ -34,14 +35,20 @@ What a stem is, and the only things the module does:
 * a name with nothing left (``""``, ``..``, ``/``, a name of another script) is ``unnamed``, and
   a check with nothing left is ``unnamed_check``;
 * a stem that is a Windows device name (``con``, ``nul``, ``com1`` ...) takes ``_file`` after it;
-* **a name that is already a stem is its own stem**, so every report that was fine is
-  byte-for-byte what it was. Every real name seen is such a name (6 query names and 40 check
-  names in 20 saved reports, all ``snake_case``, the longest 47 characters);
+* **a name that is already a stem is its own stem**, so a report whose names are all stems
+  generates the same files, byte for byte, as before. Every real name seen is such a name: on the
+  author's machine, 6 query names and 40 check names in 20 saved reports (most of them
+  git-ignored, so not reproducible from a clone; the one committed report holds 1 and 2), all
+  ``snake_case``, the longest 47 characters. A name that worked before and is not a stem (an
+  upper-case letter, a hyphen, a space, a dot, more than 64 characters) is renamed;
 * the stems of one list are different from one another. The first name that is already a stem
   keeps it wherever it stands, then the others take the stem they fold to if it is free, and
   otherwise the stem with ``_2``, ``_3`` ... after it. A number never takes a stem another name
-  has as its own, and the order of the list decides the numbering, so the same report always
-  gives the same files.
+  has as its own, and the order of the list decides the numbering, so the same report gives the
+  same files on one Python. The folding reads the running Python's Unicode tables, so a later
+  Python could fold a newly assigned character differently; none of the 1,114,112 code points,
+  taken one at a time, differs between Python 3.11.2 (Unicode 14.0) and 3.13.5 (Unicode 15.1),
+  and later Pythons were not tried. A name made of ASCII is never affected.
 
 Costs a reader sees:
 
@@ -49,8 +56,9 @@ Costs a reader sees:
   ``claims_auto_total_loss.sql``. The readable name stays in headings, in the datasheet's title
   and in ``reports/data_report.json``, and the paths that the project prints are the real ones;
 * nobody is told that the model broke the ``snake_case`` the Data Agent's prompt asks for;
-* two names that fold together make the second ``<stem>_2``, which a reader has to match to the
-  query by its place in the report.
+* of two names that fold together, the one that is not already a stem takes the number (``Foo``
+  and ``foo`` give ``foo_2`` for ``Foo``), and a reader has to match it to its query by its place
+  in the report.
 
 Not covered, on purpose: a name that only a person reading it would call hostile (a Markdown or
 Quarto construct in a heading is part (7)(e) and the notebooks' own neutraliser); the generated
@@ -65,15 +73,17 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
-# PostgreSQL's limit for an identifier is 63 bytes, and the longest real name is 47 characters.
-# With ``datasheet_`` in front and ``.md`` after, a stem of this length is 77 bytes of a 255-byte
-# file name, and ``queries/quality/<stem>/<stem>.sql`` is well inside any path limit.
+# PostgreSQL's limit for an identifier is 63 bytes, so a table-derived name rarely passes it, and
+# the longest real name is 47 characters; 64 is that limit with a byte to spare. With
+# ``datasheet_`` in front and ``.md`` after, a stem of this length is 77 bytes of a 255-byte file
+# name, and ``queries/quality/<stem>/<stem>.sql`` is well inside any path limit.
 MAX_STEM_LENGTH: Final[int] = 64
 
 UNNAMED: Final[str] = "unnamed"
 UNNAMED_CHECK: Final[str] = "unnamed_check"
 
-# The file names Windows reserves, whatever follows them (``CON.sql`` is as reserved as ``CON``).
+# The 22 ASCII file names Windows reserves, whatever follows them (``CON.sql`` is as reserved as
+# ``CON``). The superscript forms (``COM`` followed by a superscript one) fold to these first.
 WINDOWS_DEVICE_NAMES: Final[frozenset[str]] = frozenset(
     {"con", "prn", "aux", "nul"}
     | {f"com{number}" for number in range(1, 10)}

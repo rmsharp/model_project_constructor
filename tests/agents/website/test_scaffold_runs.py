@@ -1,12 +1,14 @@
 """The project the website agent writes has to pass its own checks.
 
 Nothing else in the suite executes a rendered scaffold. ``FakeRepoClient`` stores the file text
-it is given and never looks at it, and the template tests compare strings, so a placeholder the
+it is given and never looks at it (this fixture uses ``PathCheckingRepoClient``, which also
+refuses a path a checkout would refuse, so a regression cannot write outside its directory), and
+the template tests compare strings, so a placeholder the
 templates never filled in (``<project_slug>``), a test whose body is ``pass`` inside
 ``pytest.raises``, and a command that cannot work in a fresh checkout all passed the suite while
 every generated project failed 8 of 8 of its own tests (Session 286 found it by running one).
 
-These tests drive the real agent against the fake client, write what it committed to a directory,
+These tests drive the real agent against that client, write what it committed to a directory,
 and run that project's own ``pytest``, ``ruff check`` and ``ruff format --check`` in a child
 process: the three things its README, its CI and its pre-commit hook run.
 """
@@ -32,6 +34,7 @@ from model_project_constructor.agents.website.agent import WebsiteAgent
 from model_project_constructor.agents.website.governance_templates import (
     render_fairness_test_stub,
 )
+from model_project_constructor.agents.website.graph import build_website_graph
 from model_project_constructor.agents.website.templates import (
     _STUB_CALLS,
     derive_project_name,
@@ -143,7 +146,10 @@ def _generate(variant: Variant) -> tuple[str, dict[str, str]]:
     )
     # A path a checkout would refuse fails here, before this fixture writes a file anywhere.
     client = PathCheckingRepoClient()
-    result = WebsiteAgent(client, ci_platform=variant.ci_platform).run(
+    agent = WebsiteAgent(client, ci_platform=variant.ci_platform)
+    # A refused commit is retried after a real 1 s and 2 s sleep; skip them (the host tests do).
+    agent.graph = build_website_graph(client, sleep=lambda _seconds: None)
+    result = agent.run(
         IntakeReport.model_validate(intake_json), DataReport.model_validate(data_json), target
     )
     assert result.status == "COMPLETE", result.failure_reason
