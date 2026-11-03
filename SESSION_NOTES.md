@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 296 Did
+**Deliverable:** **Part (7)(a) of the `BACKLOG.md` item "What the scaffold still gets wrong after Larkspur point (2)": a query name is used as a file path (`queries/primary/<name>.sql`, `data/datasheet_<name>.md`), so a name such as `x/../../governance/model_card` replaces another file of the generated project and every check passes.** (IN PROGRESS) The operator chose the area and the item at pickers (the recommended option both times, after an opening message of "go"); the design ruling (reject such a name in the schema, or sanitize it where the path is built) is asked next. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md`.
+**Started:** 2026-11-03 15:30
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 295 Did
 **Deliverable:** **Part (7)(b) of the `BACKLOG.md` item "What the scaffold still gets wrong after Larkspur point (2)" — COMPLETE: report text written into the generated `analysis/*.qmd` can no longer run code, read a file or read the environment when Quarto renders the notebook. The filed fix ("neutralise the opening of an inline chunk") would have left most of it open; the real fix puts one zero-width space in front of each of five kinds of text that Quarto's patterns look for.** The operator chose the area and the item at pickers (the recommended option both times, after an opening message of "go"); no ruling was needed. **Mine, not put to the operator:** the design, the decision not to widen to the `.md` files (filed as an operator call), the reviews and their fixes. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md`.
 **Started:** 2026-11-02 13:12 · **Completed:** 2026-11-03 15:09 (ledger-entry time; paused once at the operator's request, who needed the machine for timing tests).

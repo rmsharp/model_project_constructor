@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S296
+date: 2026-11-03
+status: pending
+active_task: BACKLOG.md "What the scaffold still gets wrong after Larkspur point (2)" part (7)(a) -- a query name is used as a file path, so a name such as x/../../governance/model_card replaces another file of the generated project and every check passes. Session claimed; work beginning.
+```
+
+```handoff
 session: S295
 date: 2026-11-02
 status: complete
