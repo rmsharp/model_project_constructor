@@ -234,6 +234,8 @@ class TestAListOfStemsIsUniqueAndKeepsTheNamesThatAreFine:
             # A number never takes the stem another name has as its own.
             (["a", "a", "a_2"], ["a", "a_3", "a_2"]),
             (["A", "A", "a_2"], ["a", "a_3", "a_2"]),
+            # ... nor the stem a later name that is not itself a stem folds to.
+            (["A", "A", "A_2"], ["a", "a_3", "a_2"]),
             (["", "unnamed"], ["unnamed_2", "unnamed"]),
             (["", ""], ["unnamed", "unnamed_2"]),
             (["con", "con_file"], ["con_file_2", "con_file"]),
