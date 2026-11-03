@@ -24,7 +24,10 @@ import json
 import re
 from typing import Any
 
-from model_project_constructor.agents.website._quarto_markup import neutralise_report
+from model_project_constructor.agents.website._quarto_markup import (
+    neutralise_quarto_markup,
+    neutralise_report,
+)
 from model_project_constructor.agents.website._reserved_names import RESERVED_SLUGS, SUFFIX
 
 # The one ruff version a generated project names: ``pyproject.toml`` asks for ``ruff>=`` this
@@ -456,6 +459,11 @@ def _render_business_case_block(*, intake: dict[str, Any]) -> str:
     always emitted; a missing optional field renders a ``(not estimated)``
     / ``(none declared)`` placeholder so the business case stays
     structurally complete no matter how sparse the intake is.
+
+    The notebook passes its caller's already-neutralised intake (Quarto reads a ``.qmd`` for
+    more than prose, ``_quarto_markup.py``); ``reports/intake_report.md`` passes the raw one,
+    so the two differ by the invisible characters that module writes, and only for text that
+    holds something Quarto acts on.
     """
     ev = intake.get("estimated_value") or {}
     vmp = intake.get("value_measurement_plan") or {}
@@ -628,8 +636,12 @@ def _render_production_measurement_plan(
             value_md = "(not measured) [^baseline-src]"
         window_start = snapshot.get("measurement_window_start")
         window_end = snapshot.get("measurement_window_end")
+        # The report was neutralised on the way in, and the dates are datetimes in a validated
+        # report, so only a hand-built dict puts text here. Cutting the end can leave a ``---``
+        # alone on its line (the template's newline follows it), so the end is neutralised again
+        # after the cut; the start has the arrow after it on its line, which a cut cannot undo.
         window_md = (
-            f"{str(window_start)[:10]} → {str(window_end)[:10]}"
+            f"{str(window_start)[:10]} → {neutralise_quarto_markup(str(window_end)[:10])}"
             if window_start and window_end
             else "(not recorded)"
         )

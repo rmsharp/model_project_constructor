@@ -17,7 +17,9 @@ What is tested here:
   every test below could pass by being blind);
 * ``neutralise_quarto_markup`` leaves ordinary text byte for byte alone, and after it no spelling
   is left, in any of the places a template puts a field, over a seeded fuzz as well as a table;
-* it only ever inserts one invisible character, so nothing a reader sees changes;
+* it only ever inserts one invisible character, so what a reader sees changes only in the cases
+  its module lists as costs (a ``---`` alone on a line is no longer a rule, a ``<!--`` comment is
+  shown, a brace that starts a field carries the character);
 * it runs in linear time, because it is applied to text a model wrote;
 * the four ``.qmd`` renderers apply it to every field they take, including a field no one has
   thought of yet (a payload goes into every string of both reports, which is the test that a new
@@ -28,12 +30,15 @@ What is tested here:
 
 from __future__ import annotations
 
+import contextlib
 import random
 import re
+import signal
+import threading
 import time
 import unicodedata
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import pytest
@@ -44,6 +49,7 @@ from model_project_constructor.agents.website._quarto_markup import (
     neutralise_quarto_markup,
     neutralise_report,
 )
+from model_project_constructor.agents.website.governance_templates import build_analysis_files
 from model_project_constructor.agents.website.templates import (
     build_base_files,
     render_qmd_business_understanding,
@@ -60,17 +66,24 @@ Z = ZERO_WIDTH_SPACE
 
 # The places a template puts a field. A field can be the whole document, a paragraph, a list
 # item, a heading, or the inside of a code span the template itself opened (06 does that for
-# the baseline metric's name).
+# the baseline metric's name). Most renderers ``.strip()`` a field after it was neutralised, and
+# 06 writes the review cadence as a code span that opens at the start of its line.
 CONTEXTS: dict[str, Callable[[str], str]] = {
     "alone": lambda s: s,
     "paragraph": lambda s: f"Intro.\n\n{s}\n\nOutro.\n",
+    "stripped": lambda s: f"Intro.\n\n{s.strip()}\n\nOutro.\n",
     "list_item": lambda s: f"- {s}\n- next\n",
     "heading": lambda s: f"### {s}\n\nbody\n",
     "code_span": lambda s: f"- **Metric:** `{s}`\n",
+    "line_start_code_span": lambda s: f"## Review Cadence\n\n`{s}`\n\n## Next\n",
+    "stripped_line_start_code_span": lambda s: f"## Review Cadence\n\n`{s.strip()}`\n\n## Next\n",
 }
 
 # (id, text, kind of construct the text holds). Every one is something Quarto 1.7.33 acted on
-# when Session 295's scouts or critic rendered it, or is a spelling the source accepts.
+# when Session 295's scouts, critic or reviewers rendered it, or is a spelling the source
+# accepts, or is one the model reports on the safe side: a fence after a lone carriage return,
+# after U+2028 or behind a no-break space, and a metadata block with U+2028 line ends did not
+# run when rendered.
 HOSTILE: list[tuple[str, str, str]] = [
     ("fence", "```{python}\nopen('ran', 'w')\n```", "fence"),
     ("fence_the_opening_line_only", "```{python}", "fence"),
@@ -92,6 +105,17 @@ HOSTILE: list[tuple[str, str, str]] = [
     ("fence_after_a_line_separator", "a\u2028```{python}\nx", "fence"),
     ("fence_after_a_paragraph_separator", "a\u2029``` {python}\nx", "fence"),
     ("fence_in_a_list_item_continuation", "item\n```{python}\nx\n```", "fence"),
+    ("fence_brace_on_the_next_line", "```\n{python}\nx\n```", "fence"),
+    ("fence_split_by_a_carriage_return", "```\r{python}\nx", "fence"),
+    ("fence_split_by_a_line_separator", "```\u2028{python}\nx", "fence"),
+    ("fence_split_by_a_paragraph_separator", "```\u2029 {python}\nx", "fence"),
+    ("fence_a_gap_of_forty_spaces", "```" + " " * 40 + "{python}\nx", "fence"),
+    ("fence_two_ticks_behind_a_template_tick", "`` {python}\nx\n``", "fence"),
+    ("fence_two_ticks_and_a_tab_behind_a_template_tick", "``\t{python}\nx\n``", "fence"),
+    ("fence_two_ticks_behind_a_nbsp_and_a_template_tick", "\u00a0`` {python}\nx\n``", "fence"),
+    ("fence_two_ticks_behind_blank_lines_and_a_tick", "\n\n`` {python}\nx\n``", "fence"),
+    ("inline_chunk_behind_a_nbsp_after_a_tick", "\u00a0{python} 1+1", "inline_chunk"),
+    ("inline_chunk_behind_blank_lines_after_a_tick", "\n\n{python} 1+1", "inline_chunk"),
     ("inline", "`{python} 1+1`", "inline_chunk"),
     ("inline_two_spaces", "`{python}  1+1`", "inline_chunk"),
     ("inline_tab", "`{python}\t1+1`", "inline_chunk"),
@@ -114,6 +138,23 @@ HOSTILE: list[tuple[str, str, str]] = [
     ("metadata_carriage_returns", "---\r\nfilters: [f]\r\n---\r\n", "metadata_block"),
     ("metadata_line_separators", "---\u2028filters: [f]\u2028---\u2028", "metadata_block"),
     ("metadata_dots_to_close", "---\nfilters: [f]\n...", "metadata_block"),
+    # The renderers strip a field after it was neutralised: whitespace in front of a ``---`` that
+    # starts the text is gone by the time the notebook is written.
+    ("metadata_behind_a_space", " ---\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_behind_a_tab", "\t---\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_behind_a_no_break_space", "\u00a0---\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_behind_an_ideographic_space", "\u3000---\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_behind_blank_lines", "\n \n  ---\nfilters: [f]\n...", "metadata_block"),
+    # Quarto deletes comments before it looks for the block.
+    ("metadata_comment_after_the_dashes", "x\n\n---<!---->\nfilters: [f]\n...", "metadata_block"),
+    (
+        "metadata_comment_before_the_dashes",
+        "x\n\n<!-- c -->---\nfilters: [f]\n...",
+        "metadata_block",
+    ),
+    ("metadata_comment_between_dashes", "x\n\n-<!-- c -->--\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_comment_over_two_lines", "x\n\n---<!--\n-->\nfilters: [f]\n...", "metadata_block"),
+    ("metadata_comment_in_a_list_item", "- x\n---<!---->\nfilters: [f]\n...", "metadata_block"),
 ]
 
 HOSTILE_IDS = [name for name, _, _ in HOSTILE]
@@ -144,7 +185,10 @@ BENIGN: list[tuple[str, str]] = [
     ("a_list", "- first\n- second\n  - nested"),
     ("a_heading", "# Heading\n\nbody"),
     ("a_link_and_image", "[docs](https://example.com/a) and ![alt](x.png)"),
-    ("html", "<b>bold</b> and <br> and <!-- comment -->"),
+    ("html", "<b>bold</b> and <br> and <!DOCTYPE html> and <!- not a comment"),
+    ("indented_text", "  indented text, and a tab\tinside"),
+    ("indented_dashes_with_text", " --- not a rule"),
+    ("a_rule_in_the_middle_of_a_line", "before --- after"),
     ("a_blockquote", "> quoted\n> more"),
     ("a_fence_that_is_not_a_cell", "```python\nSELECT 1\n```"),
     ("a_sql_fence", "```sql\nSELECT 1\n```"),
@@ -158,6 +202,14 @@ BENIGN: list[tuple[str, str]] = [
 ]
 
 BENIGN_IDS = [name for name, _ in BENIGN]
+
+# Every character that JavaScript's ``\s`` or Python's ``str.isspace`` counts. All of them are
+# below U+3100 except the byte order mark, which only JavaScript counts.
+SPACE_CHARACTERS = [
+    chr(code)
+    for code in range(0x3100)
+    if chr(code).isspace() or re.fullmatch(f"[{JS_SPACE}]", chr(code))
+] + ["\ufeff"]
 
 
 def _kinds(text: str) -> Counter[str]:
@@ -203,6 +255,31 @@ class TestTheModelOfQuartoSeesWhatQuartoActsOn:
     def test_the_escaped_spellings_quarto_offers_are_not_shortcodes(self) -> None:
         assert not constructs("{{{< env HOME >}}} and {{</* env HOME */>}}")
 
+    def test_a_comment_ends_at_the_first_close_so_a_block_between_two_is_a_block(self) -> None:
+        """Quarto's pattern is lazy: ``<!-- a -->`` and ``<!-- b -->`` do not swallow the text
+        between them."""
+
+        text = "<!-- a -->\n\n---\nfilters: [f]\n...\n\n<!-- b -->"
+        assert _kinds(text) == Counter({"metadata_block": 1})
+
+    def test_a_rule_followed_by_a_line_of_spaces_opens_no_block(self) -> None:
+        """Quarto's pattern refuses a ``---`` whose next line holds only spaces or tabs (a
+        horizontal rule, not metadata). An empty next line it lets through, because ``[\\r\\n]+``
+        takes it, and the model follows: Quarto then drops that block for starting with a
+        blank line, which the model does not, and over-reporting is the safe direction."""
+
+        assert not constructs("x\n\n---\n \nfilters: [f]\n...\n")
+        assert _kinds("x\n\n---\n\nfilters: [f]\n...\n") == Counter({"metadata_block": 1})
+
+    def test_a_block_inside_a_comment_is_not_a_block(self) -> None:
+        """Quarto deletes the comment, block and all, before it looks."""
+
+        assert not constructs("a <!--\n---\nfilters: [f]\n...\n--> b")
+
+    def test_a_fence_is_found_across_a_line_end_and_a_line_break_is_any_of_four(self) -> None:
+        for gap in ("\n", "\r", "\u2028", "\u2029", "\r\n", " \n "):
+            assert _kinds(f"```{gap}{{python}}\nx") == Counter({"fence": 1}), repr(gap)
+
 
 class TestTheInsertedCharacter:
     """The one character this module writes into a notebook has to be the right one."""
@@ -239,6 +316,20 @@ class TestOrdinaryTextIsNotChanged:
         # A horizontal rule typed as three dashes alone on a line is a metadata marker to Pandoc.
         assert neutralise_quarto_markup("a\n\n---\n\nb") == "a\n\n-" + Z + "--\n\nb"
 
+    def test_the_costs_are_the_ones_the_module_lists(self) -> None:
+        """What a reader sees differs in these cases and no others: each is a rule the module
+        lists, and each is pinned so that narrowing or widening it is a decision."""
+
+        # A comment is shown as the text it is instead of being hidden.
+        assert neutralise_quarto_markup("a <!-- c --> b") == "a <!" + Z + "-- c --> b"
+        # The fence rule's whitespace crosses line ends, so a line that starts with a brace and
+        # follows a bare fence gets the character too (inside the code block, invisible).
+        assert neutralise_quarto_markup('```\n{"a": 1}\n```') == "```\n" + Z + '{"a": 1}\n```'
+        # Quarto would not run that one, and a language label after the ticks is left alone.
+        assert neutralise_quarto_markup('```json\n{"a": 1}\n```') == '```json\n{"a": 1}\n```'
+        # A lone rule renders as a hyphen and an en dash, and underlines no heading.
+        assert neutralise_quarto_markup("Cost\n---\nText") == "Cost\n-" + Z + "--\nText"
+
 
 class TestEverySpellingIsBrokenInEveryPlace:
     @pytest.mark.parametrize(("text",), [(t,) for _, t, _ in HOSTILE], ids=HOSTILE_IDS)
@@ -270,6 +361,28 @@ class TestEverySpellingIsBrokenInEveryPlace:
             ("{{< env HOME >}}", Z + "{{" + Z + "< env HOME >}}"),
             ("a\n---\nb", "a\n-" + Z + "--\nb"),
             ("---", "-" + Z + "--"),
+            # The renderers strip a field after this runs, so whitespace around the text counts
+            # as nothing: a rule behind it is at the start of a line when the notebook is written.
+            (" ---\nx", " -" + Z + "--\nx"),
+            ("\u00a0---\nx", "\u00a0-" + Z + "--\nx"),
+            ("\n ---\nx", "\n -" + Z + "--\nx"),
+            ("x\n---\u00a0", "x\n-" + Z + "--\u00a0"),
+            ("x\n---   ", "x\n-" + Z + "--   "),
+            ("x --- ", "x --- "),
+            ("x\n --- \ny", "x\n --- \ny"),
+            (" {python} 1", " " + Z + "{python} 1"),
+            ("`` {python}", "`` " + Z + "{python}"),
+            (" ``\t{python}", " ``\t" + Z + "{python}"),
+            ("a `` {python}", "a `` {python}"),
+            ("``` {python}", "``` " + Z + "{python}"),
+            ("```\n{python}", "```\n" + Z + "{python}"),
+            ("```\r{python}", "```\r" + Z + "{python}"),
+            ("```\u2028{python}", "```\u2028" + Z + "{python}"),
+            ("<!-- c -->", "<!" + Z + "-- c -->"),
+            ("<!--", "<!" + Z + "--"),
+            ("<!-", "<!-"),
+            ("---<!---->", "---<!" + Z + "---->"),
+            ("-<!-- c -->--", "-<!" + Z + "-- c -->--"),
             ("---  \r\nx", "-" + Z + "--  \r\nx"),
             ("a\u2028---\u2028b", "a\u2028-" + Z + "--\u2028b"),
             ("a---", "a---"),
@@ -284,6 +397,50 @@ class TestEverySpellingIsBrokenInEveryPlace:
             once = neutralise_quarto_markup(text)
             assert neutralise_quarto_markup(once) == once
 
+    def test_every_whitespace_character_between_the_ticks_and_the_brace(self) -> None:
+        """Quarto's pattern counts JavaScript's ``\\s`` there, Python's counts a different set, and
+        the rule uses the union. Every code point either one counts is tried."""
+
+        for char in SPACE_CHARACTERS:
+            out = neutralise_quarto_markup(f"```{char}{{python}}\nx\n```")
+            assert constructs(out) == [], repr(char)
+            assert out.replace(Z, "") == f"```{char}{{python}}\nx\n```", repr(char)
+
+    @pytest.mark.parametrize("width", [1, 2, 3, 4, 8, 9, 40, 500])
+    def test_a_gap_of_any_width_between_the_ticks_and_the_brace(self, width: int) -> None:
+        for char in (" ", "\t", "\u00a0"):
+            text = "```" + char * width + "{python}\nx\n```"
+            assert constructs(neutralise_quarto_markup(text)) == [], (width, char)
+
+    def test_every_whitespace_character_the_renderers_strip(self) -> None:
+        """A ``.strip()`` runs after this: the rule has to see through whatever it removes, at
+        either end, because what is left is a ``---`` alone on its line."""
+
+        for char in SPACE_CHARACTERS:
+            opener = neutralise_quarto_markup(f"{char}---\nfilters: [f]\n...")
+            assert constructs(f"Intro.\n\n{opener.strip()}\n\nOutro.\n") == [], repr(char)
+            ender = neutralise_quarto_markup(f"x\n---{char}")
+            assert ender.strip().split("\n")[-1] != "---", repr(char)
+
+    def test_every_whitespace_character_in_front_of_what_a_template_tick_completes(self) -> None:
+        """06 writes a tick before the review cadence and the baseline metric, and the renderers
+        strip a field. A brace, or two ticks and a brace, behind any whitespace at the start of
+        the field is then right behind that tick."""
+
+        for char in SPACE_CHARACTERS:
+            brace = neutralise_quarto_markup(f"{char}{{python}} 1+1")
+            assert constructs(f"`{brace.strip()}`") == [], repr(char)
+            ticks = neutralise_quarto_markup(f"{char}`` {{python}}\nx\n``")
+            assert constructs(f"`{ticks.strip()}`") == [], repr(char)
+
+    @pytest.mark.parametrize("char", ["\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85"])
+    def test_the_line_ends_python_adds_are_broken_too(self, char: str) -> None:
+        """Quarto does not end a line there, and the rule breaks a rule beside one anyway: it
+        costs an invisible character, and a missed line end that Quarto does honour would cost
+        a live block. The module says so; this holds it to that."""
+
+        assert neutralise_quarto_markup(f"x{char}---{char}y") == f"x{char}-{Z}--{char}y"
+
 
 class TestSeededFuzz:
     """Strings made of the pieces Quarto's patterns are built from, in every order the dice give.
@@ -296,7 +453,7 @@ class TestSeededFuzz:
     PIECES = [
         "`", "``", "```", "````", "{", "}", "{{", "}}", "<", ">", "/*", "*/", "---", "...", "-",
         " ", "  ", "\t", "\n", "\n\n", "\r", "\r\n", "\u2028", "\u2029", "\ufeff", "\u00a0",
-        "\u3000", "python", "r", "env", "x", "=", ",", "~~~", ":::", "#", "|",
+        "\u3000", "python", "r", "env", "x", "=", ",", "~~~", ":::", "#", "|", "<!--", "-->", "<!",
     ]  # fmt: skip
     TICKS = ["```", "````", "`````", "`", "``"]
     BETWEEN = ["", "", " ", "  ", "\t", " \t", "\u00a0", "\ufeff", "\u3000", "\u2003", "\u200b",
@@ -308,11 +465,15 @@ class TestSeededFuzz:
     AFTER = ["", "\nx\n```", " 1+1`", "`", "\n", "\r\nx", "\u2028x"]
     LINE_ENDS = ["\n", "\r\n", "\r", "\u2028", "\u2029", "\n\n", " \n", "\t\n"]
     CLOSERS = ["---", "...", "----", "-- -", "---  "]
+    # A ``---`` the way Quarto reads it after it deletes comments, and whitespace a renderer's
+    # ``.strip()`` would remove from in front of it.
+    OPENERS = ["---", "---", "---<!---->", "-<!-- c -->--", "<!-- c -->---", "--<!---->-"]
+    STRIPPED = ["", " ", "  ", "\t", "\u00a0", "\u3000", "\u2003", "\x1c", "\x85", "\n "]
 
     @staticmethod
     def _built(dice: random.Random) -> str:
         cls = TestSeededFuzz
-        kind = dice.choice(["fence", "fence", "inline", "shortcode", "metadata"])
+        kind = dice.choice(["fence", "fence", "inline", "shortcode", "metadata", "stripped"])
         if kind == "fence":
             return (
                 dice.choice(cls.BEFORE)
@@ -348,10 +509,20 @@ class TestSeededFuzz:
                 + dice.choice([">}}", "*/>}}", ">}}}"])
             )
         ends = cls.LINE_ENDS
+        if kind == "stripped":
+            return (
+                dice.choice(cls.STRIPPED)
+                + dice.choice(cls.OPENERS)
+                + dice.choice(ends)
+                + "filters: [f]"
+                + dice.choice(ends)
+                + dice.choice(cls.CLOSERS)
+                + dice.choice(["", "\u00a0", " ", "\n"])
+            )
         return (
             dice.choice(cls.BEFORE)
             + dice.choice(ends)
-            + "---"
+            + dice.choice(cls.OPENERS)
             + dice.choice(["", " ", "\t", "  "])
             + dice.choice(ends)
             + "filters: [f]"
@@ -388,6 +559,44 @@ class TestSeededFuzz:
         assert flagged_raw > 4_000
 
 
+@contextlib.contextmanager
+def _deadline(seconds: int) -> Iterator[None]:
+    """Raise ``TimeoutError`` if the block takes longer (where signals allow it).
+
+    Python's ``re`` looks for a pending signal while it matches, so this stops a pattern that
+    backtracks without end; without it that failure is a hang, not a red test. Windows has no
+    ``SIGALRM`` and a worker thread cannot take one, and there the block simply runs.
+    """
+
+    if not hasattr(signal, "SIGALRM") or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    def stop(signum: int, frame: Any) -> None:
+        raise TimeoutError(f"took longer than {seconds} seconds")
+
+    previous = signal.signal(signal.SIGALRM, stop)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+@pytest.fixture(autouse=True)
+def _no_test_may_hang() -> Iterator[None]:
+    """Every test in this module runs under a deadline of a minute where the platform has one.
+
+    The timing tests below carry a tighter one of their own, but a pattern that backtracks
+    without end can also stall a test above them (a sweep, a fuzz round), and then the run hangs
+    before it reaches a test that would have named the problem. This turns that hang into a
+    failure in the test that hit it; no test here takes more than a few seconds."""
+
+    with _deadline(60):
+        yield
+
+
 class TestItIsFastOnTextAModelWrote:
     """The patterns are built to be linear: a long run of the pieces they look for is the input
     that makes an ordinary pattern quadratic.
@@ -395,7 +604,9 @@ class TestItIsFastOnTextAModelWrote:
     The patterns take about ten milliseconds for 100,000 characters. A quadratic pattern needs
     tens of seconds for the same input (the pattern did, in a scratch copy with the guard against
     restarting inside a run of ticks removed), so a bound of two seconds separates them with room
-    on a slow machine, and a failure arrives in well under a minute rather than after a hang.
+    on a slow machine. A pattern that backtracks exponentially never returns, so each case also
+    runs under a deadline of twenty seconds where the platform has one: that fails the test
+    instead of hanging the run.
     """
 
     N = 100_000
@@ -424,9 +635,39 @@ class TestItIsFastOnTextAModelWrote:
         ],
     )  # fmt: skip
     def test_a_long_run_takes_seconds_not_minutes(self, text: str) -> None:
-        start = time.perf_counter()
-        neutralise_quarto_markup(text)
-        assert time.perf_counter() - start < 2
+        with _deadline(20):
+            start = time.perf_counter()
+            neutralise_quarto_markup(text)
+            assert time.perf_counter() - start < 2
+
+    def test_a_gap_that_backtracks_badly_cannot_hang_the_run(self) -> None:
+        """The shape that makes a nested quantifier exponential: whitespace that can be split
+        between two repeats, then something that fails."""
+
+        with _deadline(20):
+            neutralise_quarto_markup("```" + " " * 60 + "x")
+
+    @pytest.mark.parametrize(
+        ("hostile", "expected"),
+        [
+            ("{{< env HOME >}}", "{{" + Z + "< env HOME >}}"),
+            ("`{python} 1`", "`" + Z + "{python} 1`"),
+            ("<!-- c -->", "<!" + Z + "-- c -->"),
+        ],
+    )
+    def test_a_construct_after_a_long_text_is_still_broken(
+        self, hostile: str, expected: str
+    ) -> None:
+        """The cost of the patterns must not come from skipping text: the construct is found
+        at the end of a hundred thousand ordinary characters and of one very long line."""
+
+        for filler in ("word " * 40_000, "a" * 200_000):
+            assert neutralise_quarto_markup(filler + hostile) == filler + expected
+            assert neutralise_quarto_markup(filler + "\n" + hostile) == filler + "\n" + expected
+
+    def test_a_rule_after_a_long_text_is_still_broken(self) -> None:
+        filler = "word " * 40_000
+        assert neutralise_quarto_markup(filler + "\n---\nx") == filler + "\n-" + Z + "--\nx"
 
 
 class TestReports:
@@ -478,6 +719,16 @@ PAYLOADS = {
     "an_expression_that_starts_with_a_brace": "{python} open('ran', 'w')",
     "an_inline_chunk_alone": "`{python} open('ran', 'w')`",
     "a_rule_alone": "---",
+    # The renderers strip a field after neutralising it.
+    "a_block_behind_a_space": " ---\nfilters:\n  - f.lua\n...",
+    "a_block_behind_no_break_spaces": "\u00a0\u00a0---\nfilters:\n  - f.lua\n...",
+    "a_block_behind_blank_lines": "\n\n  ---\nfilters:\n  - f.lua\n...",
+    "a_rule_before_trailing_spaces": "x\n---\u00a0",
+    # Quarto deletes comments before it looks for the block.
+    "a_block_opened_through_a_comment": "x\n\n---<!---->\nfilters:\n  - f.lua\n...",
+    "a_block_opened_between_dashes": "-<!-- c -->--\nfilters:\n  - f.lua\n...",
+    # 06 writes a backtick in front of the review cadence.
+    "two_ticks_a_space_and_a_brace": "`` {python}\nopen('ran', 'w')\n``",
 }
 
 QMD_FILES = [
@@ -563,6 +814,79 @@ class TestTheRenderersNeutraliseEveryFieldTheyTake:
                 constructs(planted[path])[:6],
             )
 
+    def test_no_notebook_the_agent_writes_carries_a_construct_it_was_not_given(
+        self, intake_report: IntakeReport, data_report: DataReport
+    ) -> None:
+        """Every file that Quarto would treat as a notebook, wherever it is built, not a list of
+        the seven this module knew about: ``analysis/fairness_audit.qmd`` comes from the
+        governance templates and only when the intake uses protected attributes. A notebook
+        that someone adds tomorrow is covered the day it appears."""
+
+        def agent_files(planted: bool) -> dict[str, str]:
+            intake, data = _reports(intake_report, data_report)
+            counter = [0]
+            if planted:
+                intake = _plant(intake, lambda n: PAYLOADS["everything"], counter)
+                data = _plant(data, lambda n: PAYLOADS["everything"], counter)
+            intake["governance"] = {
+                **(intake.get("governance") or {}),
+                "uses_protected_attributes": True,
+            }
+            return {
+                **_build(intake, data),
+                **build_analysis_files(intake=intake, project_slug="subrogation_model"),
+            }
+
+        baseline, hostile = agent_files(False), agent_files(True)
+        notebooks = sorted(p for p in hostile if p.endswith((".qmd", ".ipynb", ".Rmd", ".rmd")))
+        assert "analysis/fairness_audit.qmd" in notebooks
+        assert set(QMD_FILES) <= set(notebooks)
+        for path in notebooks:
+            assert _kinds(hostile[path]) == _kinds(baseline[path]), path
+
+    @pytest.mark.parametrize(
+        ("start", "end"),
+        [
+            ("2024-01-01", "abcdef\n---junk"),
+            ("x\n---\nk: v", "2024-02-01"),
+            ("x\n---\nk: v", "abcdef\n---junk"),
+        ],
+        ids=["end", "start", "both"],
+    )
+    def test_a_cut_date_cannot_leave_a_rule_alone_on_a_line(self, start: str, end: str) -> None:
+        """The measurement window is a datetime in a validated report, so only a hand-built dict
+        holds text there; ``[:10]`` of it can end in ``---``, and the template's newline follows;
+        and a newline inside it puts a ``---`` on a line of its own wherever it falls."""
+
+        def render(first: str, last: str) -> str:
+            data = {
+                "baseline_snapshot": {
+                    "measurement_window_start": first,
+                    "measurement_window_end": last,
+                }
+            }
+            return render_qmd_implementation_plan(
+                intake={"value_measurement_plan": {"decision_rights": "..."}}, data=data
+            )
+
+        def rules(text: str) -> list[str]:
+            return [line for line in text.split("\n") if line.rstrip(" \t") == "---"]
+
+        out, plain = render(start, end), render("2024-01-01", "2024-02-01")
+        assert _kinds(out) == _kinds(plain) == Counter({"metadata_block": 1})  # the header
+        assert len(rules(out)) == len(rules(plain))
+
+    @pytest.mark.parametrize("lead", [" ", "\t", "\u00a0", "\n", " \n "])
+    def test_a_field_the_renderer_strips_cannot_start_a_block(self, lead: str) -> None:
+        text = lead + "---\nfilters:\n  - f.lua\n..."
+        intake = {"business_problem": text, "proposed_solution": text}
+        out = render_qmd_business_understanding(intake=intake)
+        assert _kinds(out) == Counter({"metadata_block": 1})
+        # 02 holds a cell of its own, so it is compared with the same notebook for plain text.
+        data_out = render_qmd_data(data={"summary": text}, project_slug="subrogation_model")
+        plain = render_qmd_data(data={"summary": "Plain."}, project_slug="subrogation_model")
+        assert _kinds(data_out) == _kinds(plain)
+
     def test_the_check_above_can_fail(
         self,
         intake_report: IntakeReport,
@@ -630,8 +954,13 @@ class TestTheRenderersNeutraliseEveryFieldTheyTake:
         data_report: DataReport,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """Quarto renders ``.qmd`` files. ``reports/intake_report.md`` shares its business-case
-        block with notebook 01, and neither it nor any other file is rewritten."""
+        """A deliberate scope, pinned so that changing it is a decision. Quarto renders ``.md``
+        as well, and a ``.md`` it is asked to render expands ``{{< env >}}`` and
+        ``{{< include >}}`` and reads a second ``---`` block, though it runs no code; nothing in
+        the generated project asks it to (no ``_quarto.yml``, and the README renders the
+        notebooks by name). ``BACKLOG.md`` records the residual and the options.
+        ``reports/intake_report.md`` shares its business-case block with notebook 01, and neither
+        it nor any other file is rewritten."""
 
         with_it = _planted_build(intake_report, data_report, PAYLOADS["everything"])
         monkeypatch.setattr(templates, "neutralise_report", lambda value: value)
