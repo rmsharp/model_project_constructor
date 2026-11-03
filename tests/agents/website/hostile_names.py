@@ -76,3 +76,50 @@ HOSTILE_NAMES: list[tuple[str, str]] = [
 
 HOSTILE_IDS = [name for name, _ in HOSTILE_NAMES]
 HOSTILE_VALUES = [value for _, value in HOSTILE_NAMES]
+
+# Names that steer a path (Session 296, BACKLOG (7)(a)). The set above holds the values a Python
+# string literal must survive and none of them has a ``/`` or a ``..`` in it, so it never
+# exercised a name used as a file name. Each of these did something to the generated project
+# before ``_file_stems``: wrote outside ``queries/primary/``, replaced another file, made a file
+# name Windows or git refuses, or made the generated governance check crash. Anything that is not
+# plain ASCII is built with ``chr``: the Write tool turns an escape into the raw character
+# (learning #397), and a raw look-alike of a slash would read as a slash in a diff.
+_FULLWIDTH_SOLIDUS = chr(0xFF0F)
+_LONE_SURROGATE = chr(0xD800)
+
+PATH_NAMES: list[tuple[str, str]] = [
+    ("traversal_to_the_model_card", "x/../../governance/model_card"),
+    ("parent_directory", "../escape"),
+    ("two_parents", "../../outside"),
+    ("nested", "a/b"),
+    ("backslash", "a\\b"),
+    ("absolute", "/etc/passwd"),
+    ("empty", ""),
+    ("dot", "."),
+    ("dot_dot", ".."),
+    ("three_dots", "..."),
+    ("windows_device", "CON"),
+    ("windows_device_nul", "NUL"),
+    ("newline", "a\nb"),
+    ("nul_character", "a" + chr(0) + "b"),
+    ("over_255_bytes", "a" * 300),
+    ("trailing_dot", "a."),
+    ("trailing_space", "a "),
+    ("leading_dash", "-rf"),
+    ("git_directory", ".git"),
+    ("git_short_name", "GIT~1"),
+    ("traversal_with_a_slash_inside", "x/../y"),
+    ("percent_encoded_slash", "a%2fb"),
+    ("fullwidth_solidus", _FULLWIDTH_SOLIDUS),
+    ("fullwidth_solidus_inside", "a" + _FULLWIDTH_SOLIDUS + "b"),
+    ("names_another_directory", "queries/primary/x"),
+    ("looks_like_a_datasheet", "datasheet_x"),
+    ("quality_directory", "../quality/x"),
+    ("lone_surrogate", "a" + _LONE_SURROGATE + "b"),
+]
+
+PATH_IDS = [name for name, _ in PATH_NAMES]
+PATH_VALUES = [value for _, value in PATH_NAMES]
+# The lone surrogate cannot travel through the agent (the checkpointer refuses it first, part
+# (7)(d)); the renderers are plain functions and are tested with it, the agent is not.
+PATH_NAMES_FOR_THE_AGENT = [(i, v) for i, v in PATH_NAMES if i != "lone_surrogate"]
