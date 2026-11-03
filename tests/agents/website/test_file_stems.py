@@ -80,6 +80,11 @@ class TestAConformingNameIsItsOwnStem:
             "com10",
             "com0",
             "lpt",
+            "z",
+            "9",
+            "_con",
+            "con_",
+            "lpt_1",
         ],
     )
     def test_the_stem_is_the_name(self, name: str) -> None:
@@ -159,6 +164,30 @@ class TestAnyNameBecomesAFileNameThatIsSafeEverywhere:
         assert UNNAMED == "unnamed"
         assert UNNAMED_CHECK == "unnamed_check"
 
+    @pytest.mark.parametrize(
+        "device",
+        ["con", "prn", "aux", "nul"]
+        + [f"com{n}" for n in range(1, 10)]
+        + [f"lpt{n}" for n in range(1, 10)],
+    )
+    def test_each_of_the_twenty_two_device_names_is_renamed(self, device: str) -> None:
+        assert file_stem(device) == device + DEVICE_SUFFIX
+        assert file_stem(device.upper()) == device + DEVICE_SUFFIX
+
+    def test_a_letter_that_only_normalising_turns_into_a_capital_is_a_letter(self) -> None:
+        """Case folding comes after the compatibility fold: the mathematical bold capital A
+        and the modifier capital A become ``A`` only once decomposed, and ``a`` once folded."""
+
+        assert file_stem(chr(0x1D400)) == "a"
+        assert file_stem(chr(0x1D2C)) == "a"
+
+    def test_the_cut_comes_after_the_runs_are_collapsed(self) -> None:
+        assert file_stem("/" * 50 + "a" * 100) == "_" + "a" * 63
+
+    def test_a_falsy_name_that_is_not_none_is_written_as_text(self) -> None:
+        assert file_stem(0) == "0"
+        assert file_stem(False) == "false"
+
     def test_a_name_that_is_not_text_is_written_as_text(self) -> None:
         assert file_stem(5) == "5"
 
@@ -186,7 +215,7 @@ class TestAnyNameBecomesAFileNameThatIsSafeEverywhere:
     def test_a_name_that_only_starts_or_ends_like_a_device_name_is_not_one(self, name: str) -> None:
         assert file_stem(name) == re.sub(r"[^a-z0-9_]+", "_", name)
 
-    def test_the_device_names_are_the_twenty_two_windows_reserves(self) -> None:
+    def test_the_device_names_are_the_twenty_two_ascii_names_windows_reserves(self) -> None:
         expected = {"con", "prn", "aux", "nul"}
         expected |= {f"com{n}" for n in range(1, 10)} | {f"lpt{n}" for n in range(1, 10)}
         assert expected == set(WINDOWS_DEVICE_NAMES)
@@ -255,6 +284,23 @@ class TestAListOfStemsIsUniqueAndKeepsTheNamesThatAreFine:
         ]
         full = "a" * 64
         assert derive_file_stems([full, full]) == [full, "a" * 62 + "_2"]
+
+    def test_a_number_of_two_or_three_digits_still_fits_inside_the_cap(self) -> None:
+        full = "a" * 64
+        stems = derive_file_stems([full] * 120)
+        assert stems[0] == full
+        assert stems[1] == "a" * 62 + "_2"
+        assert stems[8] == "a" * 62 + "_9"
+        assert stems[9] == "a" * 61 + "_10"
+        assert stems[98] == "a" * 61 + "_99"
+        assert stems[99] == "a" * 60 + "_100"
+        assert stems[119] == "a" * 60 + "_120"
+        assert len(set(stems)) == 120
+        assert all(len(stem) <= MAX_STEM_LENGTH for stem in stems)
+
+    def test_a_missing_name_and_a_name_that_says_unnamed_are_two_names(self) -> None:
+        assert derive_file_stems([None, "unnamed"]) == ["unnamed_2", "unnamed"]
+        assert derive_file_stems(["unnamed", None]) == ["unnamed", "unnamed_2"]
 
     def test_ten_or_more_of_one_name_are_numbered_up_to_the_cap(self) -> None:
         stems = derive_file_stems(["q"] * 12)
@@ -357,3 +403,13 @@ class TestTheHelpersReadTheReport:
         one = {"name": "p", "quality_checks": [{"check_name": "row_count"}]}
         two = {"name": "q", "quality_checks": [{"check_name": "row_count"}]}
         assert quality_check_stems(one) == quality_check_stems(two) == ["row_count"]
+
+
+class TestTheCorporaAreNotEmptied:
+    """An emptied corpus would skip every parametrised case that reads it and still pass."""
+
+    def test_the_path_corpus_is_not_empty_and_has_no_repeats(self) -> None:
+        assert len(PATH_VALUES) >= 25
+        assert len(set(PATH_IDS)) == len(PATH_IDS)
+        assert len(set(PATH_VALUES)) == len(PATH_VALUES)
+        assert len(ALL_HOSTILE) == len(ALL_HOSTILE_IDS) == len(HOSTILE_VALUES) + len(PATH_VALUES)

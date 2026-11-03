@@ -5,8 +5,9 @@ would (``path_checks``), with the names of ``PATH_NAMES`` as primary query names
 names. Before ``_file_stems`` Session 296's scouts ran this and saw: a datasheet written over
 ``governance/model_card.md`` while the generated project's own check said "0 problems"; a check
 named ``../../primary/beta`` written over a primary query; two queries of one name written as one
-file; ``Foo`` and ``foo`` as two entries in a commit and one file on macOS; a name of 300
-characters that made the generated governance check crash.
+file; ``Foo`` and ``foo`` as two entries in a commit and one file on macOS; a name of 243 to
+251 characters that made the generated governance check crash (a name of 252 or more could not
+be written to disk at all, and the old check then reported no problem for the tree it was given).
 """
 
 from __future__ import annotations
@@ -23,10 +24,14 @@ import pytest
 
 from model_project_constructor.agents.website import _governance_check as gc
 from model_project_constructor.agents.website.agent import WebsiteAgent
+from model_project_constructor.agents.website.governance_templates import render_datasheet
+from model_project_constructor.agents.website.graph import build_website_graph
 from model_project_constructor.agents.website.protocol import RepoClientError
 from model_project_constructor.agents.website.templates import (
     derive_project_name,
     derive_project_slug,
+    render_primary_query_files,
+    render_quality_check_files,
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -42,6 +47,8 @@ FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 E_ACUTE = chr(0xE9)  # a precomposed letter; its decomposed twin is the letter and the mark below
 COMBINING_ACUTE = chr(0x301)
 LONE_SURROGATE = chr(0xD800)
+EM_DASH = chr(0x2014)  # the dash in the datasheet's title
+SUPERSCRIPT_ONE = chr(0xB9)
 HINT = "Hostile Names"
 SLUG = derive_project_slug(derive_project_name(HINT))
 TARGET = RepoTarget(
@@ -111,7 +118,11 @@ def _report(
 
 def _generate(data: dict[str, Any]) -> tuple[RepoProjectResult, dict[str, str]]:
     client = PathCheckingRepoClient()
-    result = WebsiteAgent(client, ci_platform="gitlab").run(
+    agent = WebsiteAgent(client, ci_platform="gitlab")
+    # A refused commit is retried after a real 1 s and 2 s sleep; without this a regression makes
+    # every failing case cost three seconds, as the host tests avoid in the same way.
+    agent.graph = build_website_graph(client, sleep=lambda _seconds: None)
+    result = agent.run(
         IntakeReport.model_validate(_load("subrogation_intake.json")),
         DataReport.model_validate(data),
         TARGET,
@@ -169,7 +180,21 @@ class TestThePathModelCanFail:
             "queries/quality/nul/x.sql",
             "queries/primary/Com1.sql",
             "queries/primary/" + "a" * 256 + ".sql",
+            "queries/primary/" + "a" * 252 + ".sql",  # a 256-byte component, one too many
+            "x/" + E_ACUTE * 128,  # 256 bytes in 128 characters
             "a" + LONE_SURROGATE + "b",
+            "a?b",
+            "a<b",
+            "a>b",
+            "a|b",
+            'a"b',
+            "a\x1fb",  # the last control character
+            "queries/primary/a ",
+            "queries/primary/conin$.sql",
+            "queries/primary/COM" + SUPERSCRIPT_ONE + ".sql",
+            "queries/quality/LPT" + SUPERSCRIPT_ONE + "/x.sql",
+            "queries/primary/aux",
+            "queries/primary/PRN.txt.sql",
         ],
     )
     def test_a_path_that_something_refuses_is_refused(self, path: str) -> None:
@@ -189,6 +214,10 @@ class TestThePathModelCanFail:
             "queries/primary/" + "a" * 251 + ".sql",
             "queries/primary/con_file.sql",
             "queries/primary/conx.sql",
+            "queries/primary/a b.sql",  # a space inside a name is allowed
+            "x/" + E_ACUTE * 127,  # 254 bytes
+            "queries/primary/xcon.sql",
+            "queries/primary/a.b.sql",
         ],
     )
     def test_a_path_the_scaffold_writes_is_accepted(self, path: str) -> None:
@@ -204,6 +233,7 @@ class TestThePathModelCanFail:
             ],
             ["queries/primary", "queries/primary/a.sql"],
             ["a/b/c", "a/b"],
+            ["a", "a/b/c"],
         ],
     )
     def test_two_paths_that_are_one_file_somewhere_are_refused(self, paths: list[str]) -> None:
@@ -230,6 +260,63 @@ class TestThePathModelCanFail:
                 message="m",
             )
         assert client.get_files(project.id) == {}
+
+    @pytest.mark.parametrize("bad", ["queries/primary/../../x.md", "queries/primary/CON.sql"])
+    def test_a_bad_path_anywhere_in_a_commit_refuses_all_of_it(self, bad: str) -> None:
+        """The agent sends the whole scaffold in one commit, so the guard must read every path,
+        not the first, and a refused commit must leave nothing behind."""
+
+        client = PathCheckingRepoClient()
+        project = client.create_project(namespace="ns", name="p", visibility="private")
+        files = {f"queries/primary/q{n:03}.sql": "x" for n in range(60)}
+        files[bad] = "x"  # after every safe path, in insertion order and in sorted order alike
+        files["zzz/last.md"] = "x"
+        with pytest.raises(RepoClientError, match="path refused"):
+            client.commit_files(project_id=project.id, branch="main", files=files, message="m")
+        assert client.get_files(project.id) == {}
+
+    def test_a_collision_with_a_file_committed_earlier_is_refused(self) -> None:
+        client = PathCheckingRepoClient()
+        project = client.create_project(namespace="ns", name="p", visibility="private")
+        client.commit_files(
+            project_id=project.id, branch="main", files={"a/b.sql": "1"}, message="one"
+        )
+        with pytest.raises(RepoClientError, match="one file"):
+            client.commit_files(
+                project_id=project.id, branch="main", files={"A/B.sql": "2"}, message="two"
+            )
+        assert client.get_files(project.id) == {"a/b.sql": "1"}
+
+
+class TestTheRenderersTakeTheStemTheyAreGiven:
+    """``render_datasheet(stem=None)`` and the ``None`` of a report with no checks or queries
+    are paths the agent never takes (it always passes a stem and a full report)."""
+
+    def test_a_datasheet_without_a_stem_uses_the_stem_the_query_has_alone(self) -> None:
+        text = render_datasheet(query={"name": "Claims 2024", "datasheet": {}})
+        assert "> Source SQL: `queries/primary/claims_2024.sql`" in text
+        assert text.startswith("# Datasheet " + EM_DASH + " `Claims 2024`")
+
+    def test_a_datasheet_with_a_stem_uses_that_stem_and_keeps_the_name_as_its_title(self) -> None:
+        text = render_datasheet(query={"name": "Dup", "datasheet": {}}, stem="dup_2")
+        assert "> Source SQL: `queries/primary/dup_2.sql`" in text
+        assert "`Dup`" in text.splitlines()[0]
+
+    def test_a_datasheet_for_a_query_with_no_name_is_the_unnamed_one(self) -> None:
+        assert "`queries/primary/unnamed.sql`" in render_datasheet(query={})
+
+    @pytest.mark.parametrize("data", [{}, {"primary_queries": None}, {"primary_queries": []}])
+    def test_a_report_with_no_queries_writes_no_query_files(self, data: dict[str, Any]) -> None:
+        assert render_primary_query_files(data=data) == {}
+        assert render_quality_check_files(data=data) == {}
+
+    @pytest.mark.parametrize("query", [{"name": "a"}, {"name": "a", "quality_checks": None}])
+    def test_a_query_with_no_checks_writes_its_sql_and_no_check_files(
+        self, query: dict[str, Any]
+    ) -> None:
+        data = {"primary_queries": [{**query, "sql": "SELECT 1"}]}
+        assert render_primary_query_files(data=data) == {"queries/primary/a.sql": "SELECT 1\n"}
+        assert render_quality_check_files(data=data) == {}
 
 
 class TestAReportThatWasFineIsUnchanged:
@@ -293,10 +380,14 @@ class TestAHostileNameStillMakesASafeProject:
         for path, text in files.items():
             if path.startswith("reports/") or path.startswith("queries/"):
                 continue  # the raw reports keep the readable name; the SQL is SQL
-            for stem in re.findall(r"queries/primary/([a-z0-9_]+)\.sql", text):
+            # Anything up to a space, a backtick, an angle bracket, a brace or a star is a printed
+            # path, so a raw name printed in a new place is caught here. The generic text
+            # ``datasheet_<query>.md``, the glob ``datasheet_*.md`` and the f-string source of
+            # the generated check are not paths and are left alone.
+            for stem in re.findall(r"queries/primary/([^`\s<>*{}]+?)\.sql", text):
                 shown += 1
                 assert f"queries/primary/{stem}.sql" in files, (path, stem)
-            for stem in re.findall(r"datasheet_([a-z0-9_]+)\.md", text):
+            for stem in re.findall(r"datasheet_([^`\s<>*{}]+?)\.md", text):
                 shown += 1
                 if not path.startswith("data/datasheet_"):
                     assert f"data/datasheet_{stem}.md" in files, (path, stem)
@@ -419,7 +510,16 @@ class TestTheGeneratedProjectStaysHonest:
     def test_its_own_governance_check_passes_for_names_that_used_to_crash_it(
         self, tmp_path: Path
     ) -> None:
-        root, _ = self._project(tmp_path, ["a" * 300, "x/../../governance/model_card", "CON", ""])
+        names = [
+            "a" * 243,
+            "b" * 251,
+            "c" * 252,
+            "d" * 300,
+            "x/../../governance/model_card",
+            "CON",
+            "",
+        ]
+        root, _ = self._project(tmp_path, names)
         assert gc.check(root) == []
 
     def test_the_check_still_asks_for_a_datasheet_for_every_query(self, tmp_path: Path) -> None:

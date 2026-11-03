@@ -1,8 +1,11 @@
 """Metric and query names that a Python string literal must survive.
 
 ``templates._str_list_literal`` writes ``evaluation_metrics`` and the primary query names into
-``REQUESTED_METRICS`` and ``PRIMARY_QUERY_NAMES`` in a generated project. Neither string is
-constrained by the schemas (Session 294's scouts read both), so a name can hold anything.
+``REQUESTED_METRICS`` and ``PRIMARY_QUERY_NAMES`` in a generated project (since Session 296 the
+scaffold lists the *file stems* of the query names, ``_file_stems``; the direct renderer
+``render_data_loading`` still writes whatever list it is given, and these values test that).
+Neither string is constrained by the schemas (Session 294's scouts read both), so a name can
+hold anything.
 Before Session 294 the writer was ``f'"{item}"'``: a double quote, a newline or a NUL made the
 generated module a syntax error, a backslash changed the value, and ``a"+str(1+1)+"b`` was an
 expression that ran when the module was imported.
@@ -79,11 +82,14 @@ HOSTILE_VALUES = [value for _, value in HOSTILE_NAMES]
 
 # Names that steer a path (Session 296, BACKLOG (7)(a)). The set above holds the values a Python
 # string literal must survive and none of them has a ``/`` or a ``..`` in it, so it never
-# exercised a name used as a file name. Each of these did something to the generated project
+# exercised a name used as a file name. Most of these did something to the generated project
 # before ``_file_stems``: wrote outside ``queries/primary/``, replaced another file, made a file
-# name Windows or git refuses, or made the generated governance check crash. Anything that is not
-# plain ASCII is built with ``chr``: the Write tool turns an escape into the raw character
-# (learning #397), and a raw look-alike of a slash would read as a slash in a diff.
+# name Windows or git refuses, or made the generated governance check crash. Five did nothing
+# harmful (``leading_dash``, ``percent_encoded_slash``, both ``fullwidth_solidus`` names and
+# ``looks_like_a_datasheet``): they are controls, there to show the stem leaves a safe path safe.
+# Anything that is not plain ASCII is built with ``chr``: the Write tool turns an escape into
+# the raw character (learning #397), and a raw look-alike of a slash would read as a slash in a
+# diff.
 _FULLWIDTH_SOLIDUS = chr(0xFF0F)
 _LONE_SURROGATE = chr(0xD800)
 

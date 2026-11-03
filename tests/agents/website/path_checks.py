@@ -10,7 +10,8 @@ developer can clone on Linux, macOS and Windows.
 The rules were measured where they could be: local git 2.56.0 (``git update-index --cacheinfo``)
 refuses ``..``, ``.``, an empty component, ``//`` and any ``.git`` component, and accepts a
 trailing dot, ``CON.sql`` and ``a/b.sql``. The Windows and macOS rules are the documented ones
-and were not run on those systems (the model errs towards refusing). This module imports nothing
+and were not run on those systems; the model refuses what they document and may accept what they
+do not (``COM0`` and ``LPT0`` are left out: Windows versions differ). This module imports nothing
 from ``_file_stems``: a list of device names copied from the code under test would share its
 mistakes.
 """
@@ -22,11 +23,15 @@ import unicodedata
 from model_project_constructor.agents.website.fake_client import FakeRepoClient
 from model_project_constructor.agents.website.protocol import CommitInfo, RepoClientError
 
-# Microsoft's list of names that cannot be a file name on Windows, with or without an extension.
+# The names Windows reserves as devices, with or without an extension: Microsoft's documented
+# list plus the superscript digits that CPython's own check also reserves.
+_SUPERSCRIPTS = (chr(0xB9), chr(0xB2), chr(0xB3))
 _DEVICES = (
     {"con", "prn", "aux", "nul", "conin$", "conout$"}
     | {f"com{n}" for n in range(1, 10)}
     | {f"lpt{n}" for n in range(1, 10)}
+    | {f"com{n}" for n in _SUPERSCRIPTS}
+    | {f"lpt{n}" for n in _SUPERSCRIPTS}
 )
 _FORBIDDEN_ON_WINDOWS = set('\\:*?"<>|')
 MAX_COMPONENT_BYTES = 255
