@@ -13,6 +13,7 @@ process: the three things its README, its CI and its pre-commit hook run.
 
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import os
@@ -28,7 +29,6 @@ import pytest
 import yaml
 
 from model_project_constructor.agents.website.agent import WebsiteAgent
-from model_project_constructor.agents.website.fake_client import FakeRepoClient
 from model_project_constructor.agents.website.governance_templates import (
     render_fairness_test_stub,
 )
@@ -44,6 +44,7 @@ from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
 from model_project_constructor.schemas.v1.repo import RepoTarget
 from tests.agents.website.hostile_names import HOSTILE_NAMES
+from tests.agents.website.path_checks import PathCheckingRepoClient
 
 FIXTURES_DIR = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -65,6 +66,8 @@ class Variant:
     protected_attributes: bool
     # A report may validly list no evaluation metrics and no primary queries.
     empty_lists: bool = False
+    # Query and check names that steer a path, collide or are not file names (Session 296).
+    hostile_names: bool = False
 
 
 VARIANTS = [
@@ -86,8 +89,24 @@ VARIANTS = [
     Variant("reserved-tests", "tier1_intake.json", "github", "Tests", True),
     Variant("reserved-statistics", "subrogation_intake.json", "gitlab", "Statistics", False),
     Variant("reserved-keyword", "subrogation_intake.json", "gitlab", "Class", False),
+    # Session 296: a report name is written as a file name, so a name that steers a path, two that
+    # are one, a Windows device name, an empty one and one past 255 bytes must still give a project
+    # whose own tests pass, which ruff leaves as written, and whose files are all where it says.
+    Variant(
+        "hostile-names",
+        "subrogation_intake.json",
+        "gitlab",
+        "Queries Named Oddly",
+        False,
+        hostile_names=True,
+    ),
 ]
 TIER1_GITHUB = VARIANTS[1]
+
+HOSTILE_QUERY_NAMES = ["x/../../governance/model_card", "Dup", "dup", "CON", "", "q" * 300]
+# The fixture query has two checks; alternate a check aimed at a primary query with a pair that
+# fold together.
+HOSTILE_CHECK_NAMES = [("../../primary/dup", "Row Count"), ("Row Count", "row count")]
 
 
 @dataclass(frozen=True)
@@ -104,13 +123,26 @@ def _generate(variant: Variant) -> tuple[str, dict[str, str]]:
     if variant.empty_lists:
         intake_json["model_solution"]["evaluation_metrics"] = []
         data_json["primary_queries"] = []
+    if variant.hostile_names:
+        template = data_json["primary_queries"][0]
+        queries = []
+        for index, name in enumerate(HOSTILE_QUERY_NAMES):
+            query = copy.deepcopy(template)
+            query["name"] = name
+            check_names = HOSTILE_CHECK_NAMES[index % len(HOSTILE_CHECK_NAMES)]
+            assert len(query["quality_checks"]) == len(check_names)
+            for check, check_name in zip(query["quality_checks"], check_names, strict=True):
+                check["check_name"] = check_name
+            queries.append(query)
+        data_json["primary_queries"] = queries
     target = RepoTarget(
         host_url="https://gitlab.example.com",
         namespace="data-science/model-drafts",
         project_name_hint=variant.name_hint,
         visibility="private",
     )
-    client = FakeRepoClient()
+    # A path a checkout would refuse fails here, before this fixture writes a file anywhere.
+    client = PathCheckingRepoClient()
     result = WebsiteAgent(client, ci_platform=variant.ci_platform).run(
         IntakeReport.model_validate(intake_json), DataReport.model_validate(data_json), target
     )
