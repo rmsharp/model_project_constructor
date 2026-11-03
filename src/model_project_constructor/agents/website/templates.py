@@ -24,6 +24,10 @@ import json
 import re
 from typing import Any
 
+from model_project_constructor.agents.website._file_stems import (
+    primary_query_stems,
+    quality_check_stems,
+)
 from model_project_constructor.agents.website._quarto_markup import (
     neutralise_quarto_markup,
     neutralise_report,
@@ -538,6 +542,9 @@ def render_qmd_business_understanding(*, intake: dict[str, Any]) -> str:
 
 
 def render_qmd_data(*, data: dict[str, Any], project_slug: str) -> str:
+    # The file a query is written to comes from the report as given, as it does in every other
+    # renderer; the neutraliser below changes the text a reader sees, not the path.
+    stems = primary_query_stems(data)
     data = neutralise_report(data)
     summary = str(data.get("summary", "")).strip()
     primary_queries = data.get("primary_queries") or []
@@ -547,11 +554,11 @@ def render_qmd_data(*, data: dict[str, Any], project_slug: str) -> str:
         summary,
         "\n\n## Primary Queries\n",
     ]
-    for q in primary_queries:
+    for q, stem in zip(primary_queries, stems, strict=True):
         name = q.get("name", "unknown")
         purpose = q.get("purpose", "")
         lines.append(f"\n### {name}\n\n{purpose}\n")
-        lines.append(f"\nSQL: `queries/primary/{name}.sql`\n")
+        lines.append(f"\nSQL: `queries/primary/{stem}.sql`\n")
     lines.append(
         "\n```{python}\n"
         f"# from {project_slug}.data_loading import load_primary\n"
@@ -775,20 +782,28 @@ def render_qmd_extensions(*, intake: dict[str, Any], project_slug: str) -> str:
 
 
 def render_primary_query_files(*, data: dict[str, Any]) -> dict[str, str]:
+    """One ``queries/primary/<stem>.sql`` per primary query.
+
+    The stem is not the report's name: a name is any string, and it used to be written here as
+    given (``_file_stems``, BACKLOG (7)(a)).
+    """
+
     out: dict[str, str] = {}
-    for q in data.get("primary_queries") or []:
-        name = q.get("name", "unnamed")
-        out[f"queries/primary/{name}.sql"] = str(q.get("sql", "")).rstrip() + "\n"
+    queries = data.get("primary_queries") or []
+    for q, stem in zip(queries, primary_query_stems(data), strict=True):
+        out[f"queries/primary/{stem}.sql"] = str(q.get("sql", "")).rstrip() + "\n"
     return out
 
 
 def render_quality_check_files(*, data: dict[str, Any]) -> dict[str, str]:
+    """One ``queries/quality/<query stem>/<check stem>.sql`` per quality check."""
+
     out: dict[str, str] = {}
-    for q in data.get("primary_queries") or []:
-        primary_name = q.get("name", "unnamed")
-        for check in q.get("quality_checks") or []:
-            check_name = check.get("check_name", "unnamed_check")
-            path = f"queries/quality/{primary_name}/{check_name}.sql"
+    queries = data.get("primary_queries") or []
+    for q, primary_stem in zip(queries, primary_query_stems(data), strict=True):
+        checks = q.get("quality_checks") or []
+        for check, check_stem in zip(checks, quality_check_stems(q), strict=True):
+            path = f"queries/quality/{primary_stem}/{check_stem}.sql"
             out[path] = str(check.get("check_sql", "")).rstrip() + "\n"
     return out
 
@@ -864,7 +879,7 @@ def render_data_readme(*, data: dict[str, Any]) -> str:
         "## Primary Queries\n",
         "\n",
     ]
-    for q in queries:
+    for q, stem in zip(queries, primary_query_stems(data), strict=True):
         name = q.get("name", "unnamed")
         # "unknown" is a defensive sentinel: expected_row_count_order is a
         # REQUIRED PrimaryQuery field (schemas.RowCountOrder), so a validly
@@ -875,7 +890,7 @@ def render_data_readme(*, data: dict[str, Any]) -> str:
         lines.append(f"### `{name}`\n\n")
         lines.append(f"- **Expected row order:** {row_order}\n")
         lines.append(f"- **Purpose:** {purpose}\n")
-        lines.append(f"- **Datasheet:** `datasheet_{name}.md`\n\n")
+        lines.append(f"- **Datasheet:** `datasheet_{stem}.md`\n\n")
     return "".join(lines)
 
 
@@ -962,9 +977,9 @@ def build_base_files(
     """
 
     src_prefix = f"src/{project_slug}"
-    primary_query_names = [
-        q.get("name", f"query_{i}") for i, q in enumerate(data.get("primary_queries") or [])
-    ]
+    # The loader reads ``queries/primary/<name>.sql``, so the list holds the stems the files are
+    # written under, not the report's names.
+    primary_query_names = primary_query_stems(data)
 
     files: dict[str, str] = {
         ".gitignore": render_gitignore(),

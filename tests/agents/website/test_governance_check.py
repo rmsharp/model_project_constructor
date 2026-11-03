@@ -251,7 +251,12 @@ class TestTheRequiredFiles:
 
 
 class TestAQueryWithAnEmptyName:
-    """The generator writes ``queries/primary/.sql`` and ``data/datasheet_.md`` for it."""
+    """The generator writes ``unnamed.sql`` and ``datasheet_unnamed.md`` for it.
+
+    It wrote ``queries/primary/.sql`` and ``data/datasheet_.md`` until Session 296
+    (``_file_stems``). A hand-made project can still hold the first, and the check must agree
+    with it, so the unit test below keeps building that tree itself.
+    """
 
     def test_the_check_asks_for_the_datasheet_the_generator_wrote(self, tmp_path: Path) -> None:
         primary = tmp_path / "queries" / "primary"
@@ -279,7 +284,8 @@ class TestAQueryWithAnEmptyName:
         )
         assert result.status == "COMPLETE", result.failure_reason
         files = client.get_files(result.project_id)
-        assert "data/datasheet_.md" in files and "queries/primary/.sql" in files
+        assert "data/datasheet_unnamed.md" in files and "queries/primary/unnamed.sql" in files
+        assert "data/datasheet_.md" not in files and "queries/primary/.sql" not in files
         for relative, text in files.items():
             (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
             (tmp_path / relative).write_text(text, encoding="utf-8")

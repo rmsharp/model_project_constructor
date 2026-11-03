@@ -33,6 +33,7 @@ from importlib.resources import files
 from typing import Any, Literal
 
 from model_project_constructor._vocab_guard import assert_vocab_parity
+from model_project_constructor.agents.website._file_stems import file_stem, primary_query_stems
 from model_project_constructor.agents.website.templates import RUFF_VERSION
 from model_project_constructor.schemas.v1.common import CycleTime, RiskTier
 
@@ -592,14 +593,18 @@ def render_eu_ai_act_compliance(*, intake: dict[str, Any]) -> str:
     )
 
 
-def render_datasheet(*, query: dict[str, Any]) -> str:
+def render_datasheet(*, query: dict[str, Any], stem: str | None = None) -> str:
     """Render a Gebru-2021 datasheet for a single primary query.
 
     ``query`` is one element from ``DataReport.primary_queries`` dumped to
-    JSON (so the nested ``datasheet`` is a dict).
+    JSON (so the nested ``datasheet`` is a dict). ``stem`` is the file stem the query is
+    written under (``primary_query_stems``); the datasheet names its SQL file by it, and the
+    query's own name stays the title. Without one, the stem is the one the query would have
+    alone in its report.
     """
 
     name = query.get("name", "unnamed")
+    stem = file_stem(query.get("name")) if stem is None else stem
     datasheet = query.get("datasheet") or {}
     biases = datasheet.get("known_biases") or []
     biases_md = "\n".join(f"- {b}" for b in biases) or "- (none declared)"
@@ -607,7 +612,7 @@ def render_datasheet(*, query: dict[str, Any]) -> str:
         f"# Datasheet — `{name}`\n"
         "\n"
         "> Per Gebru et al. 2021, \"Datasheets for Datasets.\"\n"
-        f"> Source SQL: `queries/primary/{name}.sql`\n"
+        f"> Source SQL: `queries/primary/{stem}.sql`\n"
         "\n"
         "## Motivation\n\n"
         f"{datasheet.get('motivation', '(not provided)')}\n"
@@ -899,10 +904,11 @@ def build_governance_files(
         ci_host_config=ci_host_config
     )
 
-    # One datasheet per primary query, per Gebru 2021.
-    for query in data.get("primary_queries") or []:
-        name = query.get("name", "unnamed")
-        files[f"data/datasheet_{name}.md"] = render_datasheet(query=query)
+    # One datasheet per primary query, per Gebru 2021. The file is named by the same stem the
+    # query's SQL file has, so the generated governance check finds one for the other.
+    queries = data.get("primary_queries") or []
+    for query, stem in zip(queries, primary_query_stems(data), strict=True):
+        files[f"data/datasheet_{stem}.md"] = render_datasheet(query=query, stem=stem)
 
     # --- Tier 3+ (tier 3, 2, 1) ---
     if _tier_at_least(risk_tier, "tier_3_moderate"):

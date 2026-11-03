@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from model_project_constructor.agents.website._file_stems import file_stem
 from model_project_constructor.agents.website.templates import (
     _STUB_CALLS,
     _str_list_literal,
@@ -630,7 +631,9 @@ class TestNamesAreWrittenAsPythonStrings:
         evaluation = files["src/subrogation_model/evaluation.py"]
         loading = files["src/subrogation_model/data_loading.py"]
         assert _assigned(evaluation, "REQUESTED_METRICS") == [value]
-        assert _assigned(loading, "PRIMARY_QUERY_NAMES")[0] == value
+        # The loader reads queries/primary/<name>.sql, so it lists the stem the file is
+        # written under, not the report's name (Session 296, BACKLOG (7)(a)).
+        assert _assigned(loading, "PRIMARY_QUERY_NAMES") == [file_stem(value)]
 
     @pytest.mark.parametrize(
         ("value", "literal"),
@@ -698,18 +701,29 @@ class TestNamesAreWrittenAsPythonStrings:
         out.encode("utf-8")  # a lone surrogate would raise here
 
     @pytest.mark.parametrize(
-        "names",
+        ("names", "stems"),
         [
-            ["AUC", "AUC"],
-            ["a", "b", "a"],
-            [" a ", "\n", " ", "\t", "x "],
+            (["AUC", "AUC"], ["auc", "auc_2"]),
+            (["a", "b", "a"], ["a", "b", "a_2"]),
+            (
+                [" a ", "\n", " ", "\t", "x "],
+                ["_a_", "unnamed", "unnamed_2", "unnamed_3", "x_"],
+            ),
         ],
         ids=["duplicates", "separated_duplicates", "surrounding_whitespace"],
     )
     def test_names_are_kept_as_given_on_every_path(
-        self, intake_report: IntakeReport, data_report: DataReport, names: list[str]
+        self,
+        intake_report: IntakeReport,
+        data_report: DataReport,
+        names: list[str],
+        stems: list[str],
     ) -> None:
-        """No path through the scaffold drops a duplicate or trims a name."""
+        """No path through the scaffold drops a duplicate or trims a metric or a list's items.
+
+        A query name is different since Session 296: a name is written to a file, so the scaffold
+        lists the stem each query's file has (``_file_stems``), which is one per query and never
+        a repeat. The writer itself still writes whatever list it is given."""
 
         metrics = render_evaluation(intake={"model_solution": {"evaluation_metrics": names}})
         assert _assigned(metrics, "REQUESTED_METRICS") == names
@@ -729,7 +743,7 @@ class TestNamesAreWrittenAsPythonStrings:
         evaluation = files["src/subrogation_model/evaluation.py"]
         data_loading = files["src/subrogation_model/data_loading.py"]
         assert _assigned(evaluation, "REQUESTED_METRICS") == names
-        assert _assigned(data_loading, "PRIMARY_QUERY_NAMES") == names
+        assert _assigned(data_loading, "PRIMARY_QUERY_NAMES") == stems
 
     def test_the_corpus_is_not_empty_and_has_no_repeats(self) -> None:
         """An emptied corpus would skip every parametrised test above and still pass."""
