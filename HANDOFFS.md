@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S297
+date: 2026-11-04
+status: pending
+active_task: The thirteenth trim of SESSION_NOTES.md (207430 B, past the 196608 B byte-rule trigger): the oldest records move into a thirteenth write-once shard with its proof, in three commits (claim, trim with no record edit, close-out), as Session 287 did the twelfth. Session claimed; work beginning.
+```
+
+```handoff
 session: S296
 date: 2026-11-03
 status: complete

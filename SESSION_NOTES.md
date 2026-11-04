@@ -95,6 +95,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 297 Did
+**Deliverable:** **The thirteenth trim of `SESSION_NOTES.md`: the live file is 207,430 B, past the 196,608 B trigger of the byte rule (`CLAUDE.md`, "`SESSION_NOTES.md` is trimmed"), so the oldest records move into a thirteenth write-once shard with its own proof, cut back to at most 98,304 B and keeping at least four non-stub records.** (IN PROGRESS) The operator chose the area at a picker (the recommended option, after an opening message of "go"). The procedure is `CLAUDE.md`'s trim bullets and Session 287's record, the twelfth trim, as the worked precedent. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` (the nearest; the trim authors a proof script).
+**Started:** 2026-11-04 15:20
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 296 Did
 **Deliverable:** **Part (7)(a) of the `BACKLOG.md` item "What the scaffold still gets wrong after Larkspur point (2)" — COMPLETE: a data report's query and check names can no longer choose the path of a file, replace another file or collide, in the project the website agent writes. The item left the design to the operator; the operator ruled for repair at the file name, for both names and for duplicates, and the scouts found a second sink the item did not name (`QualityCheck.check_name`).** The operator chose the area and the item at pickers (the recommended option both times, after an opening message of "go"), then ruled the two design questions (the recommended option both times). **Mine, not put to the operator:** the repair rule (ASCII, 64 characters, `_file` after a device name, `unnamed`, the numbering), the tests, the mutation runs, the review and its fixes, and what to file instead of fix. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md`.
 **Started:** 2026-11-03 15:30 · **Completed:** 2026-11-03 17:45 (ledger-entry time).
