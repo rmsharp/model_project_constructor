@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S298
+date: 2026-11-05
+status: pending
+active_task: Settle the SESSION_NOTES.md front-matter limit (8,192 B limit, 7,931 B used, 73 B of room that counts, so a fourteenth trim turns two next-state tests red; BACKLOG.md :91 and :1564): measure the options (cut front-matter prose, raise the limit, move the oldest table rows out), put the recommendation to the operator, then record and implement the ruling. Session claimed; work beginning.
+```
+
+```handoff
 session: S297
 date: 2026-11-04
 status: complete
