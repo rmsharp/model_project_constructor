@@ -20,9 +20,7 @@ duplicated. **`grep` the shards; `Read` none** — a default `Read` of the large
 outright, not all of the others come back whole either, and nothing watches any of them.
 
 **Shards stay write-once.** A fourteenth trim writes a fourteenth file; it never appends to one of these.
-That is also why every shard after the first is named as a range rather than in the first's
-open-ended `-through-S216` form — `docs/methodology/PROJECT_CONVENTIONS.md` §3.1 carries the rule
-and the reason.
+That is also why every shard after the first is named as a range.
 
 **A shard banner is a snapshot of its own cut; this table is the authority.** Several banners still
 route sessions to this live file that have since moved into a shard. Each was true when it was
@@ -37,12 +35,10 @@ the table's shape, each standing rule's headline, every shard filename, every nu
 vocabulary. **The prose around those is still unread — a paragraph of it deletes green.** Edit
 anything above `## ACTIVE TASK` and run `uv run pytest tests/test_session_notes_census.py --no-cov`.
 
-**Nothing is bequeathed to the fourteenth trim.** The two instructions that stood here — never
-re-open the `L`-numbering collision; publish a sweep result, never repeat its sentence — are
-recorded in `CLAUDE.md`, and the list as it stood is embedded in the tenth trim's proof.
+**Nothing is bequeathed to the fourteenth trim.** The standing instructions are in `CLAUDE.md`.
 
 | # | trim | archived | rec | lines | shard, under `docs/architecture-history/` | shard | left live | added |
-|--:|------|----------|----:|------:|------------------------------------------|------:|-----------|-------|
+|--:|---|---|--:|--:|---|--:|---|---|
 | 1 | S222 `a9510ca` | 216 → 1 | 206 | 24,564 | `SESSION_NOTES-through-S216.md` | 24,590 | 222 → 217 | L0, L1, L2, L3 |
 | 2 | S224 `07e1ab9` | 220 → 217 | 5 | 774 | `SESSION_NOTES-S220-through-S217.md` | 804 | 224 → 221 | L4 |
 | 3 | S228 `e4ca944` | 224 → 221 | 4 | 891 | `SESSION_NOTES-S224-through-S221.md` | 933 | 228 → 225 | L5, L6, L7 |
@@ -64,26 +60,12 @@ lines they took; `shard`, that file's total; `left live`, what this file was lef
 cut; `added`, the assertions that trim contributed to the inherited set. Each shard's proof is its
 own path with `.verify.sh` appended.*
 
-**The proofs, and what each can see.** The first collapse is
-[`SESSION_NOTES-pointer-collapse.verify.sh`](docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh),
-lettered `C`; this one is
-[`SESSION_NOTES-pointer-collapse-S254.verify.sh`](docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh),
-lettered `R`, and the 276 lines of front matter it replaced are embedded in it verbatim.
-Neither is a shard proof and neither is an `L`. Both hold the records byte-identical across their
-own commit — a collapse commit carries no record edit, the same rule `CLAUDE.md` sets for a trim —
-and both COMPOSE the rows that stood at their own commit from figures measured at each shard's
-add-commit instead of comparing against a typed one. A row a later trim adds is composed once, by
-that trim's own `L12/row` at its trim commit; between trims the proofs read only its span, via
-`R7`, and since Session 258 the census guard composes every other cell on each CI run. `R7` proves the `archived` spans
-tile the history with no gap and no overlap, which is what allows the routing clauses to be deleted
-rather than kept in
-parallel. `R6`, `R7`, `R8` and `C6`
-are the only proof assertions that read this file from the WORKING TREE; every other proof reads
-this file at a commit that has already passed. That is why the census guard exists — now for this
-front matter too — and the read-budget guard for this file's size and the budget sentences. **Run both modes over every proof in `docs/architecture-history/`** — a plain
-run proves the world is intact and cannot see a proof that has stopped being able to fail;
-`--self-test` proves the proof can fail and is blind to real corruption. `CLAUDE.md` carries the
-loop and the reason neither half is sufficient.
+**The proofs.** The two collapse proofs are
+[`SESSION_NOTES-pointer-collapse.verify.sh`](docs/architecture-history/SESSION_NOTES-pointer-collapse.verify.sh)
+(lettered `C`) and
+[`SESSION_NOTES-pointer-collapse-S254.verify.sh`](docs/architecture-history/SESSION_NOTES-pointer-collapse-S254.verify.sh)
+(lettered `R`); `R6`, `R7`, `R8` and `C6` read this file from the working tree. `CLAUDE.md` carries
+the loop that runs every proof in both modes.
 
 **Cutting is by byte position, never by authorship.** This ledger files a handoff evaluation under
 its author, so Session N's evaluation of N−1 sits inside N's record, and every cut so far has split

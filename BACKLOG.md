@@ -88,7 +88,7 @@ rows below it are the smaller residue that closing it exposed.
 | A quotation can defeat the S254 collapse proof's self-test | Two of that proof's self-test mutations find the oldest live record by searching for the text `### What Session `, which matches the LAST place that text appears anywhere, not the last heading. A record that quotes it lands the search inside the quotation, the mutation edits nothing, and the proof reports a surviving mutant, which turns CI red. Session 266's trim would have hit it; rewording one quotation avoided it. The eleventh trim archived the two records that quoted it (264's and 266's), so none stands in the live ledger now; a record a later trim retains can bring one back. | **Operator call.** Small — anchor both searches at a line start — but it edits a custodian proof that nothing guards, in the session that needs it green. |
 | The ledger table's rows after the eighth are guarded only in form | The table at the top of `SESSION_NOTES.md` names, for each trim, the commit that added its archive. A proof checks the first eight commit hashes against git; row 9's and every later one are not checked: the guard accepts any seven to forty hex digits, so a wrong hash, an extra trailing cell or trailing spaces on a later row stay green (each measured in a clone by Session 266's review). That trim typed row 9's hash by hand, after measuring it; the eleventh did the same for row 10, the twelfth for row 11, the thirteenth for row 12, and the fourteenth will have to for row 13. A related trap found the same way: a session record that quotes the newest row word for word turns four guard tests red at its own commit. | **Small; operator call.** The guard reads no git on purpose (CI checks out shallow), so deriving the hash belongs in the trim's own proof, which does read git. |
 | The read-budget guard cannot model "claim, then a wide close-out" from a close-out state | The guard tests each next commit by modelling what the following session will write. One of its models starts only when the newest record is still a claim stub, so from a finished close-out it never runs. Session 266's review measured the consequence with short lines: a close-out of about 19.7 to 19.9 KB, or of about 22 KB, passes at its own commit and turns the NEXT session's claim commit red. Behind it is a recurring cause: the mutant that isolates one check has been repaired five times in four sessions, each time for the quantity the last red named (learning #287). Session 287's review of the twelfth trim found it wider: a close-out of about 10.8 or 13.9 KB at about 170 to 190 bytes a line passes at its own commit and turns the next claim red; the same kind of fault in the sibling mutant (M04) had turned Session 287's own claim red (fixed in `3ef1a1b`); and where a close-out is hard-wrapped the largest record that keeps both commits green is about 11 to 12 KB. | **Small.** Add the missing model, an assertion inside that mutant, and pad the other mutant's tail as M04's now is. Until then, before committing a close-out, put the next claim stub above it in a scratch copy and run the guard. |
-| The front matter of `SESSION_NOTES.md` has no room for a fourteenth trim | The strip at the top of the file is held to 8,192 B and is 7,931 B after the thirteenth trim, but the guard's model of the next trim reserves the widest table row (124 B) plus 64 B, so the room that counts is 73 B: a padding probe passes at +73 B and turns two next-state tests red at +74 B (measured Session 297). Each trim has added 117 to 128 B (a table row, the previous row's hash and the ordinals), so a fourteenth turns `test_next_state[after-a-floor-keeping-trim]` and `[after-a-trim-then-its-close-out]` red at its own commit. The bequest list the next item worries about is empty now, so the table row is what binds. | **Small; operator call.** Before the fourteenth trim: cut at least 44 B of front-matter prose in the same commit as the row (more if the row is wider), or rule on the limit (a judgment constant), or move the oldest rows out. |
+| The front matter of `SESSION_NOTES.md` grows 117 to 128 B every trim, and only a judgment constant bounds it | Session 298 settled the near term on the operator's ruling: a one-off cut of 1,740 B of prose no guard reads (tier 3 of four measured options) took the strip from 7,931 B to 6,191 B and the room that counts from 73 B to about 1,800 B, enough for 14 to 15 more trims at the observed growth (bisects with synthetic 119 B rows, not real trims). The slope is unchanged: each trim adds a table row of 111 to 124 B, the previous row's hash and the ordinals. Two things come due whatever the limit: the fourteenth trim's front-matter substitution must anchor on the new bequest sentence, and the sixteenth trim raises `KeyError` in the census guard (`tests/test_session_notes_census.py:149-159` and `:427`, ordinal tables that stop at 16). | **Small; operator call, no deadline.** Re-open when the strip passes about 7,500 B (about four trims left; arithmetic, not a guard state). The options not taken and their measured costs are in the item body. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB); Session 266, that trim, retired the rest into a three-line "nothing is bequeathed" paragraph, with both instructions recorded in `CLAUDE.md`, so the list is empty today. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
@@ -1561,34 +1561,48 @@ and anchor the composed row pattern to the whole line with a mutant. **Operator 
 already names the CI guard as the home for table checks, and a hash check that needs history belongs
 in a job that fetches it.
 
-### The front matter of `SESSION_NOTES.md` has no room for a fourteenth trim
+### The front matter of `SESSION_NOTES.md` grows 117 to 128 B every trim, and only a judgment constant bounds it
 
-**Filed Session 287 (the twelfth trim's review: a prose lens and a perturbation lens measured it, and
-the skeptics rated it a nit or less: forward-looking, not a defect of that trim). Operator call.
-Restated Session 297 for the thirteenth trim's state (three of that trim's review lenses found the
-item one trim stale and the skeptics rated that minor, a filings chore, as it was here); the title said
-"has room for one more trim".**
+**Filed Session 287 as "has room for one more trim"; restated Session 297 as "has no room for a
+fourteenth trim"; settled in part and re-scoped by Session 298, on the operator's ruling. This item
+carries no per-trim figure that a trim would make stale: re-measure with `tests/test_read_budget.py`.**
 
 `tests/test_read_budget.py` holds the front matter (every byte above the first record heading) to
 8,192 B (`FRONT_MATTER_BYTES`, a judgment constant set in Session 255), and its model of the next trim
-reserves the widest existing table row plus 64 B (`ROW_MARGIN`). After the thirteenth trim the front
-matter is 7,931 B: 261 B of room against the limit, but the guard's model of the next trim reserves the
-widest existing table row (124 B, row 1) plus 64 B, so it binds at 8,004 B and 73 B is what is left (a
-padding probe passes at +73 B and turns two tests red at +74 B; measured Session 297). Each trim has
-grown the strip by 117 to 128 B: a table row of 111 to 124 B, the previous row's `this commit` resolved
-to a hash, and the ordinals. The thirteenth grew it by 117 B, from 7,814 B (this item had predicted
-7,935 B). Padding the front matter to what a fourteenth trim would leave, 8,048 B, and to 8,056 B turns
-`test_next_state[after-a-floor-keeping-trim]` and `[after-a-trim-then-its-close-out]` red at that trim's
-own commit: two tests. This item first said three at 8,056 B; Session 297's probes measured two at
-both sizes, and a review skeptic measured two at the filing commit as well. Nothing in the repository says how many trims fit. The item on the bequest
-list in the index names that (now empty) list as the front matter's remaining growth seam, but the
-per-trim table row is what binds. The census guard's ordinal tables also stop at the sixteenth trim.
+reserves the widest existing table row (124 B, row 1) plus 64 B (`ROW_MARGIN`), so the strip can really
+reach only 8,004 B before two next-state tests turn red at a trim's own commit. After the thirteenth
+trim it was 7,931 B: 73 B of room that counts (a padding probe passed at +73 B and failed at +74 B).
 
-**Small; operator call.** Decide before the fourteenth trim, and say so in that session's handoff (the
-decision was due before the thirteenth and was not made; it carries forward): cut at least 44 B of
-front-matter prose in the same commit as the row (more if the row is wider; the collapse proofs own
-the table's older rows and the front matter's standing rules, so check what each reads), or rule on
-`FRONT_MATTER_BYTES`, or move the table's oldest rows out of the front matter.
+**What Session 298 did.** Four read-only scouts and a critic measured the options (workflow
+`wf_6473f552-4bf`; the critic reproduced the core numbers) and the operator ruled for cutting prose, the
+largest tier: the table's separator row compacted (no information lost), the pointer tails of the
+write-once paragraph and the bequest paragraph removed, and the 1,786 B paragraph "The proofs, and what
+each can see" replaced by a six-line stub that keeps both links to the collapse proofs. No guard reads
+any of it: both guards (82 tests) and all 15 proofs, in plain and `--self-test` modes, stayed green. The
+strip is 6,191 B, the cut is its own docs commit placed before the trim so that no trim proof needs a
+declared substitution for it, and the old wording is at `74cc9db`.
+
+**What is left.**
+- **The slope.** A trim still adds 117 to 128 B (measured for trims 11 to 13): a table row of 111 to
+  124 B, the previous row's `this commit` resolved to a hash, and the ordinals. At that rate the room fits
+  14 to 15 more trims (estimate: bisects with synthetic 119 B rows against the full guard, not real trims).
+- **Due whatever is ruled.** The fourteenth trim's proof anchors its front-matter substitution on text
+  that changed: the bequest paragraph now ends "The standing instructions are in `CLAUDE.md`." The
+  fourteenth and fifteenth trims need no census edit, but the sixteenth makes `ORDINAL[total + 1]`
+  (`tests/test_session_notes_census.py:427`) raise `KeyError` until `SPELLED` and `ORDINAL` (`:149-159`)
+  gain entries. Session 298's critic wrote that the cut "lands just before" this wall; it does not, the
+  wall is about twelve trims nearer.
+- **Options not taken, each measured in Session 298.** Raise the limit (9,216 B buys about 8 trims and
+  then the lines arm binds; four literals change: the constant and the sentences in `CLAUDE.md` and
+  `PROJECT_CONVENTIONS.md`). Budget only the prose, not the table rows (an 11-line edit in
+  `tests/test_read_budget.py` that redefines an S255 constant; the proof loop was not run on the
+  prototype). Shrink the guard's reserved row (`ROW_MARGIN` 64 to 0 buys one trim). Move the oldest rows
+  out or drop columns: breaks the census guard and the collapse proofs' working-tree arms `C6`, `R6`
+  and `R7`, which no write-once guard protects; not recommended.
+
+**Small; operator call, no deadline.** Re-open when the strip passes about 7,500 B, which leaves about
+four trims (arithmetic, not a guard state), and choose then between a larger constant, a prose-only
+budget and a rolling structure for the table.
 
 ### The read-budget guard cannot model "claim, then a wide close-out" from a close-out state
 
