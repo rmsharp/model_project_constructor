@@ -174,6 +174,13 @@ manifest existed are not re-judged.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S299
+date: 2026-11-05
+status: pending
+active_task: Settle the HANDOFFS.md archive rule (212,250 B against the trimmer's 196,608 B trigger, a MEDIUM dashboard flag every session, 4 to 7 KB added per close-out; BACKLOG.md :95 and :2143): measure the options (archive with the trimmer after a planned dry run, rule it outside the read budget as CHANGELOG.md is, accept the flag), put the recommendation to the operator, then record and implement the ruling. Session claimed; work beginning.
+```
+
+```handoff
 session: S298
 date: 2026-11-05
 status: complete

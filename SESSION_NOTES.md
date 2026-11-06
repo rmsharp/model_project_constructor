@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 299 Did
+**Deliverable:** **Settle the `HANDOFFS.md` archive rule: the file is 212,250 B against the trimmer's 196,608 B trigger, the dashboard flags it as a MEDIUM risk every session, each close-out adds 4 to 7 KB, and nothing in `CLAUDE.md` says whether to archive it, rule it outside the read budget as `CHANGELOG.md` is, or accept the flag (`BACKLOG.md` `:95` and `:2143`).** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go"; both were the recommended options. The item is an operator call, so the session measures the options, puts the recommendation and the facts to the operator, and records and implements the ruling. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
+**Started:** 2026-11-05 19:12
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 298 Did
 **Deliverable:** **The `SESSION_NOTES.md` front-matter limit, settled on the operator's ruling — COMPLETE: the strip above `## ACTIVE TASK` went from 7,931 B to 6,191 B by cutting 1,740 B of prose that no guard reads, so the 8,192 B limit stays and the room the read-budget guard counts for a trim went from 73 B to about 1,800 B (14 to 15 further trims at the observed growth, an estimate); the open `BACKLOG.md` item was re-scoped to the slope that remains.** The operator chose the area (operator rulings) and then this item at pickers after an opening message of "go" (the area was the recommended option, the item was not), and ruled for the recommended one of four options put to them with measurements. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (opened only at close-out, see the self-assessment).
 **Started:** 2026-11-05 15:47 · **Completed:** 2026-11-05 17:16 (ledger-entry time).
