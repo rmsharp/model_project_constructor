@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 300 Did
+**Deliverable:** **Settle the CI-versus-push-cadence ruling: this repository pushes in bursts, so the `proofs` CI job (both modes over every `docs/architecture-history/*.verify.sh`) observes a breakage several sessions after it lands; the filed options are (a) accept CI as a backstop, (b) a `pre-push` hook under `.githooks/` running the two-mode loop, (c) push every session (`BACKLOG.md` `:96` and the item at `:1651`).** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go"; both were the recommended options. The item is an operator call, so the session measures the options, puts the recommendation and the facts to the operator, and records and implements the ruling. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
+**Started:** 2026-11-06 16:17
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 299 Did
 **Deliverable:** **The `HANDOFFS.md` archive rule, settled on the operator's ruling — COMPLETE: the file (212,763 B, 42 receipts) was archived with the trimmer's clean-seam cut `--cut 2026-10-03`, so 22 receipts (2026-09-19 to 2026-10-03, 114,245 B) moved, as a pure byte slice, into the new write-once `docs/archive/HANDOFFS-through-2026-10-03.md` with its own proof, and the live file went to 98,967 B (the trigger is 196,608 B); the dashboard's MEDIUM row for it cleared and the headline stayed 96/100 with one High risk. No prose rule was added anywhere.** The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go", and ruled for the recommended one of four options put to them with measurements; all three choices were the recommended option. The old `BACKLOG.md` item is replaced by what the trim left (four points). **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
 **Started:** 2026-11-05 19:12 · **Completed:** 2026-11-06 15:24 (ledger-entry time).

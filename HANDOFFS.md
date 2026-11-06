@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S300
+date: 2026-11-06
+status: pending
+active_task: Settle the CI-versus-push-cadence ruling (BACKLOG.md :96 and :1651): this repo pushes in bursts, so the proofs CI job sees a breakage sessions after it lands; options (a) accept CI as a backstop, (b) a pre-push hook under .githooks/ running the two-mode proof loop, (c) push every session. Measure the options (what CI runs and how long, what a hook would cost per push, the real push history), put the recommendation to the operator, then record and implement the ruling. Session claimed; work beginning.
+```
+
+```handoff
 session: S299
 date: 2026-11-06
 status: complete
