@@ -16,6 +16,14 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-11
 
+### 2026-11-06 · [ad hoc] Ledger trim: `HANDOFFS.md` → `docs/archive/HANDOFFS-through-2026-10-03.md` (22 record(s), 212,763 B → 98,967 B)
+
+**Written by:** `methodology_trim.py` v1.8.0 — a tool action, not a session's judgment.
+Moved the oldest **22** record(s) (2026-09-19 → 2026-10-03) out of [`HANDOFFS.md`](HANDOFFS.md) into
+[`docs/archive/HANDOFFS-through-2026-10-03.md`](docs/archive/HANDOFFS-through-2026-10-03.md). Losslessness is asserted by L1 (records-zone concatenation), L2 (zone
+pinning) and L3 (record partition), and is **re-derivable** — run [`docs/archive/HANDOFFS-through-2026-10-03.md.verify.sh`](docs/archive/HANDOFFS-through-2026-10-03.md.verify.sh)
+rather than trusting a digest printed here. Live file 212,763 B → 98,967 B (−53.5%).
+
 ### 2026-11-05 · [ad hoc] S299 — claim: settle the HANDOFFS.md archive rule (in progress)
 - **Change:** `SESSION_NOTES.md` (the Session 299 claim stub above Session 298's record), `HANDOFFS.md` (a `status: pending` receipt for S299) and this entry. The deliverable is an operator ruling on `HANDOFFS.md` (`BACKLOG.md` `:95`, `:2143`): 212,250 B against the trimmer's 196,608 B trigger, a MEDIUM dashboard flag every session, 4 to 7 KB added per close-out, and no rule in `CLAUDE.md` for it. The operator chose the area (operator rulings) and the item at pickers, after an opening message of "go"; both were the recommended options.
 - **Non-commit actions:** Phase 0 reconcile found nothing to backfill: the `CHANGELOG.md` and `HANDOFFS.md` frontiers and `HEAD` were all `591cd92`, no merges since, no pending marker. `origin/master` is at `9036cb0` (local ref; `git fetch --dry-run` printed nothing), so Session 298's 3 commits are unpushed; the push is the operator's. The dashboard (v2.22.0, canonical is v2.23.0; not synced, the sync writes into `methodology/`) reports 96/100 and one High risk flag, from `CHANGELOG.md` (1,297,000 B, outside the read budget by ruling) and `BACKLOG.md` (225,817 B) read-size warnings. `SESSION_NOTES.md` is 117,600 B against its 196,608 B trigger, so no trim is due.
