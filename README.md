@@ -119,6 +119,7 @@ tests/
   test_session_notes_census.py          # shard-census guard: the four prose files and the ledger's front matter vs the shards on disk (35 tests)
   test_read_budget.py                   # read-budget guard: what one default Read delivers of the three mandated-read files (47 tests)
 docs/planning/                          # active (not-yet-archived) plans
+docs/archive/                           # frozen HANDOFFS.md receipts, each file beside its own .verify.sh (grep them; do not Read them)
 docs/architecture-history/              # archived plans (concept-era + delivered): architecture-plan.md + 19 others + initial_purpose.txt
   SESSION_NOTES-through-S216.md         # frozen SESSION_NOTES records, Sessions 216->1 (grep it; do not Read it)
   SESSION_NOTES-through-S216.md.verify.sh  # re-runnable proof that the first trim was byte-for-byte lossless

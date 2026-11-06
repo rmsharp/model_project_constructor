@@ -92,7 +92,7 @@ rows below it are the smaller residue that closing it exposed.
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB); Session 266, that trim, retired the rest into a three-line "nothing is bequeathed" paragraph, with both instructions recorded in `CLAUDE.md`, so the list is empty today. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
-| `HANDOFFS.md` crossed its archive threshold and nothing says what to do | Found by Session 296's Phase 0 (a read-only dry run of the trimmer): `HANDOFFS.md` was 196,806 B against its 196,608 B archive threshold, and the trimmer says its trigger fires. Session 295's receipt crossed it; Session 296's claim left it at 197,159 B. Nothing in `CLAUDE.md`, `SESSION_NOTES.md` or this file names a retention rule for it, and `.context-budget.json` is seeded, not configured, so the dashboard shows it as a MEDIUM flag every session. | **Operator call.** Archive it with the trimmer (its own session; `--check` first), declare it outside the read budget as `CHANGELOG.md` is, or accept the flag. |
+| The `HANDOFFS.md` archive is unwatched, and its next trim has a window | Session 299 archived 22 receipts into `docs/archive/` on the operator's ruling (`d03a5ac`; lossless, proved byte for byte). What it left: CI runs proofs from `docs/architecture-history/` only and the generated proof has no `--self-test`, so nothing watches the archive or its proof; 19 of its 22 receipts still say `commit: pending`; the header's link to `FRAMEWORK_APPARATUS.md` is dead; and a second trim refuses without `--force` once the live file reaches the first archive's pre-size. | **Small; operator call on the CI question.** One item, four independent points; none is urgent. |
 | CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk. Two more of the same kind, found by Session 266's review: `.github/workflows/ci.yml:62` and `:70` state Session 253's measurements in the present tense (a proof count and a set count), and two docstrings in `tests/test_session_notes_census.py` (`:245`, `:741`) were written when nine table rows existed and now read ambiguously. A third, found by Session 277's review, is `:857`: it calls the `An eleventh ... an eleventh` wording the one count no session has exercised, and the tenth trim wrote exactly that sentence.
 
@@ -2140,20 +2140,37 @@ done
 command grep -rhoE '^\s*(async )?def test_' tests --include='*.py' | wc -l   # total
 ```
 
-### `HANDOFFS.md` crossed its archive threshold, and no rule says what to do about it
+### The `HANDOFFS.md` archive is unwatched, and its next trim has a window
 
-**Found by Session 296's Phase 0**, by a read-only dry run: `python3 methodology/methodology_trim.py --check --file HANDOFFS.md`
-reported `TRIGGER_BYTES` (196,806 B against a 196,608 B budget; the file is a root ledger the trimmer can act on, newest on top, so
-a whole-file read drops the oldest receipts) and `SRF_UNDEFINED` (no prior archive), and ended "trigger FIRES". Session 295's
-close-out receipt crossed the line; Session 296's claim receipt left the file at 197,159 B. The dashboard has shown it as a MEDIUM
-flag since.
+**Left by Session 299**, which settled the old item (`HANDOFFS.md` past the trimmer's trigger, no rule named) on the operator's
+ruling: archive it, with the clean-seam cut `--cut 2026-10-03`. The trim is `d03a5ac`: 22 receipts (2026-09-19 to 2026-10-03)
+moved to `docs/archive/HANDOFFS-through-2026-10-03.md`, the live file 212,763 B to 98,967 B, proved lossless by the generated
+`docs/archive/HANDOFFS-through-2026-10-03.md.verify.sh` (the live file without its pointer block plus the archive's records equals
+the original, sha256 `924fcfa9…`). What decided it was the file's own header (`HANDOFFS.md:92-93` and `:124-125`: this file does
+not take `CHANGELOG.md`'s optional archiving), which the old item did not mention. The other two options were measured and not
+taken: a ruling that puts it outside the read budget clears nothing (the 2026-09-14 ruling left every one of `CHANGELOG.md`'s
+dashboard flags in place, and no configuration can exempt a file), and accepting the flag only moves the same trim later.
 
-Nothing here decides it. `CLAUDE.md` gives `SESSION_NOTES.md` a byte rule and a family of proofs, puts `CHANGELOG.md` outside the
-read budget by the operator's ruling of 2026-09-14, and says `.context-budget.json` is seeded, not configured; it says nothing
-about `HANDOFFS.md`. `CLAUDE.md` also records that the trimmer's write mode mislabels `CHANGELOG.md` (it reads the whole legacy
-part as the body of the oldest tagged record), so running `--write` on this ledger without a plan is not safe to assume.
+What the trim left, each measured by Session 299's workflow (`wf_de43bbc6-75c`) or at its close:
 
-**Operator call**, one session each: (1) archive it with the trimmer after a planned dry run (the receipts have a fixed grammar,
-so the cut should be simpler than the changelog's, but that is an estimate); (2) rule it outside the read budget, as
-`CHANGELOG.md` is, with a line in `CLAUDE.md` saying so; (3) accept the flag. Each close-out adds 4 to 7 KB, so the file grows by
-one receipt a session whatever is ruled.
+1. **Nothing watches the archive or its proof.** CI's proof step globs `docs/architecture-history/*.verify.sh` only
+   (`.github/workflows/ci.yml:81`). The generated proof has no `--self-test` mode (it prints the plain result), so widening that
+   glob would turn the step red on its `SELF-TEST OK` check; moving the archive into `docs/architecture-history/` would break the
+   header's path rule (`HANDOFFS.md:107`) and hide it from the trimmer's own glob. No write-once guard covers it. And 19 of the
+   archive's 22 receipts still say `commit: pending`, which the header lets a later session edit; nothing would notice an edit in
+   that "frozen" file. **Operator call:** accept, add a separate plain-run CI step, or give the proof a self-test.
+2. **The next trim has a window.** A second trim measures its shrink-regrowth factor against the first,
+   `SRF = (size − 98,967) / (212,763 − 98,967)`, and `methodology_trim.py:278` refuses at 1.00 or above unless `--force` is
+   passed. So it must land between the trigger (196,608 B) and 212,763 B, about three close-outs wide, or carry `--force` and say
+   why in its commit. `--check` states both numbers, so do not copy them into prose. The tool's `FRONTIER_PENDING_STUB` advisory
+   also applies: trim in its own commit, never in the commit that finalizes the newest receipt.
+3. **The header has two small defects.** Its link to `docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger`
+   (`HANDOFFS.md:123`) is dead (the file is `methodology/FRAMEWORK_APPARATUS.md`), and it lacks the "retained receipt count" line
+   the trimmer expects (`FRONTMATTER_FIELD_ABSENT`). The section must keep its `handoffs-format: 2` marker.
+4. **A stale source comment.** `methodology/methodology_dashboard.py:2628-2634` says `--write` on `HANDOFFS.md` "refuses twice
+   over"; Session 299 ran it and it succeeded. The starter kit's v2.23.0 carries the same comment (`:2644`), so this is a report to
+   the canonical repository, not a local edit to a synced file.
+
+**Not taken, for the record:** capping receipt length (Session 299's critic measured 19% overlap with `SESSION_NOTES.md` and
+`CHANGELOG.md`, so the growth is mostly distinct prose and a cap would delete content); a size tripwire test; and a deeper cut
+(dry runs only: `--cut 8`, `5` and `3` leave about 49, 34 and 21 KB live).

@@ -16,6 +16,12 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-11
 
+### 2026-11-06 · [ad hoc] S299 — filings: the settled HANDOFFS.md item replaced by what the trim left
+- **Change:** `BACKLOG.md` (the item "`HANDOFFS.md` crossed its archive threshold and nothing says what to do", index row and body, replaced by "The `HANDOFFS.md` archive is unwatched, and its next trim has a window": four points, each measured by Session 299's workflow `wf_de43bbc6-75c` or at its close, and what was not taken) and `README.md` (one repo-map line for `docs/archive/`). The old item's options were ruled on by the operator at a picker: archive with the clean-seam cut, the recommended option. The trim is `d03a5ac` and has its own entry below.
+- **Commit/PR:** this commit
+- **Session:** S299 · **Verified:** `tests/test_read_budget.py` and `tests/test_session_notes_census.py`: 82 passed with both edits. The first draft failed 25 of them: the census guard classifies every number near the word "shard" and cannot tell a `HANDOFFS.md` archive from a `SESSION_NOTES.md` shard, so the item says "archive" where it first said "shard" (the figures are unchanged).
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-11-06 · [ad hoc] Ledger trim: `HANDOFFS.md` → `docs/archive/HANDOFFS-through-2026-10-03.md` (22 record(s), 212,763 B → 98,967 B)
 
 **Written by:** `methodology_trim.py` v1.8.0 — a tool action, not a session's judgment.
