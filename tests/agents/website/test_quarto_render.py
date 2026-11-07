@@ -1,4 +1,4 @@
-"""The notebooks the website agent writes, rendered by the real Quarto.
+"""The notebooks and the Markdown files the website agent writes, rendered by the real Quarto.
 
 ``test_quarto_markup.py`` holds the neutraliser to a model of what Quarto acts on. This file
 checks the neutraliser against the tool: the same text goes through the real renderers, then
@@ -14,9 +14,18 @@ tries ``QUARTO_PYTHON``, then the interpreter running pytest, then ``python3`` a
 of the four packages, so a plain run skips unless ``QUARTO_PYTHON`` names a Python that has
 them, and a machine whose ``python3`` has them runs the tests whatever else is set. The tool is
 the only judge of what Quarto does, so a machine that has it should run this before changing the
-neutraliser; a render takes a few seconds, and the module renders fourteen. It is
-three tests on purpose: each skip is counted, and nine parametrised ones would move the suite's
-standing skip count for no gain.
+neutraliser; a render takes a few seconds, and the module renders fourteen notebooks and then the
+Markdown files twice. It is four tests on purpose: each skip is counted, and nine parametrised
+ones would move the suite's standing skip count for no gain.
+
+The Markdown test needs Quarto and nothing else (a ``.md`` runs no code, so no Jupyter engine
+starts). Quarto renders a ``.md`` as it does a ``.qmd`` for ``{{< env >}}``, ``{{< include >}}``
+and a second ``---`` block, and nothing in a generated project stops a person asking it to:
+``quarto render reports/intake_report.md`` works today, and so does a render of the directory
+once anyone adds a ``_quarto.yml`` (the operator's ruling of Session 301, ``BACKLOG.md`` item
+(7)(e), is to neutralise the ``.md`` files too). A ``{python}`` fence aborts the
+render of a ``.md`` ("You must use the .qmd extension for documents with executable code"), so
+the control below plants a payload without one.
 
 A regression shows up as a side effect, or as Quarto refusing the notebook: payloads planted in
 every field do not always make one valid YAML document once they act (a stray ``---`` opens a
@@ -37,7 +46,7 @@ from typing import Any
 
 import pytest
 
-from model_project_constructor.agents.website import templates
+from model_project_constructor.agents.website import governance_templates, templates
 from model_project_constructor.agents.website._quarto_markup import ZERO_WIDTH_SPACE
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -281,3 +290,121 @@ class TestTheRealQuartoRunsNothingFromReportText:
         _, effects_brace = _render(quarto, tmp_path / "brace", raw_brace)
         assert effects_brace == {"ran_brace.txt"}
         assert "inline_chunk" in {c.kind for c in constructs(raw_brace)}
+
+
+# --- The Markdown files -----------------------------------------------------------------------
+
+# ``PAYLOAD`` without the two fences, which abort the render of a ``.md`` (a control that fails to
+# render shows nothing). The inline chunk stays as it is: it is literal in a ``.md``.
+PAYLOAD_MARKDOWN = (
+    "Visible start.\n\n"
+    "Inline `{python} open('ran_inline.txt', 'w').write('x')` here.\n\n"
+    "Env {{< env QPROBE >}} here.\n\n"
+    "{{< include secret.txt >}}\n\n"
+    "---\nfilters:\n  - f.lua\n---\n\n"
+    "---<!---->\ninclude-in-header: header.html\n---\n\n"
+    "-<!-- c -->--\ninclude-after-body: after.html\n---\n\n"
+    "Visible end."
+)
+
+# What the control must see act, and the files in which at least one of them must.
+EVERY_EFFECT = {"ran_filter.txt", "env", "include", "header", "after"}
+
+
+def _markdown_files(payload: str) -> dict[str, str]:
+    """Every ``.md`` the agent writes for a tier 1 model that touches consumers, with ``payload``
+    in every string of both reports (the tier itself is kept valid, or half the files would not
+    be written)."""
+
+    intake, data = _plant_everywhere(payload)
+    intake["governance"] = {
+        **intake["governance"],
+        "risk_tier": "tier_1_critical",
+        "affects_consumers": True,
+        "uses_protected_attributes": True,
+    }
+    files = {
+        **templates.build_base_files(
+            intake=intake, data=data, project_name="subrogation-model", project_slug="subrogation"
+        ),
+        **governance_templates.build_governance_files(
+            intake=intake, data=data, project_name="subrogation-model", project_slug="subrogation"
+        ),
+    }
+    return {path: text for path, text in files.items() if path.endswith(".md")}
+
+
+def _render_markdown(
+    exe: str, root: Path, files: dict[str, str]
+) -> tuple[dict[str, str], set[str]]:
+    """Write ``files`` under ``root`` and ask Quarto to render them the two ways a person can:
+    the project (a bare ``_quarto.yml``, which a team adds the day it wants ``quarto render`` to
+    work on the directory) and each file by name (the one way that works with no ``_quarto.yml``,
+    and the only one that reaches the READMEs). Returns each page by its source path and the
+    effects that happened."""
+
+    root.mkdir(parents=True)
+    (root / "_quarto.yml").write_text("project:\n  type: default\n")
+    for path, text in files.items():
+        target = root / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    for directory in {(root / path).parent for path in files}:
+        (directory / "secret.txt").write_text("SECRET456\n")
+        (directory / "header.html").write_text("<p>HDRMARK789</p>\n")
+        (directory / "after.html").write_text("<p>AFTERMARK789</p>\n")
+        (directory / "f.lua").write_text("io.open('ran_filter.txt', 'w'):write('x')\nreturn {}\n")
+    env = {**os.environ, "QPROBE": "SECRET123"}
+    # The READMEs are not part of a project render; the others are rendered by it and then once
+    # more by name, which is what a person who opens one file does.
+    runs = [[exe, "render", "--to", "html"]] + [
+        [exe, "render", path, "--to", "html"] for path in files if path.endswith("README.md")
+    ]
+    for command in runs:
+        done = subprocess.run(
+            command, cwd=root, env=env, capture_output=True, text=True, timeout=300, check=False
+        )
+        assert done.returncode == 0, (command, done.stderr[-2000:])
+    pages = {
+        path: (root / path).with_suffix(".html").read_text(encoding="utf-8")
+        for path in files
+        if (root / path).with_suffix(".html").exists()
+    }
+    effects = {path.name for path in root.rglob("ran_*.txt")}
+    for page in pages.values():
+        for marker, name in (
+            ("SECRET123", "env"),
+            ("SECRET456", "include"),
+            ("HDRMARK789", "header"),
+            ("AFTERMARK789", "after"),
+        ):
+            if marker in page:
+                effects.add(name)
+    return pages, effects
+
+
+def test_a_markdown_file_quarto_is_asked_to_render_runs_and_reads_nothing_from_report_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every ``.md`` the agent writes, rendered by the real tool: with the neutraliser in place
+    no effect happens and the reader still sees the text that was written; with it switched off
+    the same payload acts (the control, without which a clean result proves nothing)."""
+
+    exe = shutil.which("quarto")
+    if exe is None:
+        pytest.skip("quarto is not installed")
+
+    pages, effects = _render_markdown(exe, tmp_path / "neutralised", _markdown_files(PAYLOAD))
+    assert effects == set()
+    assert len(pages) >= 14, sorted(pages)
+    for path, page in pages.items():
+        text = html.unescape(page).replace(ZERO_WIDTH_SPACE, "")
+        if "Visible start." in text:
+            assert "{{< env QPROBE >}}" in text, path
+    assert sum("Visible start." in html.unescape(page) for page in pages.values()) >= 9
+
+    monkeypatch.setattr(templates, "neutralise_report", lambda value: value)
+    monkeypatch.setattr(governance_templates, "neutralise_report", lambda value: value)
+    monkeypatch.setattr(governance_templates, "neutralise_quarto_markup", lambda text: text)
+    _, control = _render_markdown(exe, tmp_path / "raw", _markdown_files(PAYLOAD_MARKDOWN))
+    assert control == EVERY_EFFECT

@@ -61,7 +61,8 @@ Costs a reader sees:
   in the report.
 
 Not covered, on purpose: a name that only a person reading it would call hostile (a Markdown or
-Quarto construct in a heading is part (7)(e) and the notebooks' own neutraliser); the generated
+Quarto construct in a heading is ``_quarto_markup.py``'s, in the notebooks and the ``.md``
+files alike); the generated
 ``check_governance.py``, which reads the files on disk and needs no change while the files are
 flat; and whether a real host accepts a path with ``..`` in it, which these stems make moot.
 """
