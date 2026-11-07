@@ -138,8 +138,12 @@ def render_readme(
 
     ``data`` is the data report. The layout lists ``queries/`` and the datasheets only when the
     report has primary queries, because only then do they exist.
+
+    Quarto renders a ``.md`` it is asked to render as it does a ``.qmd`` (``_quarto_markup.py``),
+    so the report text is neutralised here as it is in the notebooks.
     """
 
+    intake = neutralise_report(intake)
     business_problem = str(intake.get("business_problem", "")).strip()
     proposed_solution = str(intake.get("proposed_solution", "")).strip()
     model_solution = intake.get("model_solution") or {}
@@ -464,10 +468,8 @@ def _render_business_case_block(*, intake: dict[str, Any]) -> str:
     / ``(none declared)`` placeholder so the business case stays
     structurally complete no matter how sparse the intake is.
 
-    The notebook passes its caller's already-neutralised intake (Quarto reads a ``.qmd`` for
-    more than prose, ``_quarto_markup.py``); ``reports/intake_report.md`` passes the raw one,
-    so the two differ by the invisible characters that module writes, and only for text that
-    holds something Quarto acts on.
+    Both callers pass their already-neutralised intake (Quarto reads a ``.qmd`` and a ``.md``
+    for more than prose, ``_quarto_markup.py``), so the block is the same text in both.
     """
     ev = intake.get("estimated_value") or {}
     vmp = intake.get("value_measurement_plan") or {}
@@ -866,6 +868,10 @@ def render_test_stub(module: str, project_slug: str) -> str:
 
 
 def render_data_readme(*, data: dict[str, Any]) -> str:
+    # The datasheet a query is named for comes from the report as given; the neutraliser changes
+    # the text a reader sees, not the path (the same order as ``render_qmd_data``).
+    stems = primary_query_stems(data)
+    data = neutralise_report(data)
     queries = data.get("primary_queries") or []
     lines = [
         "# Data Dictionary\n",
@@ -879,7 +885,7 @@ def render_data_readme(*, data: dict[str, Any]) -> str:
         "## Primary Queries\n",
         "\n",
     ]
-    for q, stem in zip(queries, primary_query_stems(data), strict=True):
+    for q, stem in zip(queries, stems, strict=True):
         name = q.get("name", "unnamed")
         # "unknown" is a defensive sentinel: expected_row_count_order is a
         # REQUIRED PrimaryQuery field (schemas.RowCountOrder), so a validly
@@ -899,6 +905,7 @@ def render_reports_intake_json(*, intake: dict[str, Any]) -> str:
 
 
 def render_reports_intake_md(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     ms = intake.get("model_solution") or {}
     ev = intake.get("estimated_value") or {}
     gov = intake.get("governance") or {}
@@ -936,6 +943,7 @@ def render_reports_data_json(*, data: dict[str, Any]) -> str:
 
 
 def render_reports_data_md(*, data: dict[str, Any]) -> str:
+    data = neutralise_report(data)
     queries = data.get("primary_queries") or []
     lines = [
         "# Data Report\n",

@@ -21,9 +21,12 @@ What is tested here:
   its module lists as costs (a ``---`` alone on a line is no longer a rule, a ``<!--`` comment is
   shown, a brace that starts a field carries the character);
 * it runs in linear time, because it is applied to text a model wrote;
-* the four ``.qmd`` renderers apply it to every field they take, including a field no one has
-  thought of yet (a payload goes into every string of both reports, which is the test that a new
-  interpolation cannot slip past), and it is applied nowhere else.
+* the four ``.qmd`` renderers and the twelve ``.md`` renderers (the READMEs, ``reports/*.md``,
+  the governance documents and the datasheets) apply it to every field they take, including a
+  field no one has thought of yet (a payload goes into every string of both reports, which is
+  the test that a new interpolation cannot slip past). Quarto renders a ``.md`` it is asked to
+  render as it does a ``.qmd``, without running code; and it is applied to nothing else (the
+  JSON files and the SQL are not rendered).
 
 ``test_quarto_render.py`` renders the same text with the real tool where one is installed.
 """
@@ -43,20 +46,23 @@ from typing import Any
 
 import pytest
 
-from model_project_constructor.agents.website import templates
+from model_project_constructor.agents.website import governance_templates, templates
 from model_project_constructor.agents.website._quarto_markup import (
     ZERO_WIDTH_SPACE,
     neutralise_quarto_markup,
     neutralise_report,
 )
-from model_project_constructor.agents.website.governance_templates import build_analysis_files
+from model_project_constructor.agents.website.governance_templates import (
+    build_analysis_files,
+    build_governance_files,
+    build_regulatory_mapping,
+)
 from model_project_constructor.agents.website.templates import (
     build_base_files,
     render_qmd_business_understanding,
     render_qmd_data,
     render_qmd_implementation_plan,
     render_qmd_initial_models,
-    render_reports_intake_md,
 )
 from model_project_constructor.schemas.v1.data import DataReport
 from model_project_constructor.schemas.v1.intake import IntakeReport
@@ -948,19 +954,18 @@ class TestTheRenderersNeutraliseEveryFieldTheyTake:
         without_it = _build(intake, data)
         assert with_it == without_it
 
-    def test_only_the_notebooks_are_changed_and_the_markdown_mirrors_are_not(
+    def test_the_markdown_files_are_changed_with_the_notebooks(
         self,
         intake_report: IntakeReport,
         data_report: DataReport,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """A deliberate scope, pinned so that changing it is a decision. Quarto renders ``.md``
-        as well, and a ``.md`` it is asked to render expands ``{{< env >}}`` and
-        ``{{< include >}}`` and reads a second ``---`` block, though it runs no code; nothing in
-        the generated project asks it to (no ``_quarto.yml``, and the README renders the
-        notebooks by name). ``BACKLOG.md`` records the residual and the options.
-        ``reports/intake_report.md`` shares its business-case block with notebook 01, and neither
-        it nor any other file is rewritten."""
+        """The scope, pinned so that changing it is a decision. Quarto renders a ``.md`` it is
+        asked to render as it does a ``.qmd`` (it runs no code in one, but ``{{< env >}}`` and
+        ``{{< include >}}`` expand and a second ``---`` block is read), and nothing the generated
+        project does stops someone asking: so the four base ``.md`` files that quote a report
+        change with the four notebooks, and nothing else does (the JSON mirrors and the SQL are
+        not rendered). The governance ``.md`` files are held in ``TestTheMarkdownRenderers``."""
 
         with_it = _planted_build(intake_report, data_report, PAYLOADS["everything"])
         monkeypatch.setattr(templates, "neutralise_report", lambda value: value)
@@ -971,7 +976,288 @@ class TestTheRenderersNeutraliseEveryFieldTheyTake:
             "analysis/02_data.qmd",
             "analysis/05_initial_models.qmd",
             "analysis/06_implementation_plan.qmd",
+            "README.md",
+            "data/README.md",
+            "reports/intake_report.md",
+            "reports/data_report.md",
         }
-        intake, _ = _reports(intake_report, data_report)
-        hostile_intake = _plant(intake, lambda n: PAYLOADS["everything"], [0])
-        assert Z not in render_reports_intake_md(intake=hostile_intake)
+
+
+# --- The .md renderers --------------------------------------------------------------------
+
+_NAME = "subrogation-model"
+
+
+def _mapping_for(intake: dict[str, Any]) -> dict[str, list[str]]:
+    frameworks = list((intake.get("governance") or {}).get("regulatory_frameworks") or [])
+    return build_regulatory_mapping(frameworks=frameworks, emitted_paths=set())
+
+
+# Every renderer that writes a ``.md`` and takes a report, each called the way a test or a caller
+# would call it on its own.
+MARKDOWN_RENDERERS: dict[str, Callable[[dict[str, Any], dict[str, Any]], str]] = {
+    "README.md": lambda i, d: templates.render_readme(intake=i, project_name=_NAME, data=d),
+    "data/README.md": lambda i, d: templates.render_data_readme(data=d),
+    "reports/intake_report.md": lambda i, d: templates.render_reports_intake_md(intake=i),
+    "reports/data_report.md": lambda i, d: templates.render_reports_data_md(data=d),
+    "governance/model_card.md": lambda i, d: governance_templates.render_model_card(
+        intake=i, project_name=_NAME
+    ),
+    "governance/change_log.md": lambda i, d: governance_templates.render_change_log(intake=i),
+    "governance/three_pillar_validation.md": (
+        lambda i, d: governance_templates.render_three_pillar_validation(intake=i)
+    ),
+    "governance/ongoing_monitoring.md": (
+        lambda i, d: governance_templates.render_ongoing_monitoring(intake=i)
+    ),
+    "governance/impact_assessment.md": (
+        lambda i, d: governance_templates.render_impact_assessment(intake=i)
+    ),
+    "governance/regulatory_mapping.md": lambda i, d: governance_templates.render_regulatory_mapping(
+        intake=i, mapping=_mapping_for(i)
+    ),
+    "governance/eu_ai_act_compliance.md": (
+        lambda i, d: governance_templates.render_eu_ai_act_compliance(intake=i)
+    ),
+    "data/datasheet_x.md": lambda i, d: governance_templates.render_datasheet(
+        query=d["primary_queries"][0], stem="x"
+    ),
+}
+
+# The three that take no report text: nothing to neutralise, so nothing in the table above.
+MARKDOWN_WITHOUT_REPORT_TEXT = {
+    "governance/deployment_gates.md",
+    "governance/lcp_integration.md",
+    "governance/audit_log/README.md",
+}
+
+# Those the planted build below puts text in. ``three_pillar_validation.md`` and
+# ``eu_ai_act_compliance.md`` quote only an enum and two flags, which the build keeps valid so
+# that every file is written; the renderer tests above plant a payload in those fields too.
+MARKDOWN_THAT_QUOTE_TEXT = {
+    "README.md",
+    "data/README.md",
+    "reports/intake_report.md",
+    "reports/data_report.md",
+    "governance/model_card.md",
+    "governance/change_log.md",
+    "governance/ongoing_monitoring.md",
+    "governance/impact_assessment.md",
+    "governance/regulatory_mapping.md",
+}
+
+
+def _every_file(intake: dict[str, Any], data: dict[str, Any]) -> dict[str, str]:
+    """All the files the agent writes at tier 1 for a consumer-facing model that uses protected
+    attributes, so every ``.md`` it can write is written. The tier is set last: a payload planted
+    in it would be a tier that is none of the four, and half the files would not exist."""
+
+    intake = {
+        **intake,
+        "governance": {
+            **(intake.get("governance") or {}),
+            "risk_tier": "tier_1_critical",
+            "affects_consumers": True,
+            "uses_protected_attributes": True,
+        },
+    }
+    return {
+        **_build(intake, data),
+        **build_governance_files(
+            intake=intake, data=data, project_name=_NAME, project_slug="subrogation_model"
+        ),
+        **build_analysis_files(intake=intake, project_slug="subrogation_model"),
+    }
+
+
+def _markdown(files: dict[str, str]) -> dict[str, str]:
+    return {path: text for path, text in files.items() if path.endswith((".md", ".markdown"))}
+
+
+def _hand_built(
+    intake: dict[str, Any], data: dict[str, Any], make: Callable[[int], str]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Both reports with ``make(n)`` in every string, and in the two flags the governance block
+    holds as booleans: the schema allows nothing else there, so only a hand-built dict has text
+    in them, and two of the files quote nothing else."""
+
+    counter = [0]
+    planted = _plant(intake, make, counter)
+    planted["governance"]["affects_consumers"] = make(0)
+    planted["governance"]["uses_protected_attributes"] = make(0)
+    return planted, _plant(data, make, counter)
+
+
+def _same_constructs(hostile: dict[str, str], baseline: dict[str, str]) -> None:
+    """Every file holds the constructs its template holds and no others. A datasheet is filed
+    under the stem of its query's name, which the payload changes, so it has no entry in the
+    baseline; the template's own datasheet holds none."""
+
+    for path, text in hostile.items():
+        expected = _kinds(baseline[path]) if path in baseline else Counter()
+        assert _kinds(text) == expected, (path, constructs(text)[:6])
+
+
+def _switch_everything_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(templates, "neutralise_report", lambda value: value)
+    monkeypatch.setattr(governance_templates, "neutralise_report", lambda value: value)
+    monkeypatch.setattr(governance_templates, "neutralise_quarto_markup", lambda text: text)
+
+
+class TestTheMarkdownRenderers:
+    """Quarto renders a ``.md`` it is asked to render; the notebooks' neutraliser is applied to
+    the files that quote a report as well (``_quarto_markup.py``)."""
+
+    def test_the_table_lists_every_markdown_file_the_agent_writes(
+        self, intake_report: IntakeReport, data_report: DataReport
+    ) -> None:
+        intake, data = _reports(intake_report, data_report)
+        written = set(_markdown(_every_file(intake, data)))
+        listed = set(MARKDOWN_RENDERERS) | MARKDOWN_WITHOUT_REPORT_TEXT
+        listed -= {"data/datasheet_x.md"}
+        written = {path for path in written if not path.startswith("data/datasheet_")}
+        assert written == listed
+
+    def test_no_markdown_file_the_agent_writes_carries_a_construct_it_was_not_given(
+        self, intake_report: IntakeReport, data_report: DataReport
+    ) -> None:
+        """Every ``.md`` wherever it is built, not a list: a renderer added tomorrow is covered
+        the day it appears."""
+
+        intake, data = _reports(intake_report, data_report)
+        baseline = _markdown(_every_file(intake, data))
+        counter = [0]
+        hostile = _markdown(
+            _every_file(
+                _plant(intake, lambda n: PAYLOADS["everything"], counter),
+                _plant(data, lambda n: PAYLOADS["everything"], counter),
+            )
+        )
+        assert set(MARKDOWN_THAT_QUOTE_TEXT) <= set(hostile)
+        assert any(path.startswith("data/datasheet_") for path in hostile)
+        _same_constructs(hostile, baseline)
+
+    @pytest.mark.parametrize("shape", list(PAYLOADS))
+    def test_a_payload_in_every_string_adds_nothing_quarto_acts_on_to_any_markdown_file(
+        self, intake_report: IntakeReport, data_report: DataReport, shape: str
+    ) -> None:
+        intake, data = _reports(intake_report, data_report)
+        baseline = _markdown(_every_file(intake, data))
+        counter = [0]
+
+        def make(n: int) -> str:
+            return PAYLOADS[shape].replace("MARK", f"ZZ{n}ZZ")
+
+        hostile = _markdown(_every_file(_plant(intake, make, counter), _plant(data, make, counter)))
+        _same_constructs(hostile, baseline)
+
+    def test_the_payload_reaches_the_markdown_files_that_quote_a_report(
+        self, intake_report: IntakeReport, data_report: DataReport
+    ) -> None:
+        """Without this, a clean result above could mean the text never arrived."""
+
+        intake, data = _reports(intake_report, data_report)
+        counter = [0]
+        make = lambda n: f"ZZ{n}ZZ"  # noqa: E731 - a one-line table entry
+        files = _markdown(_every_file(_plant(intake, make, counter), _plant(data, make, counter)))
+        reached = {
+            path
+            for path, text in files.items()
+            if "ZZ" in text and not path.startswith("data/datasheet_")
+        }
+        assert reached == MARKDOWN_THAT_QUOTE_TEXT
+        assert any("ZZ" in text for path, text in files.items() if "datasheet_" in path)
+
+    @pytest.mark.parametrize("path", sorted(MARKDOWN_RENDERERS))
+    def test_each_markdown_renderer_does_it_itself(
+        self, intake_report: IntakeReport, data_report: DataReport, path: str
+    ) -> None:
+        """The renderers are public functions and tests and callers use them directly. A payload
+        in every string, an enum and a flag as well as the free text."""
+
+        render = MARKDOWN_RENDERERS[path]
+        intake, data = _reports(intake_report, data_report)
+        baseline = _kinds(render(intake, data))
+
+        def make(n: int) -> str:
+            return PAYLOADS["everything"].replace("MARK", f"ZZ{n}ZZ")
+
+        assert _kinds(render(*_hand_built(intake, data, make))) == baseline
+
+    @pytest.mark.parametrize("path", sorted(MARKDOWN_RENDERERS))
+    def test_the_check_above_can_fail(
+        self,
+        intake_report: IntakeReport,
+        data_report: DataReport,
+        monkeypatch: pytest.MonkeyPatch,
+        path: str,
+    ) -> None:
+        """With every neutraliser switched off, the payload does add constructs to each of the
+        renderers. A test that cannot fail proves nothing."""
+
+        render = MARKDOWN_RENDERERS[path]
+        intake, data = _reports(intake_report, data_report)
+        baseline = _kinds(render(intake, data))
+        _switch_everything_off(monkeypatch)
+
+        def make(n: int) -> str:
+            return PAYLOADS["everything"].replace("MARK", f"ZZ{n}ZZ")
+
+        assert _kinds(render(*_hand_built(intake, data, make))) != baseline
+
+    def test_a_framework_name_is_neutralised_where_it_is_a_heading(
+        self, intake_report: IntakeReport, data_report: DataReport, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``neutralise_report`` leaves dict keys alone, and the regulatory mapping's keys are the
+        framework names the report gave, written as ``### <name>`` headings. With only that one
+        call switched off, the mapping carries the payload and nothing else does."""
+
+        intake, data = _reports(intake_report, data_report)
+        intake["governance"]["regulatory_frameworks"] = [PAYLOADS["everything"]]
+        render = MARKDOWN_RENDERERS["governance/regulatory_mapping.md"]
+        assert not constructs(render(intake, data))
+        monkeypatch.setattr(governance_templates, "neutralise_quarto_markup", lambda text: text)
+        assert {c.kind for c in constructs(render(intake, data))} == {
+            "fence",
+            "inline_chunk",
+            "shortcode",
+            "metadata_block",
+        }
+
+    def test_ordinary_reports_produce_the_same_markdown_as_before(
+        self,
+        intake_report: IntakeReport,
+        data_report: DataReport,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        intake, data = _reports(intake_report, data_report)
+        with_it = _every_file(intake, data)
+        _switch_everything_off(monkeypatch)
+        assert with_it == _every_file(intake, data)
+
+    def test_a_name_is_neutralised_where_it_is_shown_and_not_where_it_is_a_path(self) -> None:
+        """The datasheet a query is filed under, and the SQL file it names, come from the name as
+        the report gave it, as they do for the notebook; only the text a reader sees changes."""
+
+        names = ["{{< env HOME >}}", "---", "<!-- x -->", "`{python} 1`", "plain"]
+        intake = {"governance": {"risk_tier": "tier_4_low"}}
+        data = {
+            "primary_queries": [
+                {"name": name, "datasheet": {}, "expected_row_count_order": "thousands"}
+                for name in names
+            ]
+        }
+        files = {
+            **build_governance_files(
+                intake=intake, data=data, project_name=_NAME, project_slug="subrogation_model"
+            ),
+            "data/README.md": templates.render_data_readme(data=data),
+        }
+        sheets = sorted(path for path in files if path.startswith("data/datasheet_"))
+        assert len(sheets) == len(names)
+        for path in sheets:
+            stem = path.removeprefix("data/datasheet_").removesuffix(".md")
+            assert f"`queries/primary/{stem}.sql`" in files[path]
+            assert f"`datasheet_{stem}.md`" in files["data/README.md"]
+            assert not constructs(files[path])
+        assert not constructs(files["data/README.md"])

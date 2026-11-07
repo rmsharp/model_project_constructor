@@ -34,6 +34,10 @@ from typing import Any, Literal
 
 from model_project_constructor._vocab_guard import assert_vocab_parity
 from model_project_constructor.agents.website._file_stems import file_stem, primary_query_stems
+from model_project_constructor.agents.website._quarto_markup import (
+    neutralise_quarto_markup,
+    neutralise_report,
+)
 from model_project_constructor.agents.website.templates import RUFF_VERSION
 from model_project_constructor.schemas.v1.common import CycleTime, RiskTier
 
@@ -238,6 +242,7 @@ def build_model_registry_entry(
 
 
 def render_model_card(*, intake: dict[str, Any], project_name: str) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     model_solution = intake.get("model_solution") or {}
     metrics = ", ".join(model_solution.get("evaluation_metrics") or []) or "(none declared)"
@@ -297,6 +302,7 @@ def render_model_card(*, intake: dict[str, Any], project_name: str) -> str:
 
 
 def render_change_log(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     created = str(intake.get("created_at", "")) or "unknown"
     return (
         "# Change Log\n"
@@ -314,6 +320,7 @@ def render_change_log(*, intake: dict[str, Any]) -> str:
 
 
 def render_three_pillar_validation(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     return (
         "# Three-Pillar Validation Plan\n"
@@ -339,6 +346,7 @@ def render_three_pillar_validation(*, intake: dict[str, Any]) -> str:
 
 
 def render_ongoing_monitoring(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     cycle_time = str(governance.get("cycle_time", "tactical"))
     cadence = _CYCLE_CADENCE.get(cycle_time, "Quarterly review")
@@ -438,6 +446,7 @@ def _usd_band(low: Any, high: Any, *, suffix: str = "") -> str:
 
 
 def render_impact_assessment(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     estimated_value = intake.get("estimated_value") or {}
     narrative = str(estimated_value.get("narrative", "")).strip()
@@ -483,6 +492,7 @@ def render_regulatory_mapping(
     intake: dict[str, Any],
     mapping: dict[str, list[str]],
 ) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     lines = [
         "# Regulatory Mapping\n",
@@ -500,7 +510,9 @@ def render_regulatory_mapping(
     if not mapping:
         lines.append("_(No regulatory frameworks declared in intake.)_\n")
     for framework, artifacts in sorted(mapping.items()):
-        lines.append(f"### {framework}\n\n")
+        # The mapping's keys are the framework names the report gave; ``neutralise_report`` leaves
+        # keys alone, and these are shown.
+        lines.append(f"### {neutralise_quarto_markup(framework)}\n\n")
         if not artifacts:
             lines.append("_No scaffolded artifacts directly satisfy this framework._\n\n")
             continue
@@ -549,6 +561,7 @@ def render_audit_log_readme() -> str:
 
 
 def render_eu_ai_act_compliance(*, intake: dict[str, Any]) -> str:
+    intake = neutralise_report(intake)
     governance = intake.get("governance") or {}
     return (
         "# EU AI Act Compliance Mapping\n"
@@ -603,8 +616,9 @@ def render_datasheet(*, query: dict[str, Any], stem: str | None = None) -> str:
     alone in its report.
     """
 
-    name = query.get("name", "unnamed")
     stem = file_stem(query.get("name")) if stem is None else stem
+    query = neutralise_report(query)
+    name = query.get("name", "unnamed")
     datasheet = query.get("datasheet") or {}
     biases = datasheet.get("known_biases") or []
     biases_md = "\n".join(f"- {b}" for b in biases) or "- (none declared)"

@@ -1,9 +1,13 @@
 """Stop report text from acting on the notebook that Quarto renders.
 
-The website agent writes the intake and data reports into ``analysis/*.qmd`` as prose. The
-reports hold text a language model wrote from a stakeholder's words and from a database, and the
-schemas constrain none of it. Quarto reads a ``.qmd`` for more than prose: it runs code, reads
-files and reads the environment. Session 295's scouts rendered each of these with Quarto 1.7.33
+The website agent writes the intake and data reports into ``analysis/*.qmd`` as prose, and
+quotes their fields in the generated ``.md`` files (the READMEs, ``reports/*.md``, the governance
+documents and the datasheets). The reports hold text a language model wrote from a stakeholder's
+words and from a database, and the schemas constrain none of it. Quarto reads a ``.qmd`` for more
+than prose: it runs code, reads files and reads the environment. It reads a ``.md`` it is asked
+to render the same way, except that a ``.md`` runs no code (a ``{python}`` fence aborts the render
+and an inline chunk stays literal): ``{{< env >}}`` and ``{{< include >}}`` and a second ``---``
+block act in both. Session 295's scouts rendered each of these with Quarto 1.7.33
 (``BACKLOG.md``, "What the scaffold still gets wrong after Larkspur point (2)", part (7)(b)):
 
 * a line of three or more backticks and ``{python}`` opens a cell that runs, and it does so in a
@@ -69,11 +73,14 @@ line is no longer a horizontal rule (it renders as a hyphen and an en dash) and 
 underlines a heading above it.
 
 What it does not do: it does not make a field safe as Markdown (a heading, a link, a raw HTML tag
-or a ``![](url)`` image is still whatever the model wrote), it is not applied to the ``.md``
-mirrors (``reports/intake_report.md`` shares its text with notebook 01 and is left as it was; a
-``.md`` that Quarto is asked to render still expands ``{{< env >}}`` and ``{{< include >}}`` and
-reads a second ``---`` block, though it runs no code, and BACKLOG records the decision), and it
-does not touch the names used as file paths (part (7)(a)).
+or a ``![](url)`` image is still whatever the model wrote), it does not touch the names used as
+file paths (part (7)(a)), and it does not stop raw TeX (``\\input{file}`` reads a file into a PDF)
+or raw HTML, in a notebook or a ``.md`` alike.
+
+Every renderer that puts a report field into a ``.qmd`` or a ``.md`` calls it itself, on the
+report it was given and before it reads a field (``templates.py`` and ``governance_templates.py``);
+the two that also use a field as a path or a dict key (the query names, the framework names) take
+the path from the report as it came and neutralise only the text that is shown.
 """
 
 from __future__ import annotations
