@@ -93,7 +93,7 @@ rows below it are the smaller residue that closing it exposed.
 | `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first, so even a smaller copy would show the oldest learnings and cut the newest. Sessions reach it by search, which still works. | **Operator call** — four remedies in the item, each a session. The read-budget guard tolerates it only while it stays over the limit. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
 | The `HANDOFFS.md` archive is unwatched, and its next trim has a window | Session 299 archived 22 receipts into `docs/archive/` on the operator's ruling (`d03a5ac`; lossless, proved byte for byte). What it left: CI runs proofs from `docs/architecture-history/` only and the generated proof has no `--self-test`, so nothing watches the archive or its proof; 19 of its 22 receipts still say `commit: pending`; the header's link to `FRAMEWORK_APPARATUS.md` is dead; and a second trim refuses without `--force` once the live file reaches the first archive's pre-size. | **Small; operator call on the CI question.** One item, four independent points; none is urgent. |
-| CI runs the proofs, but this repo pushes in bursts | The new CI job runs both proof modes on every push. When it was filed, this clone was 7 commits and 4 sessions ahead of `origin/master` — so CI would have caught the Session 249 breakage about four sessions late, which is exactly how late it *was* caught. The per-session command now lives in `CLAUDE.md`. | **Operator call.** Accept CI as a backstop, add a `pre-push` hook, or push every session. |
+| The proof loop is written out twice, and nothing makes a session run it | Session 300 ruled on CI versus push cadence: CI stays the backstop after a push, a `pre-push` hook was rejected (it fires when CI does, so it sees nothing sooner), nobody pushes on a schedule, and the loop in `CLAUDE.md` now fails a proof that has no self-test mode, as CI does. Left: the loop is prose in `CLAUDE.md` and shell in `ci.yml`, no gate makes a session run it, and it takes about 3 to 4 minutes serial, growing by about one proof's cost per trim. One incident is on file (Session 249), none in the 47 sessions since. | **Optional, with a trigger.** One shared script that runs the proofs in parallel (about a minute), called from both. Build it if a second break traces to an edit of a proof's inputs, or when the serial run is longer than you will wait. |
 **Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk. Two more of the same kind, found by Session 266's review: `.github/workflows/ci.yml:62` and `:70` state Session 253's measurements in the present tense (a proof count and a set count), and two docstrings in `tests/test_session_notes_census.py` (`:245`, `:741`) were written when nine table rows existed and now read ambiguously. A third, found by Session 277's review, is `:857`: it calls the `An eleventh ... an eleventh` wording the one count no session has exercised, and the tenth trim wrote exactly that sentence.
 
 ---
@@ -1648,24 +1648,13 @@ next session above it in a scratch copy and run `uv run pytest tests/test_read_b
 The durable fix for the M01 half is the one `3ef1a1b` applied to M04: pad M01's tail until the predicted
 page keeps pace with the K prefix.
 
-### CI runs the proofs on push, and this repository pushes in bursts
+### The proof loop is written out twice, and nothing makes a session run it
 
-**Filed Session 253. Operator call — it is about cadence, not code.**
+**Ruled in Session 300 (operator): (a) accept CI as the backstop; no `pre-push` hook; no routine push, which stays the operator's.** Filed in Session 253 as "CI runs the proofs on push, and this repository pushes in bursts"; the measurements and the rejected options are in Session 300's record. The filed premise ("four sessions late") measured bringing a new CI job online: a `pre-push` hook fires when CI does, and with the job in place Session 249's break would have reached `origin` 2.95 hours after the commit. Its cause was an edit to `SESSION_NOTES.md`'s front matter, outside the directory the proofs live in, so a path filter would have missed it.
 
-Session 253 added a `proofs` job to `.github/workflows/ci.yml` running both modes over every
-`docs/architecture-history/*.verify.sh` on push to `master` and on PRs. That is the automation the
-operator ruled for, and it works. What it does not fix: measured at the time of filing,
-`origin/master` was at `037895b` (Session 249's close-out) while local `master` was **7 commits and
-4 sessions ahead**. On that cadence the new job would first have observed the Session 249 breakage
-about four sessions after it landed — **the same latency as the outage it repairs.**
+**Done:** the loop in `CLAUDE.md` requires `SELF-TEST OK`, as `ci.yml` does (a proof with no self-test mode exits 0 without it).
 
-The per-session countermeasure landed instead, in `CLAUDE.md`'s trimmed-file bullet: the both-modes
-loop, with the reason neither mode alone is sufficient. That is prose, and prose was already
-mandating `--self-test` when four sessions did not run it.
-
-**Options:** (a) accept — CI is a backstop, the per-session run is the fast path; (b) a `pre-push`
-hook under `.githooks/` (the directory exists and `core.hooksPath` is already the convention here)
-running the two-mode loop; (c) push every session. **DONE** = an operator ruling recorded here.
+**Left, optional:** the loop is prose in `CLAUDE.md` and shell in `ci.yml`, and no gate makes a session run it. One script (parallel, about a minute), called from `CLAUDE.md` first and from `ci.yml` only once it has run on a CI runner, would make the two copies one. **Build it when** a second break traces to an edit of a proof's inputs, or the serial run is longer than the operator will wait. "None since Session 253" is thin: 54 of 311 commits were re-run in both modes, all green, and the rest are unexamined. Widening either loop to `docs/archive/` waits on the `HANDOFFS.md` archive item above: that proof has no self-test mode and would turn the loop red.
 
 
 ### `PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom
