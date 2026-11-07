@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 302 Did
+**Deliverable:** **Settle the operator ruling on `BACKLOG.md` (7)(g), raw TeX and raw HTML in report text (index row `:59`, item text `:870`): `neutralise_quarto_markup` leaves both alone, in the notebooks and in the `.md` copies alike, so when a person renders a PDF or a self-contained page with Quarto, a line such as `\input{secret.tex}` or `![x](../../outside.txt)` in a report field reads a file from outside the project or prints an environment value. The options on file: one README sentence in the generated project, a shipped `_quarto.yml` with `from: markdown-raw_tex-raw_html` (notebook 03 not yet measured), or accept.** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go"; both were the recommended options. The item is an operator call, so the session measures the options, puts the facts and a recommendation to the operator, and records and implements the ruling. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
+**Started:** 2026-11-07 11:30
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 301 Did
 **Deliverable:** **The operator ruling on `BACKLOG.md` (7)(e), the `.md` copies of the reports in the generated project, settled and applied — COMPLETE: the operator ruled to neutralise them, so the 12 `.md` renderers now call `neutralise_report` on the report they are given, as the four notebooks already do, and the pin test that kept them raw is rewritten; the gap that leaves, raw TeX and raw HTML in report text (open in the notebooks too), is filed as `BACKLOG.md` (7)(g).** The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go", and ruled at a picker for the recommended option on each of two questions (neutralise, and file the leftover gap as a new item). **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
 **Started:** 2026-11-06 20:49 · **Completed:** 2026-11-06 22:30 (ledger-entry time).

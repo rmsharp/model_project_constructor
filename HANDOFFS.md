@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S302
+date: 2026-11-07
+status: pending
+active_task: Settle the operator ruling on BACKLOG.md (7)(g), raw TeX and raw HTML in report text in the generated project (index row :59, item text :870): neutralise_quarto_markup leaves both alone in the notebooks and the .md copies, so rendering a PDF or a self-contained page can read a file from outside the project or print an environment value. Options on file: one README sentence, a shipped _quarto.yml with from: markdown-raw_tex-raw_html (notebook 03 not yet measured), or accept. Measure the options, put the facts and a recommendation to the operator, then record and implement the ruling. Session claimed; work beginning.
+```
+
+```handoff
 session: S301
 date: 2026-11-06
 status: complete
