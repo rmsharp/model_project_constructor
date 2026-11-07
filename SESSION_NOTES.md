@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 301 Did
+**Deliverable:** **Settle the operator ruling on `BACKLOG.md` (7)(e), the `.md` copies of the reports in the generated project (index row `:59`, item text `:859`): Quarto renders a `.md` as it renders a `.qmd`, so in those copies `{{< env NAME >}}` expands, `{{< include path >}}` splices a file in and a second `---` block with `filters` acts; nothing the generated project does renders a `.md` (it ships no `_quarto.yml` and no CI step runs Quarto), so whoever runs `quarto render` on the directory or on one of those files does. The options on file: neutralise the `.md` renderers too, ship a `_quarto.yml` whose `render:` list is `analysis/*.qmd`, or constrain the report fields in the schema.** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go"; both were the recommended options. The item is an operator call, so the session measures the options, puts the facts and a recommendation to the operator, and records and implements the ruling. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
+**Started:** 2026-11-06 20:49
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 300 Did
 **Deliverable:** **The CI-versus-push-cadence ruling, settled on the operator's ruling — COMPLETE: CI stays the post-push backstop, there is no `pre-push` hook and no routine push (the push stays the operator's), and the proof loop in `CLAUDE.md` now requires `SELF-TEST OK` from `--self-test`, as `ci.yml` does, which also makes it quiet (the old loop printed every proof's report, so "printing nothing is the gate" had never been literally true); the filed `BACKLOG.md` item was replaced by what the ruling left, an optional shared script with a trigger.** The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go", and ruled at a picker for the recommended one of four options on detection and the recommended one of two on push cadence; all four choices were the recommended option. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
 **Started:** 2026-11-06 16:17 · **Completed:** 2026-11-06 20:37 (ledger-entry time).
