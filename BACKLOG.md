@@ -927,8 +927,8 @@ two Python lists safe; these are open:
   blank-line-delimited block that holds `~~`, insert U+2060 where U+200B would go. The strikeout stays struck and the XeLaTeX
   PDF builds (27 cases through real Quarto; 0 of 1,388 fuzzed strikeouts, read by Pandoc, still held U+200B; idempotent on
   200,000 strings; the unit file and the 6 real-Quarto tests pass with its test edits). Its costs: a second invisible
-  character and a final block-level pass (about 25 lines of rule code, plus restating 8 oracles and one invariant of the
-  unit file); pdflatex gets worse (a block with a plain-word strikeout and a brace outside it builds now and fails,
+  character and a final block-level pass (about 25 lines of rule code, plus restating in the unit file 8 oracles, the
+  order test, the letter test and 4 expectations); pdflatex gets worse (a block with a plain-word strikeout and a brace outside it builds now and fails,
   reproduced); a writer's own U+200B in such a block becomes U+2060; a strikeout across two report fields joined on one line,
   with a middle field that holds the character and no tildes, keeps the failure (reasoned, not rendered). Its tests were not
   enough yet: two of 11 mutants survived (the constant set back to U+200B, and a blank line of spaces or tabs no longer
