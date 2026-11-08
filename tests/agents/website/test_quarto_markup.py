@@ -433,8 +433,9 @@ class TestOrdinaryTextIsNotChanged:
             "$\\" + Z + "frac{" + Z + "a}{" + Z + "b}$"
         )
         # A strikeout that holds a character that was inserted fails a XeLaTeX build (``soul``
-        # cannot typeset it); the module lists it as a cost that has not been accepted. The
-        # characters are inserted inside the tildes whatever the words, and the tildes are left.
+        # cannot take the ``\hspace{0pt}`` Pandoc writes for it); the operator accepted that cost in
+        # Session 303 and the module lists it. The characters are inserted inside the tildes
+        # whatever the words, and the tildes are left; these two lines pin that choice.
         assert neutralise_quarto_markup("~~old {x}~~") == "~~old {" + Z + "x}~~"
         assert neutralise_quarto_markup("~~old words~~") == "~~old words~~"
         # A grid table is a paragraph; a ``---`` that ends a line is no rule, wherever it is.

@@ -170,12 +170,19 @@ plainly (the backslash) or because it was found afterwards (marked *new*):
 * *new*: every bare carriage return (text pasted with old Mac or mixed line ends) is followed by an
   invisible character, one per line end, in prose and in fenced code alike. Pandoc ran such lines
   together without the rule, so no line break is lost;
-* **not accepted yet**: a PDF whose report text holds a strikeout (``~~...~~``) with a neutralised
-  character inside it fails to build with XeLaTeX, because the ``soul`` package that Pandoc uses
-  for strikeout cannot typeset the character (measured for a brace, a tag, ``]:`` and ``][``; a
-  strikeout of plain words builds). No rule can avoid this: a character between the two tildes
-  makes Pandoc read a subscript of that character, which would drop the tildes and the meaning of
-  the text without a word. A build that fails was judged better than text that lies;
+* accepted (Session 303, the operator's ruling): a PDF whose report text holds a strikeout
+  (``~~...~~``) with a neutralised character inside it fails to build with XeLaTeX. Pandoc writes
+  a strikeout for LaTeX as ``\\st{...}`` of the ``soul`` package and U+200B as ``\\hspace{0pt}``,
+  which ``soul`` cannot take: the build stops with ``I've run across a `}' that doesn't seem to
+  match anything`` at ``\\st{old \\{\\hspace{0pt}x\\}}``, a line of the generated ``.tex`` that
+  names no report field (measured for a brace, a tag, ``]:`` and ``][``; a strikeout of plain
+  words builds, and so do the HTML page, typst, docx and LuaLaTeX; pdflatex fails). A character
+  between the two tildes is no way out: Pandoc reads a subscript of it and drops the tildes and
+  the meaning of the text without a word, and a build that fails was judged better than text that
+  lies. (Session 302 wrote that no rule could avoid the failure; that was wrong: a word joiner,
+  U+2060, in place of U+200B inside a block that holds ``~~`` builds under XeLaTeX.
+  ``BACKLOG.md`` (7)(g) keeps that remedy with its costs. It was not adopted: no saved report
+  holds ``~~``, nothing the project generates builds a PDF, and the failure is loud.);
 * *new*: Pandoc's time to read the text this returns grows with the square of the number of ``<``
   signs that are followed by a letter, ``/``, ``?`` or ``!``, because it looks at the rest of the
   text at each one (measured on a busy machine, so the seconds are rough: 800 paragraphs that each
