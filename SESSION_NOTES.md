@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 304 Did
+**Deliverable:** **Settle the operator ruling on `BACKLOG.md`'s item "`PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom" (item text `:1731-1755`, index row `:93`): the file is 466.4 KB against the 256 KB refusal ceiling and grows every session. Four remedies are filed, each "a session of its own": (a) archive the oldest rows, (b) reorder newest-first, (c) an index plus detail, (d) declare it grep-only and outside the read budget.** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go" with the workflow-authoring reference loaded; both were the recommended options. The session re-measures the file and what depends on it, costs each remedy, puts the facts and a recommendation to the operator and records the ruling; the remedy ruled is applied in a separate session. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim).
+**Started:** 2026-11-08 16:50
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 303 Did
 **Deliverable:** **The last open cost of the Session 302 ruling on `BACKLOG.md` (7)(g), a PDF with a `~~strikeout~~` that holds a neutralised character failing to build in XeLaTeX, settled — COMPLETE: the operator accepted it (the recommended option, at a picker, over adopting a word-joiner fix, showing strikeouts as literal tildes, and leaving it open). The record is corrected (the cause, and "no rule can avoid this", were wrong) and the remedy is priced in `BACKLOG.md` as a design. No rule changed.** The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go" with the workflow-authoring reference loaded; both were the recommended options. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
 **Started:** 2026-11-07 23:32 · **Completed:** 2026-11-08 (ledger-entry time).

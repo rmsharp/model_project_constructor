@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S304
+date: 2026-11-08
+status: pending
+active_task: Settle the operator ruling on BACKLOG.md's item "PROJECT_LEARNINGS.md is refused by a default Read, and its newest learnings are at the bottom": the file is 466.4 KB against the 256 KB refusal ceiling and grows every session; four remedies are filed (archive the oldest rows, reorder newest-first, index plus detail, declare it grep-only). Re-measure the file and what depends on it, cost each remedy, put the facts and a recommendation to the operator, record the ruling; the remedy ruled is applied in a separate session. Session claimed; work beginning.
+```
+
+```handoff
 session: S303
 date: 2026-11-08
 status: complete
