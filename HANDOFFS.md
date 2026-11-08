@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S303
+date: 2026-11-07
+status: pending
+active_task: Settle the last open cost of the Session 302 ruling on BACKLOG.md (7)(g): a PDF whose report text holds a ~~strikeout~~ with a character the neutraliser inserted inside it fails to build with XeLaTeX (the soul package cannot typeset U+200B). Options on file: accept it, or ask for another way. Re-verify the cost, measure how likely it is and what the alternatives cost, put the facts and a recommendation to the operator, then record and apply the ruling. Session claimed; work beginning.
+```
+
+```handoff
 session: S302
 date: 2026-11-07
 status: complete
