@@ -1144,6 +1144,24 @@ class TestTheStructuralRules:
             }
             assert hit == expected, (opener, sorted(hit ^ expected)[:10])
 
+    def test_the_modules_source_holds_no_invisible_character(self) -> None:
+        """The module writes the zero-width space as the escape ``\\u200b`` everywhere. The Edit
+        and Write tools rewrite that escape into the character itself (learning #397), which in a
+        regular expression is invisible: Session 302's attack round found one inside the
+        carriage-return rule's lookahead, where a formatter or a copy that drops it would make the
+        rule fail its own idempotence. No format character (category Cf) and no line or paragraph
+        separator may stand in the source."""
+
+        with open(markup.__file__, encoding="utf-8") as handle:
+            source = handle.read()
+        found = [
+            (line, f"U+{ord(c):04X}")
+            for line, text in enumerate(source.splitlines(), 1)
+            for c in text
+            if unicodedata.category(c) == "Cf" or c in "\u2028\u2029"
+        ]
+        assert found == [], found
+
     def test_a_grid_table_is_no_table_and_a_plus_is_otherwise_left_alone(self) -> None:
         assert neutralise_quarto_markup("+---+---+\n| a | b |\n+---+---+") == (
             "+" + Z + "---+" + Z + "---+\n| a | b |\n+" + Z + "---+" + Z + "---+"

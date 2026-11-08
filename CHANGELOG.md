@@ -16,9 +16,16 @@ Dates are commit dates on `master`. Commit hashes are short-form as produced by 
 
 ## 2026-11
 
+### 2026-11-07 · [ad hoc] S302 — a test that the neutraliser's source holds no invisible character (learning #397 recurred)
+- **Change:** `tests/agents/website/test_quarto_markup.py` (one test: no format character, line separator or paragraph separator may stand in `_quarto_markup.py`) and this entry. The Edit tool had rewritten the escape `\u200b` into the zero-width space itself inside the carriage-return rule's lookahead, where it is invisible; the attack round's regressions lane found it by reading the file, the pure tests did not (the rule behaved the same). Fixed in the code commit; this is the gate so that a later edit cannot put one back unseen (a mechanical learning is a gate, not a row).
+- **Non-commit actions:** none. Checked by mutation: a copy of the module with the character put back fails the test with `[(319, 'U+200B')]`; the real module passes.
+- **Commit/PR:** this commit
+- **Session:** S302 · **Verified:** `tests/agents/website/test_quarto_markup.py` 1,680 passed; `ruff check` and `ruff format --check` clean on the file.
+- **Model:** Claude Sonnet 5.5
+
 ### 2026-11-07 · [ad hoc] S302 — the (7)(g) ruling recorded in BACKLOG: settled, with the costs and what is left open
 - **Change:** `BACKLOG.md` (230,646 B to 233,723 B: the (7)(g) item replaced by a settled note that carries the rules, what the filed item got wrong, how four attack rounds went, the costs and what is not measured; the index row for "What the scaffold still gets wrong after the Larkspur fixes" and the item's list of who fixed what updated) and this entry. **What the filed item got wrong, from the measurements:** raw HTML also reaches the plain `format: html` page (11 of 11 constructs tried), which the item left out; the `../` file read works only from the file whose directory resolves the path; a markdown image reads a file under `embed-resources` only by a path that resolves; `<style>@import`, `<iframe>` and `<embed>` inline files and `<object>` does not; a tilde-fenced `{=latex}` block got past Session 301's raw-attribute rule; `from:` is not applied to `README.md`, notebook 03 carries no report text, and a shipped `_quarto.yml` makes a directory render legal and adds `/.quarto/` to the tracked `.gitignore`, so the item's option B is ruled out; a Windows path in report text already failed the PDF build at HEAD.
-- **Non-commit actions:** **One operator call is left:** a PDF whose report text holds a strikeout with a neutralised character fails to build with XeLaTeX, and the operator has not accepted it (no rule avoids it). **No push:** 17 commits are ahead of `origin/master` (`9036cb0`, local ref) with this one; the push is the operator's, by Session 300's ruling.
+- **Non-commit actions:** **One operator call is left:** a PDF whose report text holds a strikeout with a neutralised character fails to build with XeLaTeX, and the operator has not accepted it (no rule avoids it). **No push:** 17 commits are ahead of `origin/master` (`9036cb0`, local ref) with this one (the test commit that follows makes 18); the push is the operator's, by Session 300's ruling.
 - **Commit/PR:** this commit
 - **Session:** S302 · **Verified:** `tests/test_read_budget.py` on this tree (see the close-out entry for the full guard run).
 - **Model:** Claude Sonnet 5.5
