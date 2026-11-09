@@ -1091,7 +1091,13 @@ def self_test(before, after, live_wt, pre_live, world):
         i = t.rfind("### What Session ")
         j = t.find(" Did", i)
         assert i != -1 and j != -1, "self-test fixture: no record heading found in the working tree"
-        return t[:i] + "### What Session 299" + t[j:]
+        # DERIVED from the heading, never typed. A typed id equals the oldest record's id as soon as
+        # a trim retains it: Session 305's fourteenth trim kept Session 299 as its oldest, the typed
+        # "299" renamed it to itself, M43 MUTATED NOTHING and this proof's --self-test exited 2.
+        start = i + len("### What Session ")
+        old_id = t[start:j]
+        assert old_id.isdigit(), "self-test fixture: the oldest record's id is not a number: %r" % old_id
+        return t[:start] + str(int(old_id) + 1000) + t[j:]
 
     # --- fixture integrity, the C-series idiom: these can only fire in a run where the assertion
     # --- they support is already failing, which is what makes them a backstop and not a predicate.
