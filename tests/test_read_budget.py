@@ -1,4 +1,4 @@
-"""Hold the three mandated-read files to their read budgets, on every CI run.
+"""Hold the two mandated-read files to their read budgets, on every CI run.
 
 WHY THIS EXISTS (Session 255 -- Option D of docs/planning/ledger-budgets-review.md,
 widened; operator ruling 2026-09-10, recorded in docs/methodology/PROJECT_CONVENTIONS.md
@@ -61,13 +61,16 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SESSION_NOTES = "SESSION_NOTES.md"
 BACKLOG = "BACKLOG.md"
 CHANGELOG = "CHANGELOG.md"
-LEARNINGS = "PROJECT_LEARNINGS.md"
 CLAUDE = "CLAUDE.md"
 CONVENTIONS = "docs/methodology/PROJECT_CONVENTIONS.md"
 RUNNER = "methodology/SESSION_RUNNER.md"   # moved under methodology/ (BL-101 P11)
 
-MANDATED = (SESSION_NOTES, BACKLOG, LEARNINGS)   # ruling 2026-09-14: CHANGELOG.md is outside
-KNOWN_REFUSED: tuple[str, ...] = (LEARNINGS,)   # ruling 2026-09-10: declare, guard, file
+# CHANGELOG.md (ruling 2026-09-14) and PROJECT_LEARNINGS.md (ruling 2026-11-09) are outside.
+MANDATED = (SESSION_NOTES, BACKLOG)
+# A file declared over the ceiling and filed for remediation (ruling 2026-09-10: declare, guard,
+# file). None today: the last one left the budget instead (2026-11-09). A new entry must also be
+# named in the "except ..., declared over it" clause both DECLARING files then have to carry.
+KNOWN_REFUSED: tuple[str, ...] = ()
 DECLARING = (CLAUDE, CONVENTIONS)
 MIRRORED = (*MANDATED, *DECLARING, RUNNER)
 
@@ -76,7 +79,7 @@ PAGE_FACTOR = 0.85              # [M] S255: a partial view is 0.85 of the cap, c
 REGIME_FACTOR = 0.7             # [M] S255: every reduced page probed was 0.7 of the rule's
 TOKEN_OVERHEAD = 5              # [M] S255: a banner's token total is content tokens + 5
 MIN_BYTES_PER_TOKEN = 2.49      # [M] S255: CHANGELOG.md's, the densest file then in scope --
-                                # kept at S257: below all three now, and a re-tune needs a ruling
+                                # kept at S257: below both now, and a re-tune needs a ruling
 RATIO_MAX = 2.90                # judgment: above the highest measured (PROJECT_LEARNINGS 2.858)
 PAGE_TOKENS = round(READ_CAP_TOKENS * PAGE_FACTOR)           # 21,250
 PAGE_BYTES = int(PAGE_TOKENS * MIN_BYTES_PER_TOKEN)          # 52,912
