@@ -90,7 +90,6 @@ rows below it are the smaller residue that closing it exposed.
 | The read-budget guard cannot model "claim, then a wide close-out" from a close-out state | The guard tests each next commit by modelling what the following session will write. One of its models starts only when the newest record is still a claim stub, so from a finished close-out it never runs. Session 266's review measured the consequence with short lines: a close-out of about 19.7 to 19.9 KB, or of about 22 KB, passes at its own commit and turns the NEXT session's claim commit red. Behind it is a recurring cause: the mutant that isolates one check has been repaired five times in four sessions, each time for the quantity the last red named (learning #287). Session 287's review of the twelfth trim found it wider: a close-out of about 10.8 or 13.9 KB at about 170 to 190 bytes a line passes at its own commit and turns the next claim red; the same kind of fault in the sibling mutant (M04) had turned Session 287's own claim red (fixed in `3ef1a1b`); and where a close-out is hard-wrapped the largest record that keeps both commits green is about 11 to 12 KB. | **Small.** Add the missing model, an assertion inside that mutant, and pad the other mutant's tail as M04's now is. Until then, before committing a close-out, put the next claim stub above it in a scratch copy and run the guard. |
 | The front matter of `SESSION_NOTES.md` grows 111 to 128 B every trim, and only a judgment constant bounds it | Session 298 settled the near term on the operator's ruling: a one-off cut of 1,740 B of prose no guard reads (tier 3 of four measured options) took the strip from 7,931 B to 6,191 B and the room that counts from 73 B to about 1,800 B, enough for 14 to 15 more trims at the observed growth (bisects with synthetic 119 B rows, not real trims). The slope is unchanged: each trim adds a table row of 111 to 124 B, the previous row's hash and the ordinals. One thing comes due whatever the limit (the fourteenth trim, Session 305, anchored its front-matter substitution on the new bequest sentence, as predicted): the sixteenth trim raises `KeyError` in the census guard (`tests/test_session_notes_census.py:149-159` and `:427`, ordinal tables that stop at 16). | **Small; operator call, no deadline.** Re-open when the strip passes about 7,500 B (about four trims left; arithmetic, not a guard state). The options not taken and their measured costs are in the item body. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB); Session 266, that trim, retired the rest into a three-line "nothing is bequeathed" paragraph, with both instructions recorded in `CLAUDE.md`, so the list is empty today. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
-| `PROJECT_LEARNINGS.md` is refused, and newest-last | A default `Read` of the project's learnings file returns nothing at all: it is past the 256 KiB size at which the agent's file reader refuses outright. It is also ordered oldest-first. Sessions reach it by search, which still works. **Ruled in Session 304: take it off the read budget**, as you did for `CHANGELOG.md`. Nothing tells a session to read it whole, today's guard bounds nothing on it, and a cut to the 256 KiB size would still return only a short page of the oldest rows. | **Ruled; not yet applied.** One later session edits 12 places in 5 files (the item holds the list) and rewrites the `CLAUDE.md` search advice. Accepted costs: no alarm on growth, and nothing guards against the file being deleted. |
 | `CHANGELOG.md`'s top is out of order | Four July entries sit above the September ones, so the newest entry of that stretch is not at the top of it. Since Session 259 new entries no longer go there at all — they go above the whole legacy part, under the newest `## YYYY-MM` heading. Its size stopped being a defect in Session 257, when the operator ruled this file — and only this one — outside the read budget. | **Operator call** — reorder the four (a provable pure move), or accept the order. |
 | The `HANDOFFS.md` archive is unwatched, and its next trim has a window | Session 299 archived 22 receipts into `docs/archive/` on the operator's ruling (`d03a5ac`; lossless, proved byte for byte). What it left: CI runs proofs from `docs/architecture-history/` only and the generated proof has no `--self-test`, so nothing watches the archive or its proof; 19 of its 22 receipts still say `commit: pending`; the header's link to `FRAMEWORK_APPARATUS.md` is dead; and a second trim refuses without `--force` once the live file reaches the first archive's pre-size. | **Small; operator call on the CI question.** One item, four independent points; none is urgent. |
 | The proof loop is written out twice, and nothing makes a session run it | Session 300 ruled on CI versus push cadence: CI stays the backstop after a push, a `pre-push` hook was rejected (it fires when CI does, so it sees nothing sooner), nobody pushes on a schedule, and the loop in `CLAUDE.md` now fails a proof that has no self-test mode, as CI does. Left: the loop is prose in `CLAUDE.md` and shell in `ci.yml`, no gate makes a session run it, and it takes about 3 to 4 minutes serial, growing by about one proof's cost per trim. One incident is on file (Session 249), none in the 47 sessions since. | **Optional, with a trigger.** One shared script that runs the proofs in parallel (about a minute), called from both. Build it if a second break traces to an edit of a proof's inputs, or when the serial run is longer than you will wait. |
@@ -1728,97 +1727,6 @@ page keeps pace with the K prefix.
 **Left, optional:** the loop is prose in `CLAUDE.md` and shell in `ci.yml`, and no gate makes a session run it. One script (parallel, about a minute), called from `CLAUDE.md` first and from `ci.yml` only once it has run on a CI runner, would make the two copies one. **Build it when** a second break traces to an edit of a proof's inputs, or the serial run is longer than the operator will wait. "None since Session 253" is thin: 54 of 311 commits were re-run in both modes, all green, and the rest are unexamined. Widening either loop to `docs/archive/` waits on the `HANDOFFS.md` archive item above: that proof has no self-test mode and would turn the loop red.
 
 
-### `PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom
-
-**Filed Session 255, under the operator's ruling of 2026-09-10 (Option D widened: declare, guard,
-file).** `tests/test_read_budget.py` lists this file in `KNOWN_REFUSED`, so the guard tolerates it
-over the refusal ceiling — and fails the moment it drops under, until it is removed from that list
-and from the sentence in `CLAUDE.md` and `docs/methodology/PROJECT_CONVENTIONS.md` §5 naming it.
-
-Measured Session 255: **298,720 B**, 247 lines, **104,523 tokens** (an explicit `offset`/`limit`
-`Read` over the whole file meters it exactly; a default `Read` is refused with zero content). It
-crossed 262,144 B at the Session 246 close-out (`ea82065`, 267,155 B) and has grown ~4.6 KB per
-session since. **It is oldest-first** — learning #1 at the top, the newest at the bottom — so even
-under the ceiling a default `Read` would deliver the oldest learnings and cut the newest.
-
-Constraints any remedy meets: `CLAUDE.md` tells sessions to `grep` it or `Read` it with
-`offset`/`limit`, so a default `Read` is not its instructed access path; learnings are cited by
-number on ~250 lines across ~19 files outside it; canonical gives on-demand learnings files no token
-verdict at all.
-
-- **(a) Archive the oldest rows** into a frozen part beside a `.verify.sh` proving the move lossless
-  (PROJECT_CONVENTIONS §3). Row numbers survive; citations of archived rows then point at the wrong file.
-- **(b) Reorder newest-first.** One large rewrite; citations by number still resolve by `grep`.
-- **(c) Split into an index** (one short line per learning) plus detail.
-- **(d) Re-scope**: rule that a grep-only file is outside the read budget, and drop it from D's scope.
-
-**RULED by the operator, Session 304 (2026-11-09): (d).** Chosen at a picker, as the recommended
-option, over "(d) plus an integrity check" (the file exists and its rows are numbered 1..N: about a
-dozen lines and a mutant, an estimate), "(a) archive the oldest rows" and "keep the exemption and fix
-only the wording". The file leaves the read budget, as `CHANGELOG.md` did on 2026-09-14. **Not
-applied: the application is its own session** (a ruling and its code are separate deliverables).
-
-*Evidence* (two read-only workflows, `wf_b4933180-79b` and `wf_76d15fd4-1d3`, five agents; the points
-marked ✔ were re-run by Session 304 itself). No tracked file mandates reading it: both routing
-instructions are conditional ("when a task resembles earlier work"; `CLAUDE.md` since 2026-06-07,
-`ae67b9d`), so `docs/planning/ledger-budgets-review.md` §13.8's premise (`:984-996`, "directs every
-session to consult it") overstated the pointer ✔. The guard bounds nothing on it: `check_ceiling`
-skips it (`tests/test_read_budget.py:307`) and 300 KB appended left all 82 tests green; it fails only
-if the file shrinks to the ceiling or is deleted ✔. A size-only cut does not give a useful default
-`Read`: the cap that bites is 25,000 tokens (about 72 to 75 KB), so a 249,692 B copy returned 71 of 285
-lines, the oldest, and only a cut that leaves about 52 KB reads whole; and `Read` at `offset=1
-limit=60` is refused today at 30,607 tokens ✔. `grep` floods on broad words (15% of 1,819 words
-exceed Bash's inline limit of about 30 KB, and then only a 2 KB preview of the OLDEST rows shows);
-piping through `cut -c1-240` brings `guard` from 85.8 KB to 17.8 KB; a headline view is triage only
-(the word is in the headline of 3 of the 10 `Quarto` rows). The records show no session unable to
-find, or flooded by, a learning; the recurrences that reproduced (7 to 9) were failures to apply a
-known row, not to find it; about 6% of rows (25 'Promoted', 25 'Mechanical:', 7 test or gate) could be
-promoted to gates; and the records cannot show how often sessions consult the file (no transcripts).
-Growth is 3,338 B per session (366,308 B at the Session 273 close-out, 466,445 B at Session 303) ✔,
-about 177 sessions to 1 MiB. **Retracted in-session:** "95.1% of later citations fall on rows 1 to 61"
-(41% to 86% by counting rule; 2 of 76 citations in the orientation files; the 95.7% figure belongs to
-rows 1 to 147 inside the frozen archives) and "16 recorded recurrences" (7 to 9 reproduce).
-
-*Costs accepted:* no alarm on growth, and nothing guards against deletion or shrinkage (after (d),
-moving the file away leaves all tests green; `CHANGELOG.md` has the same gap).
-
-*The application session's list: 12 live sites in 5 files, of which the guard notices 3.*
-1. `tests/test_read_budget.py:69-70` (`MANDATED = (SESSION_NOTES, BACKLOG)`, `KNOWN_REFUSED = ()`),
-   the docstring at `:1` ("three mandated-read files") and the comment at `:79` ("below all three
-   now"). Do not touch `MIN_BYTES_PER_TOKEN` or `RATIO_MAX`: a re-tune needs its own ruling.
-2. `CLAUDE.md:91` (drop the clause "except `PROJECT_LEARNINGS.md`, declared over it and filed for
-   remediation"; the covers-sentence becomes `SESSION_NOTES.md` and `BACKLOG.md`) and `:122` (the
-   access sentence and its "refused outright" claim; the count line, which no test reads).
-3. `docs/methodology/PROJECT_CONVENTIONS.md:163` (covers-sentence), `:176-178` ("names this file
-   alone ... stays in scope ... until the operator rules on it") and `:204-206` (the exemption is
-   THREE lines: editing only `:204` leaves a false orphan sentence and the guard stays green).
-4. `README.md:120` ("three mandated-read files (47 tests)": two files, and the count from
-   `pytest --collect-only`).
-5. `docs/planning/ledger-budgets-review.md`: a new section 17 recording this ruling and CORRECTING
-   §13.8's premise and §16's "keeps all three, as §13.8 ruled" (`:1143`), as §16 did for `CHANGELOG.md`.
-6. `BACKLOG.md`: close this item and its index row, and add a dated line to the read-cap item
-   (`:1836-1838`, "only `PROJECT_LEARNINGS.md` is still declared").
-
-Expect both guards at 79 passed (from 82: `test_live[known_refused]`, M02 and M14 go); run both proof
-loops and the whole suite. Nothing under `docs/wiki/` needs editing (searched) and the dashboard does
-not change (the file is not in `READ_CAP_WATCHED`). **The `CLAUDE.md:122` rewrite states rules and
-commands, not figures** (the count line is typed and read by nothing; a figure such as "74 rows" goes
-stale each session): `grep -n -i WORD PROJECT_LEARNINGS.md | cut -c1-240` (a row is about 1 KB, so a
-broad word floods); `grep -P`, because the shell's grep (ugrep) rejects `-E '.{0,60}word.{0,60}'` on
-this file; row N is on line N+6, so `Read` with `offset=N+6 limit=1`; the newest rows are read with a
-high offset and a `limit` of 30 or less; and the refusal notice offers `allow_large`, which was not
-exercised.
-
-*Not taken, with measured costs.* (a) K=322 leaves 98 KB, due again in about 30 sessions, takes two
-sessions and a new hand-built proof (the canonical trimmer cannot do it), moves the seed rows that
-`NOTICE` §1 and `CLAUDE.md:71` name, and stops `grep -n '^| N |'` resolving 146 to 189 citing lines
-outside the frozen archives (4 to 6 of them in `docs/wiki/`, which cannot be repaired without a
-publishing edit). (b) one session; changes nothing a default `Read` returns; makes `offset=1
-limit=50` work; breaks line-number citations such as Session 303's `PROJECT_LEARNINGS.md:431`. (c) a
-derived index is 60 KB, passes the page cap in about 5 sessions at 160 characters, 65 rows lack a
-usable headline, and it needs a regeneration test and a close-out step. (e) a script is the cheapest
-form of the `CLAUDE.md` sentence above.
-
 ### `CHANGELOG.md`'s top is not newest-first
 
 **Filed Session 255 as two defects; narrowed Session 257.** A default `Read` of this file is
@@ -1903,6 +1811,13 @@ filed as its own remediation item above; at that ruling they measured 291.7 KB a
 `PROJECT_LEARNINGS.md` is still declared; the other item now records only that file's order.
 **Ruled 2026-11-09 (Session 304):** `PROJECT_LEARNINGS.md` leaves the read budget too, so applying
 that ruling empties the declared list (see that item for the work list).
+**Applied 2026-11-09 (Session 306):** the declared list is empty (`KNOWN_REFUSED` in
+`tests/test_read_budget.py`), the guard's scope is `SESSION_NOTES.md` and `BACKLOG.md`, and
+`PROJECT_LEARNINGS.md` is outside the read budget as `CHANGELOG.md` is. That item is closed and
+removed from this file; its ruling, evidence and costs are in
+[`docs/planning/ledger-budgets-review.md`](docs/planning/ledger-budgets-review.md) §17. The pointer
+in `CLAUDE.md` that the sentences above say returns nothing now tells a session to search the file,
+and gives the commands.
 
 **The same false claim is repeated inside the write-once shards and their proofs, where it can
 never be repaired.** Those copies join the stale banners this project already documents as

@@ -2,9 +2,9 @@
 
 **Status:** **RULED — see §13 (Session 252, 2026-09-07); EXECUTED — see §14 (Session 255).** A was
 executed in Session 249, E in Session 254 and D, widened, in Session 255 — then narrowed by one file
-in Session 257 (§16); **F** is ruled with a CI
+in Session 257 (§16) and by a second, `PROJECT_LEARNINGS.md`, in Session 306 (§17); **F** is ruled with a CI
 substitute (landed Session 253); **B, C, G and H are declined.** The analysis below stands as
-written except where §13–§16 record a figure that has since moved, a premise since measured false or
+written except where §13–§17 record a figure that has since moved, a premise since measured false or
 a scope since narrowed; they correct rather than rewrite, for the reason §12 gives.
 **Session:** 248, 2026-08-26, at `b95c39e`. Per the operator assignment recorded at `c6aa37b` and filed
 as `BACKLOG.md:62`. **Deliverable:** this document (`SESSION_RUNNER.md` FM #18 — the plan is the
@@ -1148,3 +1148,70 @@ scope, and §14.1's second answer. It executes no option of §8.
   guard now composes it into a sentence `CLAUDE.md` and `PROJECT_CONVENTIONS.md` must each state
   once, full stop included, with a mutant that appends `CHANGELOG.md` to the list and is caught
   only because of that full stop. A separate sentence elsewhere is not read.
+
+## 17. `PROJECT_LEARNINGS.md` leaves the read budget — ruled Session 304, applied Session 306, 2026-11-09
+
+Recorded because three statements moved: §13.8's second bullet (its premise, and its ruling that D
+reaches this file), §14.1's answer for it, and §16's "`PROJECT_LEARNINGS.md` keeps all three, as
+§13.8 ruled". It executes no option of §8. The file's own `BACKLOG.md` item (filed Session 255) is
+closed and removed in the commit that carries this section, so the evidence it held is kept here.
+**Tags** follow the top of this document, with one addition: **[S304]** is a figure Session 304
+recorded in that item, from two read-only workflows (`wf_b4933180-79b` and `wf_76d15fd4-1d3`) and
+its own commands, which Session 306 did not re-derive. **[M]** is a command Session 306 ran.
+
+- **The ruling.** On 2026-11-09 (Session 304) the operator chose remedy (d) of that item — *rule
+  that a grep-only file is outside the read budget, and drop it from D's scope* — at a picker, as
+  the recommended option, over "(d) plus an integrity check" (the file exists and its rows are
+  numbered 1..N), "(a) archive the oldest rows" and "keep the exemption and fix only the wording".
+  It names this file, as §16's ruling names `CHANGELOG.md`. Session 306 applied it: the guard,
+  `CLAUDE.md`, `PROJECT_CONVENTIONS.md` §5 and `README.md` in `91d24dc`; this section, the item and
+  its index row, and a dated line in the read-cap item in the commit after.
+- **§13.8's premise overstated the pointer.** It says `CLAUDE.md:101` *directs every session to
+  consult* the file. The pointer is conditional — *when a task resembles earlier work* — and has
+  been since it was written (2026-06-07, `ae67b9d`) [M]; Session 304 found the file's other
+  routing instruction conditional too [S304]. No tracked file tells a session to read it whole.
+- **The guard bounded nothing on it** [S304]. `check_ceiling` skipped it, and 300 KB appended left
+  all 82 tests green; it failed only if the file shrank to the ceiling or was deleted. Removing it
+  from `MANDATED` therefore removes one protection, against deletion, and nothing else.
+- **A size-only cut would not have made it readable** [S304]. The cap that bites is 25,000 tokens,
+  about 72 to 75 KB, not the 256 KiB ceiling: a 249,692 B copy returned 71 of 285 lines, the
+  oldest, and only a cut that leaves about 52 KB reads whole; and `Read` at `offset=1 limit=60` was
+  refused at 30,607 tokens. The rows run oldest-first, so a shorter copy still hides the newest. A
+  default `Read` of the real file is still refused: 458.2KB against 256KB, in the harness's words [M].
+- **Search works, at a cost** [S304]. `grep` floods on broad words: 15% of 1,819 words exceed Bash's
+  inline limit of about 30 KB, and then only a 2 KB preview of the OLDEST rows shows; piping through
+  `cut -c1-240` brings `guard` from 85.8 KB to 17.8 KB. The records show no session unable to find,
+  or flooded by, a learning; the recurrences that reproduced (7 to 9) were failures to apply a known
+  row, not to find it. About 6% of rows (25 "Promoted", 25 "Mechanical:", 7 test or gate) could be
+  promoted to gates. The records cannot show how often sessions consult the file; there are no
+  transcripts. The access commands `CLAUDE.md` now states were each run by Session 306 [M]: `grep -n
+  -i` with `cut`; `grep -P` (the same bounded quantifier under `-E` is refused by ugrep); row N on
+  line N+6; and a high-offset `Read` of the newest rows (the newest 30 are 26,276 B).
+- **Growth** [S304]: 3,338 B per session (366,308 B at the Session 273 close-out, 466,445 B at
+  Session 303), about 177 sessions to 1 MiB.
+- **Costs the operator accepted:** no alarm on growth, and nothing guards against deletion or
+  shrinkage. Moving the file away leaves every test green, as for `CHANGELOG.md` since §16.
+- **Retracted by Session 304, and not to be quoted:** "95.1% of later citations fall on rows 1 to
+  61" (41% to 86% by counting rule; 2 of 76 citations sit in the files read at orientation; the
+  95.7% figure belongs to rows 1 to 147 inside the frozen archives), "16 recorded recurrences" (7 to
+  9 reproduce) and the scouting lane's "13 routing instructions" (the attack lane found 3 live). A
+  first edit set of three files was wrong too: the live set was 12 sites in 5 files, of which the
+  guard notices 3.
+- **Not taken, with the costs Session 304 measured** [S304]. (a) Archiving the oldest rows: K=322
+  leaves 98 KB, due again in about 30 sessions, takes two sessions and a new hand-built proof (the
+  canonical trimmer cannot do it), moves the seed rows that `NOTICE` §1 and `CLAUDE.md` name, and
+  stops `grep -n '^| N |'` resolving for 146 to 189 citing lines outside the frozen archives, 4 to
+  6 of them in `docs/wiki/`, which cannot be repaired without a publishing edit. (b) Reordering
+  newest-first: one session; changes nothing a default `Read` returns; makes `offset=1 limit=50`
+  work; breaks line-number citations such as Session 303's `PROJECT_LEARNINGS.md:431`. (c) An
+  index: a derived one is 60 KB, passes the page cap in about 5 sessions at 160 characters, 65 rows
+  lack a usable headline, and it needs a regeneration test and a close-out step. (e) A script is
+  the cheapest form of the access sentence `CLAUDE.md` now carries, not a separate deliverable.
+- **The page's floor and `RATIO_MAX` stand.** §16 kept the 2.49 B/token floor because it is below
+  every file still in scope (2.620–2.861 across three files by its token meter). Two files are in
+  scope now, both still above it. `RATIO_MAX` (2.90) was set above this file's 2.858 and is not
+  re-tuned: a re-tune needs its own ruling.
+- **After the application.** `KNOWN_REFUSED` is empty and its machinery is kept, so the next file
+  declared over the ceiling needs one entry there and the "except ..." clause in both prose files.
+  The guard goes from 82 tests to 79 (`test_live[known_refused]`, M02 and M14, which exist only
+  while the list is non-empty) [M].
