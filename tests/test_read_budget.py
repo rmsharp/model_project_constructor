@@ -23,9 +23,11 @@ an announced PARTIAL view, or -- past a byte ceiling -- nothing at all.
   matter has its own budget because it is the part of the page the apparatus writes.
 
 ``CHANGELOG.md`` is outside the budget by the operator's ruling of 2026-09-14 (Session 257), which
-names that file alone: it is read only to find something, and what is found is not kept. The scope
-is ``MANDATED``. ``check_declared`` requires the sentence naming it, full stop included, so the
-list cannot be edited in place without going red; a separate sentence elsewhere is not read.
+names that file alone: it is read only to find something, and what is found is not kept.
+``PROJECT_LEARNINGS.md`` followed it by the ruling of 2026-11-09 (Session 304): it is searched, not
+read whole. The scope is ``MANDATED``. ``check_declared`` requires the sentence naming it, full
+stop included, so the list cannot be edited in place without going red; a separate sentence
+elsewhere is not read.
 
 Every page check has two arms. The BYTES arm is the operator's conservative page
 (``PAGE_BYTES``, the page at the lowest measured ratio); the LINES arm is the measured page
@@ -69,7 +71,8 @@ RUNNER = "methodology/SESSION_RUNNER.md"   # moved under methodology/ (BL-101 P1
 MANDATED = (SESSION_NOTES, BACKLOG)
 # A file declared over the ceiling and filed for remediation (ruling 2026-09-10: declare, guard,
 # file). None today: the last one left the budget instead (2026-11-09). A new entry must also be
-# named in the "except ..., declared over it" clause both DECLARING files then have to carry.
+# in MANDATED (the ceiling check walks it), and both DECLARING files must then name it in the scope
+# sentence and carry the "except ..., declared over it" clause.
 KNOWN_REFUSED: tuple[str, ...] = ()
 DECLARING = (CLAUDE, CONVENTIONS)
 MIRRORED = (*MANDATED, *DECLARING, RUNNER)
