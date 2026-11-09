@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S307
+date: 2026-11-09
+status: pending
+active_task: Settle the operator's call on BACKLOG.md's item "CHANGELOG.md's top is not newest-first" (item at :1730): move the four July entries (Sessions 191, 193, 203, 205; CHANGELOG.md:2175-2217) into date order as a provable permutation, or accept the order. The ruling is put to the operator with measured facts, then applied or recorded. Session claimed; work beginning.
+```
+
+```handoff
 session: S306
 date: 2026-11-09
 status: complete

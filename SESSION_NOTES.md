@@ -79,6 +79,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 307 Did
+**Deliverable:** **The operator ruling on `BACKLOG.md`'s item "`CHANGELOG.md`'s top is not newest-first" (the item at `:1730`, index row `:93`): settle and record it. The operator's call is to move the four July entries (Sessions 191, 193, 203, 205) into date order, a pure reorder provable as a permutation of the file's entries, or to accept the order; the ruling is put to the operator with measured facts, then applied or recorded as the operator rules.** (IN PROGRESS) The operator chose the area (operator rulings) and then this item at pickers (both the recommended options), after an opening message of "go" with the workflow-authoring reference loaded. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (a ruling, as Session 304's was).
+**Started:** 2026-11-09
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 306 Did
 **Deliverable:** **Applying the operator's Session 304 ruling (d) on `PROJECT_LEARNINGS.md` — COMPLETE: the file is off the read budget, as `CHANGELOG.md` has been since 2026-09-14. `tests/test_read_budget.py` has `MANDATED` as `SESSION_NOTES.md` and `BACKLOG.md` and `KNOWN_REFUSED` empty (its machinery kept); `CLAUDE.md` and `PROJECT_CONVENTIONS.md` §5 drop the exemption clause and name two files; `CLAUDE.md`'s Learnings paragraph is rewritten as rules and commands with no file size in it; `README.md` says two files and 44 tests; `docs/planning/ledger-budgets-review.md` gains §17 (the ruling, the premise it corrects, the evidence, the costs); `BACKLOG.md` loses the item and its index row. No threshold was re-tuned and none of the declined remedies was built.** The operator chose this at a picker (the recommended option, after an opening message of "go" with the workflow-authoring reference loaded). **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` (the nearest; one guard test file changes beside prose).
 **Started:** 2026-11-09 · **Completed:** 2026-11-09 (ledger-entry time).
