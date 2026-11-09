@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S305
+date: 2026-11-09
+status: pending
+active_task: The fourteenth trim of SESSION_NOTES.md: the live file is 206,410 B against the 196,608 B trigger, so the oldest records move, as a pure byte slice, into a new write-once shard under docs/architecture-history/ with its own proof, and the live file is cut back to at most 98,304 B (CLAUDE.md's trim bullets; Session 297's record, the thirteenth trim, is the worked precedent). Claim, trim and close-out are three commits; the trim commit carries no record edit. Session claimed; work beginning.
+```
+
+```handoff
 session: S304
 date: 2026-11-09
 status: complete

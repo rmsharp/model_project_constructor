@@ -78,6 +78,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 305 Did
+**Deliverable:** **The fourteenth trim of `SESSION_NOTES.md`: the live file is 206,410 B against the 196,608 B trigger, so by the byte rule (`CLAUDE.md`'s trim bullets) the oldest records move, as a pure byte slice, into a new write-once shard under `docs/architecture-history/` with its own proof, and the live file is cut back to at most 98,304 B.** (IN PROGRESS) The operator chose this at a picker (the recommended option, after an opening message of "go" with the workflow-authoring reference loaded). Claim, trim and close-out are three commits, and the trim commit carries no record edit. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` (the nearest; the trim authors a proof script; Session 297's record, the thirteenth trim, is the worked precedent).
+**Started:** 2026-11-09 10:20
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 304 Did
 **Deliverable:** **The operator ruling on `BACKLOG.md`'s item "`PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom" (item `:1731`, index row `:93`), settled and recorded — COMPLETE: the operator ruled (d), take the file off the read budget (the recommended option, at a picker, over (d) plus an integrity check, archiving the oldest rows (a), and keeping the exemption with only the wording fixed). The ruling, its evidence, the costs accepted and the application session's work list are in `BACKLOG.md`. NOT APPLIED: the application (12 live sites in 5 files) is the next session's separate deliverable.** The operator chose the area (operator rulings) and then this item at pickers, after an opening message of "go" with the workflow-authoring reference loaded; both were the recommended options. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (read at the claim, before any analysis).
 **Started:** 2026-11-08 16:50 · **Completed:** 2026-11-09 (ledger-entry time).
