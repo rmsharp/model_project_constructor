@@ -147,11 +147,13 @@ docs/architecture-history/              # archived plans (concept-era + delivere
   SESSION_NOTES-S279-through-S270.md.verify.sh  # same, for the twelfth trim; adds no assertion (ruling F) -- L0-L14 carried forward from the eleventh proof
   SESSION_NOTES-S289-through-S280.md    # frozen SESSION_NOTES records, Sessions 289->280 (grep it; do not Read it)
   SESSION_NOTES-S289-through-S280.md.verify.sh  # same, for the thirteenth trim; adds no assertion (ruling F) -- L0-L14 carried forward from the twelfth proof
+  SESSION_NOTES-S298-through-S290.md    # frozen SESSION_NOTES records, Sessions 298->290 (grep it; do not Read it)
+  SESSION_NOTES-S298-through-S290.md.verify.sh  # same, for the fourteenth trim; adds no assertion (ruling F) -- L0-L14 carried forward from the thirteenth proof
   SESSION_NOTES-pointer-collapse.verify.sh  # NOT a shard proof: C0-C7 for Session 246's collapse of the five oldest pointer blocks into one table; C6 reads the WORKING TREE
   SESSION_NOTES-pointer-collapse-S254.verify.sh  # NOT a shard proof: R0-R8 for Session 254's RETROACTIVE collapse of the three blocks still standing, and for the collapse-on-write rule that replaces them; R6/R7/R8 read the WORKING TREE, and R8 goes red if a later trim writes a prose block instead of a table row
 SESSION_RUNNER.md                       # per-session operating procedure
 SAFEGUARDS.md                           # commit discipline and blast-radius rules
-SESSION_NOTES.md                        # session-by-session continuity log (the records the last trim kept, plus every record since; older in the thirteen shards above)
+SESSION_NOTES.md                        # session-by-session continuity log (the records the last trim kept, plus every record since; older in the fourteen shards above)
 ```
 
 ## Getting started
