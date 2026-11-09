@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S306
+date: 2026-11-09
+status: pending
+active_task: Apply the operator's Session 304 ruling (d) on PROJECT_LEARNINGS.md: take it off the read budget by editing the 12 live sites in 5 files that BACKLOG.md's item (the one filed at :1731, work list at :1785) names, then rewrite CLAUDE.md's access sentence as rules and commands, not figures. The ruling is not re-opened and the declined remedies are not built. Session claimed; work beginning.
+```
+
+```handoff
 session: S305
 date: 2026-11-09
 status: complete

@@ -79,6 +79,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 306 Did
+**Deliverable:** **Apply the operator's Session 304 ruling (d) on `PROJECT_LEARNINGS.md`: take the file off the read budget, as `CHANGELOG.md` left it on 2026-09-14, by editing the 12 live sites in 5 files that `BACKLOG.md`'s item "`PROJECT_LEARNINGS.md` is refused by a default `Read`, and its newest learnings are at the bottom" lists (the guard's `MANDATED` and `KNOWN_REFUSED`, `CLAUDE.md`'s covers-sentence and access sentence, `PROJECT_CONVENTIONS.md`'s three places, `README.md`'s count, a new section 17 of `docs/planning/ledger-budgets-review.md`, and the item and its index row).** (IN PROGRESS) The operator chose this at a picker (the recommended option, after an opening message of "go" with the workflow-authoring reference loaded). The ruling is not re-opened here, and the remedies it declined are not built. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` (the nearest; one guard test file changes beside prose).
+**Started:** 2026-11-09
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 305 Did
 **Deliverable:** **The fourteenth trim of `SESSION_NOTES.md` — COMPLETE: Sessions 298 to 290 (nine records, 407 lines, 111,409 B) moved, as a pure byte slice, into the write-once `docs/architecture-history/SESSION_NOTES-S298-through-S290.md` (462 lines with its 55-line banner), with its own proof; the live file went from 207,500 B to 96,202 B (trigger 196,608 B, target at most 98,304 B), keeping 7 records of which 6 are non-stub, with no record edited. A defect the review found in an inherited proof (the S254 collapse proof's M43) was fixed first, in its own commit.** The operator chose the trim at a picker (the recommended option, after an opening message of "go" with the workflow-authoring reference loaded) and, at the commit gate, the separate fix commit and the eight-file trim commit, each at the recommended option. **Workstream:** `methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` (the nearest; the trim authors a proof script). Session 297's record, the thirteenth trim, was the worked precedent.
 **Started:** 2026-11-09 10:20 · **Completed:** 2026-11-09 (ledger-entry time).
