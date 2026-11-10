@@ -90,9 +90,9 @@ rows below it are the smaller residue that closing it exposed.
 | The read-budget guard cannot model "claim, then a wide close-out" from a close-out state | The guard tests each next commit by modelling what the following session will write. One of its models starts only when the newest record is still a claim stub, so from a finished close-out it never runs. Session 266's review measured the consequence with short lines: a close-out of about 19.7 to 19.9 KB, or of about 22 KB, passes at its own commit and turns the NEXT session's claim commit red. Behind it is a recurring cause: the mutant that isolates one check has been repaired five times in four sessions, each time for the quantity the last red named (learning #287). Session 287's review of the twelfth trim found it wider: a close-out of about 10.8 or 13.9 KB at about 170 to 190 bytes a line passes at its own commit and turns the next claim red; the same kind of fault in the sibling mutant (M04) had turned Session 287's own claim red (fixed in `3ef1a1b`); and where a close-out is hard-wrapped the largest record that keeps both commits green is about 11 to 12 KB. | **Small.** Add the missing model, an assertion inside that mutant, and pad the other mutant's tail as M04's now is. Until then, before committing a close-out, put the next claim stub above it in a scratch copy and run the guard. |
 | The front matter of `SESSION_NOTES.md` grows 111 to 128 B every trim, and only a judgment constant bounds it | Session 298 settled the near term on the operator's ruling: a one-off cut of 1,740 B of prose no guard reads (tier 3 of four measured options) took the strip from 7,931 B to 6,191 B and the room that counts from 73 B to about 1,800 B, enough for 14 to 15 more trims at the observed growth (bisects with synthetic 119 B rows, not real trims). The slope is unchanged: each trim adds a table row of 111 to 124 B, the previous row's hash and the ordinals. One thing comes due whatever the limit (the fourteenth trim, Session 305, anchored its front-matter substitution on the new bequest sentence, as predicted): the sixteenth trim raises `KeyError` in the census guard (`tests/test_session_notes_census.py:149-159` and `:427`, ordinal tables that stop at 16). | **Small; operator call, no deadline.** Re-open when the strip passes about 7,500 B (about four trims left; arithmetic, not a guard state). The options not taken and their measured costs are in the item body. |
 | The bequest list is the front matter's remaining growth seam | Session 254's record claimed the new standing block is "fixed-size by construction". Measured, one region is not: the bequest list was 12 lines / 1,013 B at Session 254, **14% of the front matter**, and it is per-trim by content. Session 256 resolved one item into its own record and carried the rest to the tenth trim (8 lines / 0.7 KiB); Session 266, that trim, retired the rest into a three-line "nothing is bequeathed" paragraph, with both instructions recorded in `CLAUDE.md`, so the list is empty today. Nothing asserts its size and nothing stops a trim appending rather than rewriting. | **Small**, and it is a discipline rather than code: a session that resolves a bequest moves it into its own record. Or assert a byte ceiling on that region. |
-| The `HANDOFFS.md` archive is unwatched, and its next trim has a window | Session 299 archived 22 receipts into `docs/archive/` on the operator's ruling (`d03a5ac`; lossless, proved byte for byte). What it left: the CI question, **ruled in Session 308: accept** (the archive's proof reads only the trim commit's git objects, so a committed byte flip or deletion leaves it green; running it in CI or giving it a self-test would not have watched the file, and a real watcher was declined); 19 of its 22 receipts still say `commit: pending`; the header's link to `FRAMEWORK_APPARATUS.md` is dead; and a second trim refuses without `--force` once the live file reaches the first archive's pre-size. | **Small; none is urgent.** One item, four points: the CI question stays in the item, ruled, so it is not filed again; the other three are open. |
+| The `HANDOFFS.md` archive is unwatched, and its next trim has a window | Session 299 moved 22 old handoff receipts out of `HANDOFFS.md` into `docs/archive/` (nothing lost, proved byte for byte). Four points were left. **(1) Ruled in Session 308: leave it unwatched.** The question was whether the automatic checks that run after a push (CI) should watch that archive file. The script that proves nothing was lost only re-reads the original commit's saved copy, so it stays green however the file is changed afterwards (a flipped byte, a deleted file); putting it in CI, or adding a test of the script itself, would not have watched the file, and a real watcher was declined. The 19 receipts in it that still say `commit: pending` are part of that ruling. **(2)** The next time `HANDOFFS.md` is trimmed, the tool refuses unless the file's size falls in a narrow window or the trim is forced. **(3)** The file's header has a dead link and one missing line. **(4)** A comment in the synced dashboard source is out of date (a report to send upstream). | **Small; none is urgent.** Point 1 stays in the item, ruled, so it is not filed again; points 2 to 4 are open. |
 | The proof loop is written out twice, and nothing makes a session run it | Session 300 ruled on CI versus push cadence: CI stays the backstop after a push, a `pre-push` hook was rejected (it fires when CI does, so it sees nothing sooner), nobody pushes on a schedule, and the loop in `CLAUDE.md` now fails a proof that has no self-test mode, as CI does. Left: the loop is prose in `CLAUDE.md` and shell in `ci.yml`, no gate makes a session run it, and it takes about 3 to 4 minutes serial, growing by about one proof's cost per trim. One incident is on file (Session 249), none in the 47 sessions since. | **Optional, with a trigger.** One shared script that runs the proofs in parallel (about a minute), called from both. Build it if a second break traces to an edit of a proof's inputs, or when the serial run is longer than you will wait. |
-**Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk. Two more of the same kind, found by Session 266's review: `.github/workflows/ci.yml:62` and `:70` state Session 253's measurements in the present tense (a proof count and a set count), and two docstrings in `tests/test_session_notes_census.py` (`:245`, `:741`) were written when nine table rows existed and now read ambiguously. A third, found by Session 277's review, is `:857`: it calls the `An eleventh ... an eleventh` wording the one count no session has exercised, and the tenth trim wrote exactly that sentence.
+**Also standing, not an item below:** `tests/eval/README.md` has three stale statements (`:49`, `:51-52`, `:86`), unfixed for a seventh session. $0, no risk. Two more of the same kind, found by Session 266's review: `.github/workflows/ci.yml:62` and `:70` state Session 253's measurements in the present tense (a proof count and a set count), and two docstrings in `tests/test_session_notes_census.py` (`:245`, `:741`) were written when nine table rows existed and now read ambiguously. A third, found by Session 277's review, is `:857`: it calls the `An eleventh ... an eleventh` wording the one count no session has exercised, and the tenth trim wrote exactly that sentence. A fourth, noted by Sessions 306 to 308 and unassigned: the read-cap item says "`docs/archive/` does not exist in this repository at all", a Session 249 measurement left undated beside its option (b); the directory has existed since Session 299 (`d03a5ac`).
 
 ---
 
@@ -2169,38 +2169,51 @@ not take `CHANGELOG.md`'s optional archiving), which the old item did not mentio
 taken: a ruling that puts it outside the read budget clears nothing (the 2026-09-14 ruling left every one of `CHANGELOG.md`'s
 dashboard flags in place, and no configuration can exempt a file), and accepting the flag only moves the same trim later.
 
-What the trim left, each measured by Session 299's workflow (`wf_de43bbc6-75c`) or at its close:
+What the trim left, each measured by Session 299's workflow (`wf_de43bbc6-75c`) or at its close (point 1 was measured again, and ruled, in Session 308):
 
-1. **RULED, Session 308 (2026-11-10), by the operator at a picker: accept. Nothing watches the archive or its proof, on
-   purpose.** Do not "fix" it by either route this point used to offer. CI's proof step globs `docs/architecture-history/*.verify.sh`
-   only (`.github/workflows/ci.yml:81`), and the generated proof has no `--self-test` mode, so widening that glob turns the step
-   red on its `SELF-TEST OK` check. A three-lane scouting workflow (`wf_09df3210-0b9`, each lane in its own clone of `034dada`)
-   measured the rest, and the session reproduced the load-bearing facts: the proof reads only git objects from the trim commit
-   (`git show` of `d03a5ac^:HANDOFFS.md`, `d03a5ac:HANDOFFS.md` and the archive at `d03a5ac`), never the working tree, so it
-   certifies the past. A one-byte flip in the archive, committed, and the archive deleted, committed, each left its plain run at
-   exit 0 (the lanes ran seven perturbations in 20 variants, every one green, the sanctioned `commit:` reconciliation at
-   `HANDOFFS.md:142-144` among them). So **a plain-run CI step** (about 14 lines in the `proofs` job, the only job with
-   `fetch-depth: 0`, which the proof needs: it fails in a shallow clone; about 0.1 s) would watch only that the trim commit is
-   still in history, and **a self-test** (a wrapper under `docs/architecture-history/`, since the generated proof's wrapper does
-   not forward its arguments) caught 11 of one lane's 15 in-memory mutants and missed four (an edited or deleted archive banner,
-   a deleted or miscounted live pointer block); it shows the proof can fail, not that the file is intact. Neither watches the
-   file, and a green tick would read as if something did. **Declined:** both, and a working-tree watcher (a hand-built proof
-   comparing the archive with its first-committed blob and tolerating only `commit: pending` becoming a hash; a scratch prototype
-   caught a flip, an append, a delete and a delete-and-re-add and tolerated the sanctioned edit, and it would need its own
-   mutants, the smallest existing hand-built proof being 409 lines with 15). Also not taken: moving the archive and its proof
-   into `docs/architecture-history/` so the glob sees them, which breaks the header's path rule (`HANDOFFS.md:107`) and turns the
-   trimmer's shrink-regrowth factor into `SRF_UNDEFINED`. **What stands, accepted:** no commit has touched the archive or its
-   proof since the trim commit (`git log` on both prints that one), git history is its only write-once guard, and 19 of its 22
-   receipts still say `commit: pending`. Measured locally; no workflow was run on a GitHub runner. **To re-open it:** a change to
-   the archive that nothing caught, or a decision to give every archive proof a self-test upstream (the synced trimmer, v1.8.0,
-   emits none).
+1. **RULED, Session 308 (2026-11-10), by the operator at a picker: accept. Nothing in CI or in any test watches the archive or
+   its proof, on purpose.** Do not "fix" it by any route below. CI's proof step globs `docs/architecture-history/*.verify.sh`
+   only (`.github/workflows/ci.yml:81`), and the generated proof has no `--self-test` mode, so widening that glob (declined)
+   turns the step red on its `SELF-TEST OK` check. The trimmer's `--check` notices only a deleted or moved archive, as
+   `SRF_UNDEFINED`.
+   - **What the proof does.** It reads git objects at the commit that last added the archive path, which it finds afresh on every
+     run (`d03a5ac` today: `git show` of `d03a5ac^:HANDOFFS.md`, `d03a5ac:HANDOFFS.md` and the archive at `d03a5ac`), and reads
+     the working tree only for a trim not yet committed. So it certifies the past. **Reproduced by the session** in a fresh clone
+     of `034dada`: a one-byte flip in the archive, committed, and the archive deleted, committed, each left its plain run at exit
+     0; `--self-test` exits 0 without running one; it fails in a depth-1 clone, so it needs the `proofs` job's `fetch-depth: 0`
+     (line 63, the only job that has it); deleting the proof itself exits 127.
+   - **Lane-derived, not re-run by the session** (scouting workflow `wf_09df3210-0b9`, three lanes, each in its own clone of
+     `034dada`): seven perturbations in 20 variants (six left the plain run at exit 0, among them the sanctioned `commit:`
+     reconciliation at `HANDOFFS.md:142-144`; the seventh was the proof's deletion); a plain-run step's size (about 14 lines,
+     about 0.1 s); a self-test catching 11 of one lane's 15 in-memory mutants (missed: an edited or deleted archive banner, a
+     deleted or miscounted live pointer block; and a second lane found that a duplicated archived record placed in order passes
+     too); the working-tree watcher prototype; and the second trim's proof having no self-test (two lanes agree). Measured
+     locally; no workflow was run on a GitHub runner.
+   - **What each option would have bought.** A plain-run CI step would watch only that the trim commit is still in history, the
+     checkout is deep enough and the proof file exists. A self-test (a wrapper under `docs/architecture-history/`, since the
+     generated proof's wrapper does not forward its arguments) shows the proof can fail, not that the file is intact. Neither
+     watches the file, and a green tick would read as if something did.
+   - **Declined:** both, widening the glob, and a working-tree watcher (a hand-built proof comparing the archive with its
+     first-committed blob and tolerating only `commit: pending` becoming a hash; the prototype caught a flip, an append, a delete
+     and a delete-and-re-add and tolerated the sanctioned edit; it would need its own mutants, the two smallest existing proofs
+     with a self-test being 305 lines with 9 mutants and 409 with 15). Also not taken: moving the archive and its proof into
+     `docs/architecture-history/` so the glob sees them, which breaks the header's path rule (`HANDOFFS.md:107`) and makes the
+     trimmer stop seeing the first archive (`--check` prints `SRF_UNDEFINED`), which silently drops the refusal in point 2.
+   - **What stands, accepted** (as of the ruling): no commit has touched the archive or its proof since the trim commit, git
+     history is its only write-once guard, and 19 of its 22 receipts still say `commit: pending`.
+   - **To re-open it:** `git log --oneline -- docs/archive/HANDOFFS-through-2026-10-03.md` (without `--follow`: with it the
+     archive's content is traced back into `HANDOFFS.md`'s history and the count is 86) prints a commit after `d03a5ac` that does
+     more than turn a `commit: pending` line into a hash, or a sync brings a trimmer that emits a self-test mode (the synced one,
+     v1.8.0, emits none).
 2. **The next trim has a window.** A second trim measures its shrink-regrowth factor against the first,
    `SRF = (size − 98,967) / (212,763 − 98,967)`, and `methodology_trim.py:278` refuses at 1.00 or above unless `--force` is
    passed. So it must land between the trigger (196,608 B) and 212,763 B, about three close-outs wide, or carry `--force` and say
    why in its commit. `--check` states both numbers, so do not copy them into prose. The tool's `FRONTIER_PENDING_STUB` advisory
    also applies: trim in its own commit, never in the commit that finalizes the newest receipt. **Under the point 1 ruling,** that
    trim's generated proof stays outside CI too: a scouting lane forced a second trim in a scratch clone and found the same proof,
-   modulo the archive's name, again with no self-test mode, so do not widen the loop at that trim.
+   modulo the archive's name, again with no self-test mode, so do not widen the loop at that trim, and run the new proof by hand
+   (`bash <proof>`) before committing the trim, when it compares `HEAD` with the working tree, and again after, since nothing
+   else will.
 3. **The header has two small defects.** Its link to `docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger`
    (`HANDOFFS.md:123`) is dead (the file is `methodology/FRAMEWORK_APPARATUS.md`), and it lacks the "retained receipt count" line
    the trimmer expects (`FRONTMATTER_FIELD_ABSENT`). The section must keep its `handoffs-format: 2` marker.
