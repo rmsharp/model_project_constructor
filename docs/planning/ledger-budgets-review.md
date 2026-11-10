@@ -1137,7 +1137,7 @@ scope, and §14.1's second answer. It executes no option of §8.
 
 - §14.1 answered "`CHANGELOG.md` and `PROJECT_LEARNINGS.md` are refused outright. What now?" with
   **declare, guard, file**. On 2026-09-14 the operator ruled, verbatim, *"Rule (c) for CHANGELOG.md —
-  take it off the read budget"* — remedy (c) of that file's `BACKLOG.md` item — because it is never
+  take it off the read budget"* — remedy (c) of that file's `BACKLOG.md` item (closed in Session 307; whole in `e530d1e:BACKLOG.md`) — because it is never
   read whole, only searched, and what is found is not kept. The ruling names that file alone. Its
   exemption, its place in the guard's `MANDATED` and its clause in the ceiling sentence are gone;
   `PROJECT_LEARNINGS.md` keeps all three, as §13.8 ruled.

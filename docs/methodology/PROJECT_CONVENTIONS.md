@@ -170,7 +170,7 @@ stating a budget to appear exactly once here and once in `CLAUDE.md`, so a budge
 re-tuned by editing prose alone — the hazard that document's §10 names first.
 
 **`CHANGELOG.md` is outside the read budget, and so is `PROJECT_LEARNINGS.md`.** The operator's ruling of 2026-09-14 was *"Rule (c) for
-CHANGELOG.md — take it off the read budget"* — remedy (c) of the `BACKLOG.md` item that filed it —
+CHANGELOG.md — take it off the read budget"* — remedy (c) of the `BACKLOG.md` item that filed it (closed in Session 307; whole in `e530d1e:BACKLOG.md`) —
 given because the file is never read whole, only searched for something, and even then what is
 found is not kept in the session. What a default `Read` of it delivers therefore decides nothing, and
 its size is no longer a defect. **The ruling names this file alone, and `PROJECT_LEARNINGS.md`
