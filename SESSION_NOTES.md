@@ -79,6 +79,12 @@ updates rather than contradicts.
 
 ## ACTIVE TASK
 
+### What Session 308 Did
+**Deliverable:** The operator's ruling on `BACKLOG.md`'s item "The `HANDOFFS.md` archive is unwatched, and its next trim has a window" (`:2161`), point (1): nothing in CI watches `docs/archive/HANDOFFS-through-2026-10-03.md` or its generated proof; accept it, add a separate plain-run CI step, or give the proof a self-test. The ruling is put to the operator with measured facts, then applied or recorded (IN PROGRESS). The operator chose the area (operator rulings) and the item at two pickers, after an opening message of "go" with the workflow-authoring reference loaded. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (a ruling, as Sessions 304 and 307 were).
+**Started:** 2026-11-10
+**Status:** Session claimed. Work beginning.
+**Ledger:** `CHANGELOG: pending` — the claim commit's `CHANGELOG.md` entry says (in progress); Phase 3F records the rest. Until close-out, this line is the crash breadcrumb for the next session's reconcile.
+
 ### What Session 307 Did
 **Deliverable:** **The operator's ruling on `BACKLOG.md`'s item "`CHANGELOG.md`'s top is not newest-first" — COMPLETE: the operator ruled, at a picker (the recommended option), to move the four July legacy entries (Sessions 191, 193, 203, 205) into date order, newest session first; the move is applied as a pure permutation of 43 lines (16,666 B) to just above the Session 188 entry, `CLAUDE.md`'s legacy bullet now names it as the one exception (another re-sort needs its own ruling), and the item and its index row are removed from `BACKLOG.md`. No guard, test, threshold or code changed.** The operator chose the area (operator rulings) and then the item at two pickers, after an opening message of "go" with the workflow-authoring reference loaded; both were the recommended options. **Workstream:** `methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` (a ruling, as Session 304's was).
 **Started:** 2026-11-09 · **Completed:** 2026-11-10 (ledger-entry time).

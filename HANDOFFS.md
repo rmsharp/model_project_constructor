@@ -178,6 +178,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.8.0.
 <!-- Receipts go below, newest on top. Delete the seed-sentinel line above when you add the first one. -->
 
 ```handoff
+session: S308
+date: 2026-11-10
+status: pending
+active_task: Settle the operator's call on BACKLOG.md's item "The HANDOFFS.md archive is unwatched, and its next trim has a window" (item at :2161), point (1): nothing in CI watches docs/archive/HANDOFFS-through-2026-10-03.md or its generated proof (CI's glob is docs/architecture-history/*.verify.sh only; the proof has no --self-test mode). Options: accept, add a separate plain-run CI step, or give the proof a self-test. The ruling is put to the operator with measured facts, then applied or recorded. Session claimed; work beginning.
+```
+
+```handoff
 session: S307
 date: 2026-11-10
 status: complete
